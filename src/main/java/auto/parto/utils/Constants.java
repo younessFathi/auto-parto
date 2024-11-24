@@ -1,0 +1,30 @@
+package auto.parto.utils;
+
+public class Constants {
+    public static class OTPConstants {
+        public static final String GENERATE_OTP_CODE_FOR_PHONE_NUMBER = "Generate OTP code for phone number {}";
+        public static final String END_OF_GENERATE_OTP_CODE_FOR_PHONE_NUMBER = "End of generate OTP code for phone number {}";
+        public static final String VALIDATE_OTP_CODE_FOR_PHONE_NUMBER = "Validate OTP code for phone number {}";
+        public static final String PHONE_NUMBER_IS_VALID = "Phone number {} is valid";
+        public static final String PHONE_NUMBER_IS_NOT_VALID = "Phone number {} is not valid";
+        public static final String WHATSAPP = "whatsapp:";
+        public static final String WHATSAPP_YOUR_TWILIO_WHATSAPP_NUMBER = "whatsapp:+your_twilio_whatsapp_number";
+        public static final String YOUR_OTP_IS = "Your OTP is: ";
+        public static final String SENDING_OTP_TO = "Sending OTP to {} ";
+        public static final String END_OF_SEND_OTP_TO = "End of send otp to {} ";
+        public static final String FORMAT = "%04d";
+    }
+    public static class ExceptionConstants {
+        public static final String INVALID_OTP_FOR_PHONE_NUMBER = "Invalid OTP for phone number {}";
+        public static final String EXPIRED_OTP_FOR_PHONE_NUMBER = "Expired OTP for phone number {}";
+        public static final String INVALID_OTP = "Invalid OTP.";
+        public static final String EXPIRED_OTP = "Expired OTP.";
+        public static final String TOO_MANY_OTP_REQUESTS_FOR_PHONE_NUMBER = "Too many OTP requests for phone number {} ";
+        public static final String MANY_OTP_REQUESTS_FOR_PHONE_NUMBER = "Too many OTP requests for phone number";
+        public static final String TIMESTAMP = "timestamp";
+        public static final String STATUS = "status";
+        public static final String ERROR = "error";
+        public static final String MESSAGE = "message";
+        public static final String AN_UNEXPECTED_ERROR_OCCURRED = "An unexpected error occurred.";
+    }
+}
