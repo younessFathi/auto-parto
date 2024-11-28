@@ -30,6 +30,7 @@
 		<java.version>23</java.version>
 		<twilio.version>10.6.3</twilio.version>
 		<lombok.version>1.18.36</lombok.version>
+		<spring.security.test.version>6.4.1</spring.security.test.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -53,6 +54,21 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.projectreactor</groupId>
+			<artifactId>reactor-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-test</artifactId>
+			<version>${spring.security.test.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>io.projectreactor</groupId>
