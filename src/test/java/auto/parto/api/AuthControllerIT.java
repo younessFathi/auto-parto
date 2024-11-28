@@ -15,7 +15,7 @@ import static org.mockito.Mockito.*;
 import org.springframework.security.test.context.support.WithMockUser;
 
 @WebFluxTest(controllers = AuthController.class)
-public class AuthControllerTest {
+public class AuthControllerIT {
 
     @Autowired
     private WebTestClient webTestClient;
