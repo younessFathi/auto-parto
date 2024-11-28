@@ -1,31 +1,35 @@
 package auto.parto.api;
 
-import auto.parto.otp.WhatsAppOtpSender;
-import auto.parto.otp.WhatsAppOtpValidator;
+import auto.parto.dto.OtpRequestDto;
+import auto.parto.otp.OtpSender;
+import auto.parto.otp.OtpValidator;
+import auto.parto.utils.JwtTokenGenerator;
 import lombok.AllArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 @RestController
 @RequestMapping("/auth")
 @AllArgsConstructor
 public class AuthController {
-    private WhatsAppOtpSender whatsAppOtpSender;
-    private WhatsAppOtpValidator whatsAppOtpValidator;
+    private OtpSender otpSender;
+    private OtpValidator otpValidator;
+    private JwtTokenGenerator jwtTokenGenerator;
 
-    @GetMapping("/send-otp/{phoneNumber}")
-    public Mono<String> sendOTP(@PathVariable String phoneNumber) {
-        whatsAppOtpSender.send(phoneNumber);
+    @PostMapping("/send-otp")
+    public Mono<String> sendOTP(@RequestBody OtpRequestDto otpRequestDto) {
+        otpSender.send(otpRequestDto);
         return Mono.just("OTP sent successfully!");
     }
 
-    @GetMapping("/validate-otp/{phoneNumber}/{otp}")
-    public Mono<String> validateOTP(@PathVariable String phoneNumber, @PathVariable String otp) {
-        whatsAppOtpValidator.validate(phoneNumber, otp);
+    @PostMapping("/validate-otp/{otp}")
+    public Mono<String> validateOTP(@RequestBody OtpRequestDto otpRequestDto , @PathVariable String otp) {
+        if(otpValidator.validate(otpRequestDto.getPhoneNumber(), otp)){
+            // TODO: return token
 
+            // TODO: check if customer existance on BD
+            // TODO: if user not existe => create profile using full name , email , phone number
+        }
         return Mono.just("OTP validated successfully!");
     }
 }

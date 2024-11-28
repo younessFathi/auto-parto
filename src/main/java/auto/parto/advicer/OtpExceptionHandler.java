@@ -3,6 +3,7 @@ package auto.parto.advicer;
 import auto.parto.exception.OtpExpiredException;
 import auto.parto.exception.OtpInvalidException;
 import auto.parto.exception.OtpTooManyRequestsException;
+import auto.parto.exception.TwilioException;
 import auto.parto.utils.Constants;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +30,11 @@ public class OtpExceptionHandler {
     @ExceptionHandler(OtpTooManyRequestsException.class)
     public ResponseEntity<Object> handleOtpTooManyRequestsException(OtpTooManyRequestsException ex) {
         return buildErrorResponse(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+    }
+
+    @ExceptionHandler(TwilioException.class)
+    public ResponseEntity<Object> handleTwilioException(Exception ex) {
+        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, Constants.ExceptionConstants.AN_UNEXPECTED_ERROR_OCCURRED);
     }
 
     // Generic exception handler (optional)
