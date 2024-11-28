@@ -1,0 +1,52 @@
+image: maven:latest
+
+stages:
+  - build
+  - test
+  - package
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository" # Use a local Maven repo for caching
+
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - .m2/repository # Cache Maven dependencies
+    - target/        # Cache build output
+
+build:
+  stage: build
+  script:
+    - echo "Starting Build..."
+    - mvn clean compile
+  artifacts:
+    paths:
+      - target/
+    expire_in: 1 days # Keep build artifacts for debugging
+
+test:
+  stage: test
+  script:
+    - echo "Running Tests..."
+    - mvn test
+  artifacts:
+    reports:
+      junit: target/surefire-reports/*.xml # Store test results for GitLab visualization
+
+integration-test:
+  stage: test
+  script:
+    - mvn verify
+  artifacts:
+    reports:
+      junit: target/failsafe-reports/*.xml
+
+package:
+  stage: package
+  script:
+    - echo "Packaging Application..."
+    - mvn package -DskipTests
+  artifacts:
+    paths:
+      - target/*.jar # Store the packaged JAR file
+    expire_in: 7 days
