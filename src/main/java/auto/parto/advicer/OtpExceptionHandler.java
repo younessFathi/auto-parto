@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.bind.support.WebExchangeBindException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -33,15 +34,20 @@ public class OtpExceptionHandler {
     }
 
     @ExceptionHandler(TwilioException.class)
-    public ResponseEntity<Object> handleTwilioException(Exception ex) {
+    public ResponseEntity<Object> handleTwilioException(TwilioException ex) {
         return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, Constants.ExceptionConstants.AN_UNEXPECTED_ERROR_OCCURRED);
     }
 
-    // Generic exception handler (optional)
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<Object> handleGenericException(Exception ex) {
-        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, Constants.ExceptionConstants.AN_UNEXPECTED_ERROR_OCCURRED);
+    @ExceptionHandler(WebExchangeBindException.class)
+    public ResponseEntity<Object> handleValidationException(WebExchangeBindException ex) {
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getFieldErrors().forEach(error -> {
+            errors.put(error.getField(), error.getDefaultMessage());
+        });
+        return ResponseEntity.badRequest().body(errors);
     }
+
+    // Generic exception handler (optional)
 
     private ResponseEntity<Object> buildErrorResponse(HttpStatus status, String message) {
         Map<String, Object> errorDetails = new HashMap<>();
