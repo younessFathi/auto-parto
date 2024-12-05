@@ -5,7 +5,7 @@ public class Constants {
     public static class OTPConstants {
         public static final String GENERATE_OTP_CODE_FOR_PHONE_NUMBER = "Generate OTP code for phone number {}";
         public static final String END_OF_GENERATE_OTP_CODE_FOR_PHONE_NUMBER = "End of generate OTP code for phone number {}";
-        public static final String VALIDATE_OTP_CODE_FOR_PHONE_NUMBER = "Validate OTP code for phone number {}";
+        public static final String VALIDATE_OTP_CODE_FOR_PHONE_NUMBER = "Validate OTP code for phone number";
         public static final String PHONE_NUMBER_IS_VALID = "Phone number {} is valid";
         public static final String PHONE_NUMBER_IS_NOT_VALID = "Phone number {} is not valid";
         public static final String WHATSAPP = "whatsapp:";
@@ -16,8 +16,8 @@ public class Constants {
         public static final String FORMAT = "%04d";
     }
     public static class ExceptionConstants {
-        public static final String INVALID_OTP_FOR_PHONE_NUMBER = "Invalid OTP for phone number {}";
-        public static final String EXPIRED_OTP_FOR_PHONE_NUMBER = "Expired OTP for phone number {}";
+        public static final String INVALID_OTP_FOR_PHONE_NUMBER = "Invalid OTP for phone number";
+        public static final String EXPIRED_OTP_FOR_PHONE_NUMBER = "Expired OTP for phone number";
         public static final String INVALID_OTP = "Invalid OTP.";
         public static final String EXPIRED_OTP = "Expired OTP.";
         public static final String TOO_MANY_OTP_REQUESTS_FOR_PHONE_NUMBER = "Too many OTP requests for phone number {} ";
@@ -27,10 +27,11 @@ public class Constants {
         public static final String ERROR = "error";
         public static final String MESSAGE = "message";
         public static final String AN_UNEXPECTED_ERROR_OCCURRED = "An unexpected error occurred.";
-        public static final String MESSAGE_SENT = "Message sent: {} ";
+        public static final String MESSAGE_SENT = "Message sent";
         public static final String INVALID_REQUEST = "Invalid request: {} ";
         public static final String AUTHENTICATION_FAILED = "Authentication failed: {} ";
         public static final String API_ERROR = "API error: {} ";
         public static final String UNEXPECTED_ERROR = "Unexpected error: {} ";
+        public static final String INVALID_PHONE_NUMBER = "Invalid phone number";
     }
 }
