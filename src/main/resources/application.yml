@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: auto-parto
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/auto-parto
+      database: auto-parto
+      authentication-database: admin
+opt:
+  expiration:
+    minutes: 5
+
+jwt:
+  secretKey: H1lq8Mx5WjD3+KPxBlj+F+Qo5rFkNc1uWy2FpiGpWXM=
+  expiration: 5
+
+twilio:
+  sid: [REDACTED_TWILIO_ACCOUNT_SID]
+  auth: [REDACTED_CREDENTIAL]
+

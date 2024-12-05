@@ -1,22 +1,24 @@
 package auto.parto.dto;
 
+import lombok.Builder;
+import lombok.Data;
 import lombok.Getter;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
+@Data
+@Builder
 public class OtpDetailsDto {
-    @Getter
     private final String otp;
     private final LocalDateTime timestamp;
-    private final long otpExpirationMinutes;
 
-    public OtpDetailsDto(String otp, LocalDateTime timestamp , long otpExpirationMinutes) {
+    public OtpDetailsDto(String otp, LocalDateTime timestamp) {
         this.otp = otp;
         this.timestamp = timestamp;
-        this.otpExpirationMinutes = otpExpirationMinutes;
     }
 
-    public boolean isExpired() {
-        return timestamp.plusMinutes(otpExpirationMinutes).isBefore(LocalDateTime.now());
+    public boolean isExpired(long otpExpirationMinutes) {
+        return Duration.between(timestamp, LocalDateTime.now()).toMinutes() > otpExpirationMinutes;
     }
 }
