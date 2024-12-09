@@ -3,7 +3,7 @@ package auto.parto.service;
 import auto.parto.dto.CustomerDto;
 import auto.parto.dto.OtpRequestDto;
 import auto.parto.mapper.CustomerMapper;
-import auto.parto.mongo_repository.CustomerRepository;
+import auto.parto.repository.mongo_repository.CustomerRepository;
 import auto.parto.service.iservice.ICustomerService;
 import auto.parto.utils.JwtTokenGenerator;
 import lombok.AllArgsConstructor;

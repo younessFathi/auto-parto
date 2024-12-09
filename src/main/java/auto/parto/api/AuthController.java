@@ -4,6 +4,7 @@ import auto.parto.annotation.otp.ValidOtp;
 import auto.parto.annotation.phoneNumber.ValidPhoneNumber;
 import auto.parto.dto.CustomerDto;
 import auto.parto.dto.OtpRequestDto;
+import auto.parto.dto.TokenDto;
 import auto.parto.exception.OtpInvalidException;
 import auto.parto.otp.OtpSender;
 import auto.parto.otp.OtpService;
@@ -43,12 +44,12 @@ public class AuthController {
     }
 
     @GetMapping("/validate-otp/{otp}/{phoneNumber}")
-    public Mono<String> validateOTP(@ValidOtp @PathVariable String otp , @ValidPhoneNumber @PathVariable String phoneNumber) {
+    public Mono<TokenDto> validateOTP(@ValidOtp @PathVariable String otp , @ValidPhoneNumber @PathVariable String phoneNumber) {
         return customerService.findCustomerByPhoneNumber(phoneNumber)
                         .flatMap(
                                 customerDto -> otpValidator.validate(customerDto , otp))
                         .flatMap(
-                                jwtKey -> jwtKey != null ? jwtTokenGenerator.generate(phoneNumber , jwtKey):Mono.empty())
-                        .switchIfEmpty(Mono.error(new OtpInvalidException(Constants.ExceptionConstants.INVALID_OTP)));
+                                customerDto -> customerDto != null ? jwtTokenGenerator.generate(phoneNumber , customerDto):Mono.empty())
+                        .switchIfEmpty(Mono.error(new OtpInvalidException(Constants.Exception.INVALID_OTP)));
     }
 }

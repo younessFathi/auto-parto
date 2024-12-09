@@ -3,6 +3,7 @@ package auto.parto.api;
 
 import auto.parto.dto.CustomerDto;
 import auto.parto.dto.OtpRequestDto;
+import auto.parto.dto.TokenDto;
 import auto.parto.otp.OtpService;
 import auto.parto.otp.WhatsAppOtpSender;
 import auto.parto.otp.WhatsAppOtpValidator;
@@ -103,8 +104,13 @@ public class AuthControllerIT {
         String phoneNumber = "1234567890";
 
         when(customerService.findCustomerByPhoneNumber(anyString())).thenReturn(Mono.just(customerDto));
-        when(whatsAppOtpValidator.validate(customerDto, otp)).thenReturn(Mono.just(""));
-        when(jwtTokenGenerator.generate(anyString() , anyString())).thenReturn(Mono.just("mocked-jwt-token"));
+        when(whatsAppOtpValidator.validate(customerDto, otp)).thenReturn(Mono.just(new CustomerDto()));
+        when(jwtTokenGenerator.generate(anyString() , any())).thenReturn(Mono.just(
+                TokenDto.builder()
+                        .token("mocked-jwt-token")
+                        .customerDto(customerDto)
+                        .build()
+        ));
 
         // Act & Assert
         webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
@@ -112,8 +118,8 @@ public class AuthControllerIT {
                 .uri("/auth/validate-otp/{otp}/{phoneNumber}", otp, phoneNumber)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(String.class)
-                .isEqualTo("mocked-jwt-token");
+                .expectBody(TokenDto.class)
+                .value( t-> t.getToken().equals("mocked-jwt-token") );
     }
 
     @Test

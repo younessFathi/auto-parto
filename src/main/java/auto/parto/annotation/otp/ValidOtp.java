@@ -11,7 +11,7 @@ import java.lang.annotation.*;
 @Target({ElementType.PARAMETER , ElementType.FIELD})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ValidOtp {
-    String message() default Constants.ExceptionConstants.INVALID_OTP;
+    String message() default Constants.Exception.INVALID_OTP;
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
 }

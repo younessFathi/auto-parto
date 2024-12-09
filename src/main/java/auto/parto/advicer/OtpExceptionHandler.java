@@ -35,7 +35,7 @@ public class OtpExceptionHandler {
 
     @ExceptionHandler(TwilioException.class)
     public ResponseEntity<Object> handleTwilioException(TwilioException ex) {
-        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, Constants.ExceptionConstants.AN_UNEXPECTED_ERROR_OCCURRED);
+        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, Constants.Exception.AN_UNEXPECTED_ERROR_OCCURRED);
     }
 
     @ExceptionHandler(WebExchangeBindException.class)
@@ -51,10 +51,10 @@ public class OtpExceptionHandler {
 
     private ResponseEntity<Object> buildErrorResponse(HttpStatus status, String message) {
         Map<String, Object> errorDetails = new HashMap<>();
-        errorDetails.put(Constants.ExceptionConstants.TIMESTAMP, LocalDateTime.now());
-        errorDetails.put(Constants.ExceptionConstants.STATUS, status.value());
-        errorDetails.put(Constants.ExceptionConstants.ERROR, status.getReasonPhrase());
-        errorDetails.put(Constants.ExceptionConstants.MESSAGE, message);
+        errorDetails.put(Constants.Exception.TIMESTAMP, LocalDateTime.now());
+        errorDetails.put(Constants.Exception.STATUS, status.value());
+        errorDetails.put(Constants.Exception.ERROR, status.getReasonPhrase());
+        errorDetails.put(Constants.Exception.MESSAGE, message);
 
         return new ResponseEntity<>(errorDetails, status);
     }

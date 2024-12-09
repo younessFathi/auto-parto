@@ -33,6 +33,8 @@
 		<spring.security.test.version>6.4.1</spring.security.test.version>
 		<surefire.version>3.0.0</surefire.version>
 		<failsafe.version>3.0.0</failsafe.version>
+		<jacoco.version>0.8.12</jacoco.version>
+		<flapdoodle.embed.mongo.version>4.18.1</flapdoodle.embed.mongo.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -78,11 +80,6 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>io.projectreactor</groupId>
-			<artifactId>reactor-test</artifactId>
-			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>com.twilio.sdk</groupId>
@@ -156,6 +153,36 @@
 					</includes>
 					<reportsDirectory>${project.build.directory}/failsafe-reports</reportsDirectory>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>${jacoco.version}</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>prepare-package</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+						<configuration>
+							<excludes>
+								<exclude>auto.parto.mapper/**</exclude>
+								<exclude>auto.parto.model/**</exclude>
+								<exclude>auto.parto.dto/**</exclude>
+								<exclude>auto.parto.advicer/**</exclude>
+								<exclude>auto.parto.config/**</exclude>
+								<exclude>auto.parto.exception/**</exclude>
+								<exclude>**/Constants.java</exclude>
+							</excludes>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>
