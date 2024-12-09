@@ -1,4 +1,4 @@
-package auto.parto.mongo_repository;
+package auto.parto.repository.mongo_repository;
 
 import auto.parto.model.Customer;
 import auto.parto.repository.ICustomerRepository;
@@ -43,7 +43,6 @@ public class CustomerRepository implements ICustomerRepository {
     @Override
     public Mono<Customer> findByPhoneNumber(String phoneNumber) {
         Query query = new Query(Criteria.where("phoneNumber").is(phoneNumber));
-        System.out.println(phoneNumber);
         return reactiveMongoTemplate.findOne(query, Customer.class);
     }
 

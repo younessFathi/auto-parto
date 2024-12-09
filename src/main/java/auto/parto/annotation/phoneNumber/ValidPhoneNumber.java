@@ -11,7 +11,7 @@ import java.lang.annotation.*;
 @Target({ElementType.PARAMETER , ElementType.FIELD})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ValidPhoneNumber {
-    String message() default Constants.ExceptionConstants.INVALID_PHONE_NUMBER;
+    String message() default Constants.Exception.INVALID_PHONE_NUMBER;
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
 }

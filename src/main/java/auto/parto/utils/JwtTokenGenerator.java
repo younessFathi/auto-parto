@@ -1,5 +1,7 @@
 package auto.parto.utils;
 
+import auto.parto.dto.CustomerDto;
+import auto.parto.dto.TokenDto;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,17 +26,21 @@ public class JwtTokenGenerator {
     @Value("${jwt.expiration}")
     private long expirationTime;
 
-    public Mono<String> generate(String phoneNumber , String key) {
+    public Mono<TokenDto> generate(String phoneNumber , CustomerDto customerDto) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expirationTime);
-        return Mono.just(
-                    Jwts.builder()
-                    .setSubject(phoneNumber)
-                    .signWith(new SecretKeySpec(key.getBytes(), SignatureAlgorithm.HS256.getJcaName())
-                            ,SignatureAlgorithm.HS512)
+        String token = Jwts.builder()
+                            .setSubject(phoneNumber)
+                            .signWith(new SecretKeySpec(customerDto.getJwtKey().getBytes(), SignatureAlgorithm.HS256.getJcaName())
+                                ,SignatureAlgorithm.HS512)
                             .setIssuedAt(now)
                             .setExpiration(expiryDate)
-                    .compact()
+                            .compact();
+        return Mono.just(
+                TokenDto.builder()
+                        .token(token)
+                        .customerDto(customerDto)
+                        .build()
         );
     }
 

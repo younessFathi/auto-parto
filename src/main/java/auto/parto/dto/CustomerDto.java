@@ -1,5 +1,6 @@
 package auto.parto.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,5 +19,6 @@ public class CustomerDto {
     private String email;
     private String phoneNumber;
     private OtpDetailsDto otpDetailsDto;
+    @JsonIgnore
     private String jwtKey;
 }

@@ -14,8 +14,11 @@ public class Constants {
         public static final String SENDING_OTP_TO = "Sending OTP to {} ";
         public static final String END_OF_SEND_OTP_TO = "End of send otp to {} ";
         public static final String FORMAT = "%04d";
+        public static final String END_OF_OTP_VALIDATION_FOR = "End of otp validation for";
+        public static final String GENERATED_OTP = "Generated otp";
+        public static final String MESSAGE_SID = "Message SID";
     }
-    public static class ExceptionConstants {
+    public static class Exception {
         public static final String INVALID_OTP_FOR_PHONE_NUMBER = "Invalid OTP for phone number";
         public static final String EXPIRED_OTP_FOR_PHONE_NUMBER = "Expired OTP for phone number";
         public static final String INVALID_OTP = "Invalid OTP.";
