@@ -1,5 +1,7 @@
 package auto.parto.utils;
 
+import java.util.List;
+
 public class Constants {
     public static final String LOG_MESSAGE = "{}: {}";
     public static class OTPConstants {
@@ -36,5 +38,13 @@ public class Constants {
         public static final String API_ERROR = "API error: {} ";
         public static final String UNEXPECTED_ERROR = "Unexpected error: {} ";
         public static final String INVALID_PHONE_NUMBER = "Invalid phone number";
+    }
+
+    public static class FileUpload {
+        public static final String INVALID_FILE_TYPE_ONLY_IMAGE_FILES_ARE_ALLOWED = "Invalid file type. Only image files are allowed.";
+        public static final List<String> ALLOWED_EXTENSIONS = List.of("jpg", "jpeg", "png", "gif", "bmp");
+        public static final String FILE_SAVED_TO_DISK = "File saved to disk";
+        public static final String FILE_SAVED = "File saved";
+        public static final String COULD_NOT_INITIALIZE_UPLOAD_FOLDER = "Could not initialize upload folder";
     }
 }

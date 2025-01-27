@@ -20,6 +20,7 @@ public class SecurityConfig {
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(exchange -> exchange
                         .pathMatchers("/auth/**").permitAll()
+                        .pathMatchers("/search/**").permitAll()
                         .anyExchange().authenticated()
                 )
                 .httpBasic(withDefaults())

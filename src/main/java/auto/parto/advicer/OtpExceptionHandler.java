@@ -1,9 +1,6 @@
 package auto.parto.advicer;
 
-import auto.parto.exception.OtpExpiredException;
-import auto.parto.exception.OtpInvalidException;
-import auto.parto.exception.OtpTooManyRequestsException;
-import auto.parto.exception.TwilioException;
+import auto.parto.exception.*;
 import auto.parto.utils.Constants;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -36,6 +33,11 @@ public class OtpExceptionHandler {
     @ExceptionHandler(TwilioException.class)
     public ResponseEntity<Object> handleTwilioException(TwilioException ex) {
         return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, Constants.Exception.AN_UNEXPECTED_ERROR_OCCURRED);
+    }
+
+    @ExceptionHandler(FileUploadException.class)
+    public ResponseEntity<Object> handleTwilioException(FileUploadException ex) {
+        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage());
     }
 
     @ExceptionHandler(WebExchangeBindException.class)
