@@ -3,7 +3,7 @@ spring:
     name: auto-parto
   data:
     mongodb:
-      uri: mongodb+srv://theyounessfathi:LhxYAVDIVeH7ZWqg@cluster0.fjmxe.mongodb.net/auto-parto?retryWrites=true&w=majority&appName=Cluster0
+      uri: ${MONGO_URI}
       database: auto-parto
       authentication-database: admin
 opt:
