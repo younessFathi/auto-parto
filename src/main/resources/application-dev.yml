@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: auto-parto
+  data:
+    mongodb:
+      uri: ${MONGO_URI}
+      database: auto-parto
+      authentication-database: admin
+
+opt:
+  expiration:
+    minutes: 5
+
+auto:
+  parto:
+    images:
+      uploads: ../uploads
+
+jwt:
+  secretKey: ${SECRET_KEY}
+  expiration: 5
+
+twilio:
+  sid: ${TWILIO_SID}
+  auth: ${TWILIO_AUTH}
+

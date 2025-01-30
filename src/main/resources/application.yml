@@ -3,17 +3,16 @@ spring:
     name: auto-parto
   data:
     mongodb:
-      uri: ${MONGO_URI}
+      uri: mongodb://localhost:27017/auto-parto
       database: auto-parto
       authentication-database: admin
 opt:
   expiration:
     minutes: 5
-
 auto:
   parto:
     images:
-      uploads: uploads
+      uploads: ../uploads
 
 jwt:
   secretKey: H1lq8Mx5WjD3+KPxBlj+F+Qo5rFkNc1uWy2FpiGpWXM=
@@ -22,4 +21,3 @@ jwt:
 twilio: ${REDACTED_CREDENTIAL:}
   sid: ${REDACTED_CREDENTIAL:}
   auth: ${REDACTED_CREDENTIAL:}
-
