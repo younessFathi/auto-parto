@@ -6,4 +6,6 @@ import reactor.core.publisher.Mono;
 
 public interface ISellerService {
     Mono<SellerDto> create(@Valid SellerDto sellerDto);
+
+    Mono<SellerDto> getSellerById(String id);
 }

@@ -153,4 +153,22 @@ public class SellerControllerIT {
                 .exchange()
                 .expectStatus().isBadRequest();
     }
+
+
+    @Test
+    @WithMockUser
+    void getSellerById_NotFound() {
+        Mockito.when(sellerService.getSellerById("2"))
+                .thenReturn(Mono.empty());
+
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .get()
+                .uri("/seller/2")
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectBody()
+                .jsonPath("$.message").isEqualTo("Seller not found");
+    }
+
+
 }
