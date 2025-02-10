@@ -170,5 +170,44 @@ public class SellerControllerIT {
                 .jsonPath("$.message").isEqualTo("Seller not found");
     }
 
+    @Test
+    @WithMockUser
+    void addFunds_Success() {
+        BigDecimal amount = new BigDecimal("50.00");
+        SellerDto updatedSellerDto = SellerDto.builder()
+                .walletDto(WalletDto.builder()
+                        .id("1")
+                        .balance(new BigDecimal("150.00"))
+                        .currency("USD")
+                        .build())
+                .build();
 
+        Mockito.when(sellerService.addFunds("1", amount))
+                .thenReturn(Mono.just(updatedSellerDto));
+
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .post()
+                .uri("/seller/1/wallet/add?amount=50.00")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(SellerDto.class)
+                .isEqualTo(updatedSellerDto);
+    }
+
+    @Test
+    @WithMockUser
+    void addFunds_NotFound() {
+        BigDecimal amount = new BigDecimal("50.00");
+
+        Mockito.when(sellerService.addFunds("2", amount))
+                .thenReturn(Mono.empty());
+
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .post()
+                .uri("/seller/2/wallet/add?amount=50.00")
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectBody()
+                .jsonPath("$.message").isEqualTo("Seller not found");
+    }
 }
