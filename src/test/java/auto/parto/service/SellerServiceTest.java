@@ -13,6 +13,7 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 public class SellerServiceTest {
@@ -52,6 +53,32 @@ public class SellerServiceTest {
                         savedSellerDto.getPhoneNumber().equals(sellerDto.getPhoneNumber()) &&
                         savedSellerDto.getName().equals(sellerDto.getName()) &&
                         savedSellerDto.getDescription().equals(sellerDto.getDescription()))
+                .verifyComplete();
+    }
+
+
+    @Test
+    void getSellerById_Success() {
+        when(sellerRepository.getSellerById(anyString())).thenReturn(Mono.just(seller));
+
+        Mono<SellerDto> result = sellerService.getSellerById("1");
+
+        StepVerifier.create(result)
+                .expectNextMatches(foundSellerDto -> foundSellerDto.getEmail().equals(sellerDto.getEmail()) &&
+                        foundSellerDto.getPhoneNumber().equals(sellerDto.getPhoneNumber()) &&
+                        foundSellerDto.getName().equals(sellerDto.getName()) &&
+                        foundSellerDto.getDescription().equals(sellerDto.getDescription()))
+                .verifyComplete();
+    }
+
+    @Test
+    void getSellerById_NotFound() {
+        when(sellerRepository.getSellerById(anyString())).thenReturn(Mono.empty());
+
+        Mono<SellerDto> result = sellerService.getSellerById("2");
+
+        StepVerifier.create(result)
+                .expectNextCount(0)
                 .verifyComplete();
     }
 }

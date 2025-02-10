@@ -20,4 +20,11 @@ public class SellerService implements ISellerService {
         return sellerRepository.save(SellerMapper.toEntity(sellerDto))
                                 .map(SellerMapper::toDto);
     }
+
+    @Override
+    public Mono<SellerDto> getSellerById(String id) {
+        log.info("Getting seller by id: {}", id);
+        return sellerRepository.getSellerById(id)
+                                .map(SellerMapper::toDto);
+    }
 }

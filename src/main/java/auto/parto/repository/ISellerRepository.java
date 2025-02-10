@@ -5,4 +5,5 @@ import reactor.core.publisher.Mono;
 
 public interface ISellerRepository {
     Mono<Seller> save(Seller seller);
+    Mono<Seller> getSellerById(String id);
 }

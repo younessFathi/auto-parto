@@ -16,4 +16,9 @@ public class SellerRepository implements ISellerRepository {
     public Mono<Seller> save(Seller seller) {
         return reactiveMongoTemplate.save(seller);
     }
+
+    @Override
+    public Mono<Seller> getSellerById(String id) {
+        return reactiveMongoTemplate.findById(id, Seller.class);
+    }
 }
