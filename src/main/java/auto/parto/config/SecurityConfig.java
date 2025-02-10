@@ -28,6 +28,7 @@ public class SecurityConfig {
                 .authorizeExchange(exchange -> exchange
                         .pathMatchers("/auth/**").permitAll()
                         .pathMatchers("/search/**").permitAll()
+                        .pathMatchers("/seller/**").permitAll()
                         .pathMatchers(SWAGGER_WHITELIST).permitAll()
                         .anyExchange().authenticated()
                 )
