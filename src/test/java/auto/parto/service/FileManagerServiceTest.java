@@ -49,16 +49,9 @@ class FileManagerServiceTest {
         // Mock behaviors
         when(mockFilePart.filename()).thenReturn(filename);
         when(mockFilePart.content()).thenReturn(Flux.just(createTestDataBuffer("test content")));
-        when(fileService.save(any()))
-                .thenReturn(Mono.just(FileDto.builder()
-                        .id(UUID.randomUUID())
-                        .originalFilename(filename)
-                        .generatedFilename("generated.jpg")
-                        .createdAt(LocalDateTime.now())
-                        .build()));
 
         // Call the method under test
-        Mono<FileDto> result = fileManagerService.save(mockFilePart, folderName);
+        Mono<FileDto> result = fileManagerService.save(mockFilePart);
 
         // Verify
         StepVerifier.create(result)
@@ -67,9 +60,6 @@ class FileManagerServiceTest {
                     assertNotNull(fileDto.getGeneratedFilename());
                 })
                 .verifyComplete();
-
-        // Ensure methods were called
-        verify(fileService, times(1)).save(any(FileDto.class));
     }
 
     @Test
@@ -83,16 +73,13 @@ class FileManagerServiceTest {
         when(mockFilePart.filename()).thenReturn(filename);
 
         // Call the method under test
-        Mono<FileDto> result = fileManagerService.save(mockFilePart, folderName);
+        Mono<FileDto> result = fileManagerService.save(mockFilePart);
 
         // Verify
         StepVerifier.create(result)
                 .expectErrorMatches(throwable -> throwable instanceof FileUploadException &&
                         throwable.getMessage().equals(Constants.FileUpload.INVALID_FILE_TYPE_ONLY_IMAGE_FILES_ARE_ALLOWED))
                 .verify();
-
-        // Ensure no interaction with fileService
-        verify(fileService, never()).save(any(FileDto.class));
     }
 
     private DataBuffer createTestDataBuffer(String content) {

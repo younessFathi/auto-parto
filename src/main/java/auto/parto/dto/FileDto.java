@@ -1,5 +1,6 @@
 package auto.parto.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,8 +13,10 @@ import java.util.UUID;
 @Data
 @Builder
 public class FileDto {
-    private UUID id;
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY)
+    private String id;
     private String originalFilename;
-    private String generatedFilename; // generatedFilename = pieceId + original extension
+    private String generatedFilename;
     private LocalDateTime createdAt;
+    private String folderName;
 }

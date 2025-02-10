@@ -7,14 +7,13 @@ import com.twilio.type.PhoneNumber;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.web.bind.annotation.PostMapping;
 import reactor.core.publisher.Mono;
 
 @Slf4j
 @Component
-public class TwilioSender {
+public class TwilioOtpSender {
 
-    public TwilioSender(
+    public TwilioOtpSender(
             @Value("${twilio.sid}") String sid,
             @Value("${twilio.auth}") String authToken) {
         Twilio.init(sid, authToken);

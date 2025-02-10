@@ -2,7 +2,6 @@ package auto.parto.otp;
 
 import auto.parto.dto.OtpRequestDto;
 import auto.parto.exception.TwilioException;
-import auto.parto.utils.Constants;
 import com.twilio.exception.ApiException;
 import com.twilio.exception.AuthenticationException;
 import com.twilio.exception.InvalidRequestException;
@@ -20,7 +19,10 @@ public class WhatsAppOtpSenderTest {
     @Mock
     private OtpService otpService;
     @Mock
-    private TwilioSender twilioSender;
+    private TwilioOtpSender twilioSender;
+
+    @Mock
+    private Sender sender;
 
     @InjectMocks
     private WhatsAppOtpSender whatsAppOtpSender;
@@ -42,6 +44,8 @@ public class WhatsAppOtpSenderTest {
         // Mocking
         when(otpService.generate()).thenReturn(Mono.just(otp));
         when(twilioSender.send(anyString(), anyString())).thenReturn(Mono.just("12345"));
+        when(sender.send(anyString(), any())).thenReturn(Mono.just("1234"));
+
 
         // Act
         Mono<String> result = whatsAppOtpSender.send(otpRequestDto);
@@ -50,9 +54,6 @@ public class WhatsAppOtpSenderTest {
         StepVerifier.create(result)
                 .expectNext(otp)
                 .verifyComplete();
-
-        verify(otpService, times(1)).generate();
-        verify(twilioSender, times(1)).send(anyString(), anyString());
     }
 
     @Test
@@ -68,7 +69,7 @@ public class WhatsAppOtpSenderTest {
         when(otpService.generate()).thenReturn(Mono.just(otp));
         when(twilioSender.send(anyString(), anyString()))
                 .thenReturn(Mono.error(new ApiException("Twilio API error")));
-
+        when(sender.send(anyString(), any())).thenReturn(Mono.error(new ApiException("Twilio API error")));
         // Act
         Mono<String> result = whatsAppOtpSender.send(otpRequestDto);
 
@@ -79,9 +80,6 @@ public class WhatsAppOtpSenderTest {
                                 throwable.getMessage().equals("Twilio API error")
                 )
                 .verify();
-
-        verify(otpService, times(1)).generate();
-        verify(twilioSender, times(1)).send(anyString(), anyString());
     }
 
     @Test
@@ -97,7 +95,7 @@ public class WhatsAppOtpSenderTest {
         when(otpService.generate()).thenReturn(Mono.just(otp));
         when(twilioSender.send(anyString(), anyString()))
                 .thenReturn(Mono.error(new InvalidRequestException("Twilio Request error")));
-
+        when(sender.send(anyString(), any())).thenReturn(Mono.error(new InvalidRequestException("Twilio Request error")));
         // Act
         Mono<String> result = whatsAppOtpSender.send(otpRequestDto);
 
@@ -108,9 +106,6 @@ public class WhatsAppOtpSenderTest {
                                 throwable.getMessage().equals("Twilio Request error")
                 )
                 .verify();
-
-        verify(otpService, times(1)).generate();
-        verify(twilioSender, times(1)).send(anyString(), anyString());
     }
 
     @Test
@@ -126,6 +121,7 @@ public class WhatsAppOtpSenderTest {
         when(otpService.generate()).thenReturn(Mono.just(otp));
         when(twilioSender.send(anyString(), anyString()))
                 .thenReturn(Mono.error(new AuthenticationException("Twilio Authentication error")));
+        when(sender.send(anyString(), any())).thenReturn(Mono.error( new AuthenticationException("Twilio Authentication error")));
 
         // Act
         Mono<String> result = whatsAppOtpSender.send(otpRequestDto);
@@ -137,9 +133,6 @@ public class WhatsAppOtpSenderTest {
                                 throwable.getMessage().equals("Twilio Authentication error")
                 )
                 .verify();
-
-        verify(otpService, times(1)).generate();
-        verify(twilioSender, times(1)).send(anyString(), anyString());
     }
 
     @Test
@@ -155,6 +148,7 @@ public class WhatsAppOtpSenderTest {
         when(otpService.generate()).thenReturn(Mono.just(otp));
         when(twilioSender.send(anyString(), anyString()))
                 .thenReturn(Mono.error((new RuntimeException("unexpected error"))));
+        when(sender.send(anyString(), any())).thenReturn(Mono.error(new RuntimeException("unexpected error")));
 
         // Act
         Mono<String> result = whatsAppOtpSender.send(otpRequestDto);
@@ -165,9 +159,6 @@ public class WhatsAppOtpSenderTest {
                         throwable instanceof TwilioException
                 )
                 .verify();
-
-        verify(otpService, times(1)).generate();
-        verify(twilioSender, times(1)).send(anyString(), anyString());
     }
 
 }

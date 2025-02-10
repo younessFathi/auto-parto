@@ -41,20 +41,20 @@ public class CustomerRepository implements ICustomerRepository {
     }
 
     @Override
-    public Mono<Customer> findByPhoneNumber(String phoneNumber) {
-        Query query = new Query(Criteria.where("phoneNumber").is(phoneNumber));
+    public Mono<Customer> findBy(String value, String field) {
+        Query query = new Query(Criteria.where(field).is(value));
         return reactiveMongoTemplate.findOne(query, Customer.class);
     }
 
     @Override
-    public Mono<Boolean> exists(String phoneNumber) {
-        Query query = new Query(Criteria.where("phoneNumber").is(phoneNumber));
+    public Mono<Boolean> exists(String value, String field) {
+        Query query = new Query(Criteria.where(field).is(value));
         return reactiveMongoTemplate.exists(query, Customer.class);
     }
 
     @Override
-    public Mono<Customer> updateGeneratedOtp(String phoneNumber, String sentOtp, String jwtKey) {
-        Query query = new Query(Criteria.where("phoneNumber").is(phoneNumber));
+    public Mono<Customer> updateGeneratedOtp(String phoneNumber, String sentOtp, String jwtKey, String field) {
+        Query query = new Query(Criteria.where(field).is(phoneNumber));
 
         Update update = new Update();
         if (sentOtp != null) {

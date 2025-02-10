@@ -1,6 +1,7 @@
 package auto.parto.api;
 
 import auto.parto.dto.PieceDto;
+import auto.parto.exception.EntityNotFoundException;
 import auto.parto.service.iservice.IFileManagerService;
 import auto.parto.service.iservice.ISearchPieceService;
 import auto.parto.utils.Constants;
@@ -40,7 +41,8 @@ public class SearchController {
     })
     @PostMapping("/piece")
     public Mono<PieceDto> searchPieceAndNotifySellers(@Valid @RequestBody PieceDto pieceDto){
-        return searchPieceService.searchPieceAndNotifySellers(pieceDto);
+        return searchPieceService.notifySellers(pieceDto)
+                .flatMap(piece -> searchPieceService.savePieceWithImages(piece));
     }
 
     @Operation(summary = Constants.Swagger.SEARCH_PIECE_IMAGES_SUMMARY, description = Constants.Swagger.SEARCH_PIECE_IMAGES_DESCRIPTION)
@@ -50,14 +52,24 @@ public class SearchController {
             @ApiResponse(responseCode = Constants.Swagger._500, description = Constants.Swagger.RESPONSE_500_INTERNAL_ERROR)
     })
     @PostMapping(value = "/piece-with-images" , consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public Mono<String> searchPieceAndNotifySellers(@RequestPart("images") Flux<FilePart> images , @RequestPart("piece") Mono<String> pieceStr){
+    public Mono<PieceDto> searchPieceAndNotifySellers(@RequestPart("images") Flux<FilePart> images , @RequestPart("piece") Mono<String> pieceStr){
         return pieceStr.flatMap(this::deserializePiece)
-                .flatMap(pieceDto -> searchPieceService.searchPieceAndNotifySellers(pieceDto))
+                .flatMap(pieceDto -> searchPieceService.notifySellers(pieceDto))
                 .flatMap(pieceDto ->{
-                    return images.flatMap(image -> fileManagerService.save(image , pieceDto.getId().toString()))
+                    return images.flatMap(image -> fileManagerService.save(image))
                                 .collectList()
-                                .flatMap(imagePaths -> Mono.just(Constants.FileUpload.PIECE_AND_IMAGES_UPLOADED_SUCCESSFULLY));
+                                .flatMap(fileDtos -> {
+                                    pieceDto.setImages(fileDtos);
+                                    return searchPieceService.savePieceWithImages(pieceDto);
+                                })
+                                .flatMap(Mono::just);
                 });
+    }
+
+    @GetMapping("/piece/{id}")
+    public Mono<PieceDto> getPieceById(@PathVariable String id){
+        return searchPieceService.getPieceWithImagesByPieceId(id)
+                                .switchIfEmpty(Mono.error(new EntityNotFoundException("Piece not found")));
     }
 
     private Mono<PieceDto> deserializePiece(String pieceStr) {

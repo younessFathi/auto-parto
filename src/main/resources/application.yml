@@ -6,6 +6,7 @@ spring:
       uri: mongodb://localhost:27017/auto-parto
       database: auto-parto
       authentication-database: admin
+
 opt:
   expiration:
     minutes: 5

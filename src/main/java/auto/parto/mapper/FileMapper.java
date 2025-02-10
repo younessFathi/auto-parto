@@ -11,6 +11,7 @@ public class FileMapper {
                 .createdAt(fileDto.getCreatedAt())
                 .generatedFilename(fileDto.getGeneratedFilename())
                 .originalFilename(fileDto.getOriginalFilename())
+                .folderName(fileDto.getFolderName())
                 .build();
     }
 
@@ -20,6 +21,7 @@ public class FileMapper {
                 .createdAt(file.getCreatedAt())
                 .generatedFilename(file.getGeneratedFilename())
                 .originalFilename(file.getOriginalFilename())
+                .folderName(file.getFolderName())
                 .build();
     }
 }

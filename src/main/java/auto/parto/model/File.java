@@ -15,8 +15,9 @@ import java.util.UUID;
 @NoArgsConstructor
 @Builder
 public class File {
-    private UUID id;
+    private String id;
     private String originalFilename;
-    private String generatedFilename; // generatedFilename = pieceId + original extension
+    private String generatedFilename;
     private LocalDateTime createdAt;
+    private String folderName;
 }

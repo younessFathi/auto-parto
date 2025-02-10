@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import java.util.Random;
+import java.util.UUID;
 
 @Component
 @Slf4j
@@ -26,28 +27,28 @@ public class OtpService {
 
     public Mono<CustomerDto> validate(CustomerDto customerDto, String otp) {
         try {
-            log.info("{} : {}" , Constants.OTPConstants.VALIDATE_OTP_CODE_FOR_PHONE_NUMBER, customerDto.getPhoneNumber());
+            log.info("{} : {}" , Constants.OTPConstants.VALIDATE_OTP_CODE_FOR, customerDto.getId());
             OtpDetailsDto cachedOtp = customerDto.getOtpDetailsDto();
-            checkOtp(customerDto.getPhoneNumber(), otp, cachedOtp);
+            checkOtp(customerDto.getId(), otp, cachedOtp);
         } catch (Exception e) {
             return Mono.error(e);
         }
-        log.info("{} : {}" , Constants.OTPConstants.END_OF_OTP_VALIDATION_FOR, customerDto.getPhoneNumber());
+        log.info("{} : {}" , Constants.OTPConstants.END_OF_OTP_VALIDATION_FOR, customerDto.getId() );
         return Mono.just(customerDto);
     }
 
-    private void checkOtp(String phoneNumber, String otp, OtpDetailsDto cachedOtp) {
+    private void checkOtp(UUID id, String otp, OtpDetailsDto cachedOtp) {
         if (cachedOtp == null) {
-            log.info("{} : {}" , Constants.Exception.INVALID_OTP_FOR_PHONE_NUMBER, phoneNumber);
+            log.info("{} : {}" , Constants.Exception.INVALID_OTP_FOR, id);
             throw new OtpInvalidException(Constants.Exception.INVALID_OTP);
         }
         if(cachedOtp.isExpired(otpExpirationMinutes)) {
-            log.info("{} : {}" , Constants.Exception.EXPIRED_OTP_FOR_PHONE_NUMBER, phoneNumber);
+            log.info("{} : {}" , Constants.Exception.EXPIRED_OTP_FOR, id);
             throw new OtpExpiredException(Constants.Exception.EXPIRED_OTP);
         }
 
         if (!cachedOtp.getOtp().equals(otp)) {
-            log.info("{} : {}" , Constants.Exception.INVALID_OTP_FOR_PHONE_NUMBER, phoneNumber);
+            log.info("{} : {}" , Constants.Exception.INVALID_OTP_FOR, id);
             throw new OtpInvalidException(Constants.Exception.INVALID_OTP);
         }
     }

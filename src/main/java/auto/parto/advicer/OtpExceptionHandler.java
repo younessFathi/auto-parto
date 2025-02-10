@@ -36,8 +36,13 @@ public class OtpExceptionHandler {
     }
 
     @ExceptionHandler(FileUploadException.class)
-    public ResponseEntity<Object> handleTwilioException(FileUploadException ex) {
+    public ResponseEntity<Object> handleFileException(FileUploadException ex) {
         return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage());
+    }
+
+    @ExceptionHandler(EntityNotFoundException.class)
+    public ResponseEntity<Object> handleEntityException(EntityNotFoundException ex) {
+        return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
     @ExceptionHandler(WebExchangeBindException.class)

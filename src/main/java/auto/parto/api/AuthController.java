@@ -1,13 +1,11 @@
 package auto.parto.api;
 
 import auto.parto.annotation.otp.ValidOtp;
-import auto.parto.annotation.phoneNumber.ValidPhoneNumber;
 import auto.parto.dto.CustomerDto;
 import auto.parto.dto.OtpRequestDto;
 import auto.parto.dto.TokenDto;
 import auto.parto.exception.OtpInvalidException;
-import auto.parto.otp.OtpSender;
-import auto.parto.otp.OtpValidator;
+import auto.parto.otp.*;
 import auto.parto.service.iservice.ICustomerService;
 import auto.parto.utils.Constants;
 import auto.parto.utils.JwtTokenGenerator;
@@ -29,8 +27,9 @@ import reactor.core.publisher.Mono;
 @Validated
 @Tag(name = Constants.Swagger.TAG_AUTH, description = Constants.Swagger.TAG_AUTH_DESCRIPTION)
 public class AuthController {
-    private OtpSender otpSender;
-    private OtpValidator otpValidator;
+    private WhatsAppOtpSender whatsAppOtpSender;
+    private EmailOtpSender emailOtpSender;
+    private OtpService otpService;
     private JwtTokenGenerator jwtTokenGenerator;
     private ICustomerService customerService;
 
@@ -43,17 +42,32 @@ public class AuthController {
     })
     @PostMapping("/send-otp")
     public Mono<CustomerDto> sendOTP(@Valid @RequestBody OtpRequestDto otpRequestDto) {
-        return otpSender.send(otpRequestDto)
+        return whatsAppOtpSender.send(otpRequestDto)
                         .flatMap(sentOtp -> customerService.checkIfCustomerExistUsingPhoneNumber(otpRequestDto.getPhoneNumber())
                                 .flatMap(
                                     exists -> {
                                         return !exists ?
                                                 customerService.create(otpRequestDto , sentOtp):
-                                                customerService.updateGeneratedOtp(otpRequestDto.getPhoneNumber(), sentOtp);
+                                                customerService.updateGeneratedOtpByPhoneNumber(otpRequestDto.getPhoneNumber(), sentOtp);
                                     }
                                 )
                         );
     }
+
+    @PostMapping("/send-otp-email")
+    public Mono<CustomerDto> sendOTPToEmail(@Valid @RequestBody OtpRequestDto otpRequestDto) {
+        return emailOtpSender.send(otpRequestDto)
+                .flatMap(sentOtp -> customerService.checkIfCustomerExistUsingEmail(otpRequestDto.getEmail())
+                        .flatMap(
+                                exists -> {
+                                    return !exists ?
+                                            customerService.create(otpRequestDto , sentOtp):
+                                            customerService.updateGeneratedOtpByEmail(otpRequestDto.getEmail(), sentOtp);
+                                }
+                        )
+                );
+    }
+
 
     @Operation(summary = Constants.Swagger.VALIDATE_OTP_SUMMARY, description = Constants.Swagger.VALIDATE_OTP_DESCRIPTION)
     @ApiResponses({
@@ -63,13 +77,18 @@ public class AuthController {
             @ApiResponse(responseCode = Constants.Swagger._401, description = Constants.Swagger.RESPONSE_401_UNAUTHORIZED),
             @ApiResponse(responseCode = Constants.Swagger._500, description = Constants.Swagger.RESPONSE_500_INTERNAL_ERROR)
     })
-    @GetMapping("/validate-otp/{otp}/{phoneNumber}")
-    public Mono<TokenDto> validateOTP(@ValidOtp @PathVariable String otp , @ValidPhoneNumber @PathVariable String phoneNumber) {
-        return customerService.findCustomerByPhoneNumber(phoneNumber)
+    @GetMapping("/validate-otp/{otp}")
+    public Mono<TokenDto> validateOTP(@ValidOtp @PathVariable String otp , @RequestParam(required = false) String phoneNumber , @RequestParam(required = false) String email) {
+        if (phoneNumber == null && email == null) {
+            return Mono.error(new OtpInvalidException(Constants.Exception.INVALID_OTP));
+        }
+        Mono<CustomerDto> customer =  phoneNumber != null ? customerService.findCustomerByPhoneNumber(phoneNumber) : customerService.findCustomerByEmail(email);
+        String subject = phoneNumber != null ? phoneNumber : email;
+        return customer
                         .flatMap(
-                                customerDto -> otpValidator.validate(customerDto , otp))
+                                customerDto -> otpService.validate(customerDto , otp))
                         .flatMap(
-                                customerDto -> customerDto != null ? jwtTokenGenerator.generate(phoneNumber , customerDto):Mono.empty())
+                                customerDto -> customerDto != null ? jwtTokenGenerator.generate(subject , customerDto):Mono.empty())
                         .switchIfEmpty(Mono.error(new OtpInvalidException(Constants.Exception.INVALID_OTP)));
     }
 }
