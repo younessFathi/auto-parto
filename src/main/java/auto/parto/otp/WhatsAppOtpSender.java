@@ -3,44 +3,27 @@ package auto.parto.otp;
 import auto.parto.dto.OtpRequestDto;
 import auto.parto.exception.TwilioException;
 import auto.parto.utils.Constants;
-import com.twilio.Twilio;
 import com.twilio.exception.ApiException;
 import com.twilio.exception.AuthenticationException;
 import com.twilio.exception.InvalidRequestException;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 @Slf4j
-@Service
+@Service("whatsapp")
 @AllArgsConstructor
 public class WhatsAppOtpSender implements OtpSender {
     private OtpService otpService;
-    private TwilioSender twilioSender;
+    private TwilioOtpSender twilioSender;
+    private Sender sender;
 
     @Override
     public Mono<String> send(OtpRequestDto otpRequestDto) {
         log.info("{} : {}", Constants.OTPConstants.SENDING_OTP_TO, otpRequestDto.getPhoneNumber());
-
-        // Generate OTP and format the WhatsApp number
-       return otpService.generate()
-                .flatMap(
-                        otp -> {
-                            log.info("{} : {}", Constants.OTPConstants.GENERATED_OTP, otp);
-                            String whatsappNumber = Constants.OTPConstants.WHATSAPP + otpRequestDto.getPhoneNumber();
-                            return twilioSender.send(whatsappNumber, otp)
-                                    .onErrorMap(this::handleException)
-                                    .flatMap(
-                                    (sid) -> {
-                                        log.info("{} : {}" , Constants.OTPConstants.MESSAGE_SID, sid);
-                                        return Mono.just(otp);
-                                    }
-                            )
-                             .doOnTerminate(()->log.info("{} : {}", Constants.OTPConstants.END_OF_SEND_OTP_TO, otpRequestDto.getPhoneNumber()));
-                        }
-                );
+        String whatsappNumber = Constants.OTPConstants.WHATSAPP + otpRequestDto.getPhoneNumber();
+        return sender.send(whatsappNumber, twilioSender::send).onErrorMap(this::handleException);
     }
 
     // Centralized exception handling

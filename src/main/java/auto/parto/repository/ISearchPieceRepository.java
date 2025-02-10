@@ -5,4 +5,5 @@ import reactor.core.publisher.Mono;
 
 public interface ISearchPieceRepository {
     Mono<Piece> saveSearchPiece(Piece piece);
+    Mono<Piece> getPieceById(String id);
 }

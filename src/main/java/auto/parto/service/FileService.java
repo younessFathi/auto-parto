@@ -7,6 +7,7 @@ import auto.parto.service.iservice.IFileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Service
@@ -19,5 +20,12 @@ public class FileService implements IFileService {
     public Mono<FileDto> save(FileDto fileDto) {
         return fileRepository.save(FileMapper.toEntity(fileDto))
                             .map(FileMapper::toDto);
+    }
+
+    @Override
+    public Flux<FileDto> getFilesByPieceId(String pieceId) {
+        log.info("{} : {}", "Getting files by piece id" , pieceId);
+        return fileRepository.getFilesByPieceId(pieceId)
+                             .map(FileMapper::toDto);
     }
 }

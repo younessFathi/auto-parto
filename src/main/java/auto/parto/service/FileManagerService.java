@@ -18,7 +18,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 import static org.apache.commons.io.FilenameUtils.getExtension;
@@ -26,17 +25,16 @@ import static org.apache.commons.io.FilenameUtils.getExtension;
 @Service
 @Slf4j
 public class FileManagerService implements IFileManagerService {
-    private final IFileService fileService;
     @Value("${auto.parto.images.uploads}")
     private String uploadsDirectory;
 
-    public FileManagerService(IFileService fileService , @Value("${auto.parto.images.uploads}") String uploadsDirectory) {
-        this.fileService = fileService;
+    public FileManagerService(@Value("${auto.parto.images.uploads}") String uploadsDirectory) {
         this.uploadsDirectory = uploadsDirectory;
     }
 
     @Override
-    public Mono<FileDto> save(FilePart image, String folderName) {
+    public Mono<FileDto> save(FilePart image) {
+        String folderName = UUID.randomUUID().toString();
         Path rootLocation = Paths.get(uploadsDirectory +"/"+folderName);
         createUploadDirectory(rootLocation);
         String fileExtension = getExtension(image.filename());
@@ -56,12 +54,12 @@ public class FileManagerService implements IFileManagerService {
                     return FileDto.builder()
                                 .createdAt(LocalDateTime.now())
                                 .generatedFilename(generatedFileName)
-                                .id(UUID.randomUUID())
+                                .id(UUID.randomUUID().toString())
                                 .originalFilename(image.filename())
+                                .folderName(folderName)
                                 .build();
                 }))
                 // Persist metadata in the database
-                .flatMap(fileService::save)
                 .doOnSuccess(file -> log.info("{} : {}", Constants.FileUpload.FILE_SAVED, file));
     }
 

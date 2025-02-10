@@ -4,11 +4,10 @@ package auto.parto.api;
 import auto.parto.dto.CustomerDto;
 import auto.parto.dto.OtpRequestDto;
 import auto.parto.dto.TokenDto;
+import auto.parto.otp.EmailOtpSender;
 import auto.parto.otp.OtpService;
 import auto.parto.otp.WhatsAppOtpSender;
-import auto.parto.otp.WhatsAppOtpValidator;
 import auto.parto.service.CustomerService;
-import auto.parto.utils.Constants;
 import auto.parto.utils.JwtTokenGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,8 +20,6 @@ import static org.mockito.Mockito.*;
 import org.springframework.security.test.context.support.WithMockUser;
 import reactor.core.publisher.Mono;
 
-import java.util.Map;
-
 @WebFluxTest(controllers = AuthController.class)
 public class AuthControllerIT {
 
@@ -33,13 +30,13 @@ public class AuthControllerIT {
     private WhatsAppOtpSender whatsAppOtpSender;
 
     @MockitoBean
-    private WhatsAppOtpValidator whatsAppOtpValidator;
+    private OtpService otpService;
+
+    @MockitoBean
+    private EmailOtpSender emailOtpSender;
 
     @MockitoBean
     private JwtTokenGenerator jwtTokenGenerator;
-
-    @MockitoBean
-    private OtpService otpService;
 
     @MockitoBean
     private CustomerService customerService;
@@ -64,7 +61,7 @@ public class AuthControllerIT {
         when(whatsAppOtpSender.send(any())).thenReturn(Mono.just("1234"));
         when(customerService.checkIfCustomerExistUsingPhoneNumber(anyString())).thenReturn(Mono.just(false));
         when(customerService.create(any() , anyString())).thenReturn(Mono.just(customerDto));
-        when(customerService.updateGeneratedOtp(any() , anyString())).thenReturn(Mono.empty());
+        when(customerService.updateGeneratedOtpByPhoneNumber(any() , anyString())).thenReturn(Mono.empty());
 
         webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
                 .post()
@@ -86,7 +83,7 @@ public class AuthControllerIT {
         when(whatsAppOtpSender.send(any())).thenReturn(Mono.just("1234"));
         when(customerService.checkIfCustomerExistUsingPhoneNumber(anyString())).thenReturn(Mono.just(false));
         when(customerService.create(any() , anyString())).thenReturn(Mono.just(customerDto));
-        when(customerService.updateGeneratedOtp(any() , anyString())).thenReturn(Mono.empty());
+        when(customerService.updateGeneratedOtpByPhoneNumber(any() , anyString())).thenReturn(Mono.empty());
 
         webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
                 .post()
@@ -104,7 +101,7 @@ public class AuthControllerIT {
         String phoneNumber = "1234567890";
 
         when(customerService.findCustomerByPhoneNumber(anyString())).thenReturn(Mono.just(customerDto));
-        when(whatsAppOtpValidator.validate(customerDto, otp)).thenReturn(Mono.just(new CustomerDto()));
+        when(otpService.validate(customerDto, otp)).thenReturn(Mono.just(new CustomerDto()));
         when(jwtTokenGenerator.generate(anyString() , any())).thenReturn(Mono.just(
                 TokenDto.builder()
                         .token("mocked-jwt-token")
@@ -115,7 +112,7 @@ public class AuthControllerIT {
         // Act & Assert
         webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
                 .get()
-                .uri("/auth/validate-otp/{otp}/{phoneNumber}", otp, phoneNumber)
+                .uri("/auth/validate-otp/1234?phoneNumber=1234567890", otp, phoneNumber)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(TokenDto.class)
@@ -129,13 +126,39 @@ public class AuthControllerIT {
         String otp = "12344";
         String phoneNumber = "9876543210";
 
-        when(whatsAppOtpValidator.validate(customerDto, otp)).thenReturn(Mono.empty());
+        when(otpService.validate(customerDto, otp)).thenReturn(Mono.empty());
 
         // Act & Assert
         webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
                 .get()
-                .uri("/auth/validate-otp/{otp}/{phoneNumber}", otp, phoneNumber)
+                .uri("/auth/validate-otp/{otp}?phoneNumber=1234567890", otp)
                 .exchange()
                 .expectStatus().is5xxServerError();
+    }
+
+    @Test
+    @WithMockUser
+    void validateOTP_WithValidPhoneNumber_ReturnsToken() {
+        // Arrange
+        String otp = "1234";
+        String phoneNumber = "1234567890";
+
+        when(customerService.findCustomerByEmail(anyString())).thenReturn(Mono.just(customerDto));
+        when(otpService.validate(customerDto, otp)).thenReturn(Mono.just(new CustomerDto()));
+        when(jwtTokenGenerator.generate(anyString() , any())).thenReturn(Mono.just(
+                TokenDto.builder()
+                        .token("mocked-jwt-token")
+                        .customerDto(customerDto)
+                        .build()
+        ));
+
+        // Act & Assert
+        webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
+                .get()
+                .uri("/auth/validate-otp/1234?email=john@example.com", otp, phoneNumber)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(TokenDto.class)
+                .value( t-> t.getToken().equals("mocked-jwt-token") );
     }
 }

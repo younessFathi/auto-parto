@@ -5,5 +5,5 @@ import org.springframework.http.codec.multipart.FilePart;
 import reactor.core.publisher.Mono;
 
 public interface IFileManagerService {
-    Mono<FileDto> save(FilePart image , String folderName);
+    Mono<FileDto> save(FilePart image);
 }

@@ -19,11 +19,17 @@ public class CustomerService implements ICustomerService {
 
     @Override
     public Mono<Boolean> checkIfCustomerExistUsingPhoneNumber(String phoneNumber) {
-        return customerRepository.exists(phoneNumber);
+        return customerRepository.exists(phoneNumber, "phoneNumber");
+    }
+
+    @Override
+    public Mono<Boolean> checkIfCustomerExistUsingEmail(String email) {
+        return customerRepository.exists(email, "email");
     }
 
     @Override
     public Mono<CustomerDto> create(OtpRequestDto otpRequestDto, String otp) {
+        log.info("Creating new customer with phone number: {}", otpRequestDto.getPhoneNumber());
         return customerRepository.save(
                 CustomerMapper.toEntity(otpRequestDto , otp)
         ).map(CustomerMapper::toDto);
@@ -31,11 +37,31 @@ public class CustomerService implements ICustomerService {
 
     @Override
     public Mono<CustomerDto> findCustomerByPhoneNumber(String phoneNumber) {
-        return customerRepository.findByPhoneNumber(phoneNumber).map(CustomerMapper::toDto);
+        return customerRepository.findBy(phoneNumber, "phoneNumber").map(CustomerMapper::toDto);
     }
 
     @Override
-    public Mono<CustomerDto> updateGeneratedOtp(String phoneNumber, String sentOtp) {
-        return customerRepository.updateGeneratedOtp(phoneNumber, sentOtp , JwtTokenGenerator.keyGenerator(phoneNumber)).map(CustomerMapper::toDto);
+    public Mono<CustomerDto> updateGeneratedOtpByPhoneNumber(String phoneNumber, String sentOtp) {
+        log.info("Updating generated OTP for phone number: {}", phoneNumber);
+        return customerRepository.updateGeneratedOtp(
+                            phoneNumber, sentOtp ,
+                            JwtTokenGenerator.keyGenerator(phoneNumber),
+                        "phoneNumber"
+                        ).map(CustomerMapper::toDto);
+    }
+
+    @Override
+    public Mono<CustomerDto> updateGeneratedOtpByEmail(String email, String sentOtp) {
+        log.info("Updating generated OTP for email: {}", email);
+        return customerRepository.updateGeneratedOtp(
+                email, sentOtp ,
+                JwtTokenGenerator.keyGenerator(email),
+                "email"
+        ).map(CustomerMapper::toDto);
+    }
+
+    @Override
+    public Mono<CustomerDto> findCustomerByEmail(String email) {
+        return customerRepository.findBy(email , "email").map(CustomerMapper::toDto);
     }
 }
