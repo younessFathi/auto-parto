@@ -10,6 +10,8 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import java.math.BigDecimal;
+
 @RestController
 @AllArgsConstructor
 @Validated
@@ -26,5 +28,11 @@ public class SellerController {
     public Mono<SellerDto> getSellerById(@PathVariable String id) {
         return sellerService.getSellerById(id)
                 .switchIfEmpty(Mono.error(new EntityNotFoundException("Seller not found")));
+    }
+
+    @PostMapping("/{id}/wallet/add")
+    public Mono<SellerDto> addFunds(@PathVariable String id, @RequestParam BigDecimal amount) {
+        return sellerService.addFunds(id, amount)
+                        .switchIfEmpty(Mono.error(new EntityNotFoundException("Seller not found")));
     }
 }

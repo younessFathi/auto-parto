@@ -21,4 +21,7 @@ public class Wallet {
         this.balance = balance;
         this.currency = currency;
     }
+    public void addFunds(BigDecimal amount) {
+        this.balance = this.balance.add(amount);
+    }
 }

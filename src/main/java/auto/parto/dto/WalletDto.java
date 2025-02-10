@@ -16,4 +16,8 @@ public class WalletDto {
     private String id;
     private BigDecimal balance;
     private String currency;
+
+    public void addFunds(BigDecimal amount) {
+        this.balance = this.balance.add(amount);
+    }
 }

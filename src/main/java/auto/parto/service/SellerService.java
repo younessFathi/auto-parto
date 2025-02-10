@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.math.BigDecimal;
+
 @Service
 @AllArgsConstructor
 @Slf4j
@@ -26,5 +28,16 @@ public class SellerService implements ISellerService {
         log.info("Getting seller by id: {}", id);
         return sellerRepository.getSellerById(id)
                                 .map(SellerMapper::toDto);
+    }
+
+    @Override
+    public Mono<SellerDto> addFunds(String id, BigDecimal amount) {
+        log.info("Adding funds to seller with id: {}", id);
+        return sellerRepository.getSellerById(id)
+                .flatMap(seller -> {
+                    seller.getWallet().addFunds(amount);
+                    return sellerRepository.save(seller)
+                            .map(SellerMapper::toDto);
+                });
     }
 }
