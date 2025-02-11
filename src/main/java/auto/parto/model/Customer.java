@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Document(collection = "customers")
@@ -17,11 +18,13 @@ import java.util.UUID;
 @Builder
 public class Customer {
     @Id
-    private UUID id;
+    private String id;
     private String firstName;
     private String lastName;
     private String email;
     private String phoneNumber;
+    private LocalDateTime createAt;
+    private LocalDateTime modifiedAt;
     private OtpDetails otpDetails;
     private String jwtKey;
 }

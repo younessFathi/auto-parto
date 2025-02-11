@@ -34,6 +34,7 @@ public class FileManagerService implements IFileManagerService {
 
     @Override
     public Mono<FileDto> save(FilePart image) {
+        log.info("{} : {}" , "Saving File",  image.filename());
         String folderName = UUID.randomUUID().toString();
         Path rootLocation = Paths.get(uploadsDirectory +"/"+folderName);
         createUploadDirectory(rootLocation);

@@ -37,7 +37,7 @@ public class OtpService {
         return Mono.just(customerDto);
     }
 
-    private void checkOtp(UUID id, String otp, OtpDetailsDto cachedOtp) {
+    private void checkOtp(String id, String otp, OtpDetailsDto cachedOtp) {
         if (cachedOtp == null) {
             log.info("{} : {}" , Constants.Exception.INVALID_OTP_FOR, id);
             throw new OtpInvalidException(Constants.Exception.INVALID_OTP);
