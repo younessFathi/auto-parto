@@ -4,8 +4,8 @@ import auto.parto.dto.PieceDto;
 import auto.parto.mapper.PieceMapper;
 import auto.parto.notification.Notification;
 import auto.parto.repository.ISearchPieceRepository;
-import auto.parto.service.iservice.IFileService;
 import auto.parto.service.iservice.ISearchPieceService;
+import auto.parto.validator.ValidCustomerId;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -15,20 +15,23 @@ import reactor.core.publisher.Mono;
 @Slf4j
 public class SearchPieceService implements ISearchPieceService {
     private final ISearchPieceRepository searchPieceRepository;
-    private final IFileService fileService;
     private final Notification notification;
+    private final ValidCustomerId validCustomerId;
 
     public SearchPieceService(ISearchPieceRepository searchPieceRepository ,
-                              @Qualifier("pushNotification") Notification notification
-                              , IFileService fileService) {
+                              @Qualifier("pushNotification") Notification notification,
+                              ValidCustomerId validCustomerId
+    ) {
         this.searchPieceRepository = searchPieceRepository;
         this.notification = notification;
-        this.fileService = fileService;
+        this.validCustomerId = validCustomerId;
     }
 
     @Override
     public Mono<PieceDto> notifySellers(PieceDto pieceDto) {
-        return notification.notifySellers(pieceDto).thenReturn(pieceDto);
+        return validCustomerId.isValid(pieceDto)
+                            .flatMap(notification::notifySellers)
+                            .thenReturn(pieceDto);
     }
 
     @Override

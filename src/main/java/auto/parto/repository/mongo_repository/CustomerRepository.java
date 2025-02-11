@@ -53,6 +53,11 @@ public class CustomerRepository implements ICustomerRepository {
     }
 
     @Override
+    public Mono<Boolean> existsById(String id) {
+        return reactiveMongoTemplate.findById(id , Customer.class).hasElement();
+    }
+
+    @Override
     public Mono<Customer> updateGeneratedOtp(String phoneNumber, String sentOtp, String jwtKey, String field) {
         Query query = new Query(Criteria.where(field).is(phoneNumber));
 

@@ -47,7 +47,7 @@ public class CustomerMapper {
 
     public static Customer toEntity(OtpRequestDto otpRequestDto , String otp) {
         return Customer.builder()
-                .id(UUID.randomUUID())
+                .id(UUID.randomUUID().toString())
                 .firstName(otpRequestDto.getFirstName())
                 .lastName(otpRequestDto.getLastName())
                 .phoneNumber(otpRequestDto.getPhoneNumber())

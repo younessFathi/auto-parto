@@ -28,6 +28,12 @@ public class CustomerService implements ICustomerService {
     }
 
     @Override
+    public Mono<Boolean> checkIfCustomerExistUsingId(String id) {
+        log.info("Check if customer exist using id {} " , id);
+        return customerRepository.existsById(id);
+    }
+
+    @Override
     public Mono<CustomerDto> create(OtpRequestDto otpRequestDto, String otp) {
         log.info("Creating new customer with phone number: {}", otpRequestDto.getPhoneNumber());
         return customerRepository.save(

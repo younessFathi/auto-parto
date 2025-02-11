@@ -14,4 +14,5 @@ public interface ICustomerService {
     Mono<CustomerDto> updateGeneratedOtpByPhoneNumber(String phoneNumber, String sentOtp);
     Mono<CustomerDto> updateGeneratedOtpByEmail(String email, String sentOtp);
     Mono<CustomerDto> findCustomerByEmail( @Email String email);
+    Mono<Boolean> checkIfCustomerExistUsingId(String id);
 }

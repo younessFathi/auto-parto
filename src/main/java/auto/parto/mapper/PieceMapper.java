@@ -11,6 +11,7 @@ public class PieceMapper {
     public static PieceDto toDto(Piece piece) {
         return PieceDto.builder()
                     .condition(piece.getCondition())
+                    .customerId(piece.getCustomerId())
                     .id(piece.getId())
                     .name(piece.getName())
                     .description(piece.getDescription())
@@ -18,10 +19,12 @@ public class PieceMapper {
                     .createAt(piece.getCreateAt())
                     .modifiedAt(piece.getModifiedAt())
                     .images(
+                            piece.getImages() != null ?
                             piece.getImages()
                                     .stream()
                                     .map(FileMapper::toDto)
-                                    .collect(Collectors.toList())
+                                    .collect(Collectors.toList()):
+                                    null
                     )
                 .build();
     }
@@ -30,16 +33,19 @@ public class PieceMapper {
         return Piece.builder()
                     .id(UUID.randomUUID().toString())
                     .name(pieceDto.getName())
+                    .customerId(pieceDto.getCustomerId())
                     .description(pieceDto.getDescription())
                     .condition(pieceDto.getCondition())
                     .createAt(LocalDateTime.now())
                     .modifiedAt(null)
                     .category(pieceDto.getCategory())
                     .images(
+                            pieceDto.getImages() != null ?
                             pieceDto.getImages()
                                     .stream()
                                     .map(FileMapper::toEntity)
-                                    .collect(Collectors.toList())
+                                    .collect(Collectors.toList()):
+                                    null
                     )
                 .build();
     }

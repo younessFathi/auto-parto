@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.validation.annotation.Validated;
@@ -26,6 +27,7 @@ import reactor.core.publisher.Mono;
 @RequestMapping("/search")
 @AllArgsConstructor
 @Validated
+@Slf4j
 @Tag(name = Constants.Swagger.TAG_SEARCH, description = Constants.Swagger.TAG_SEARCH_DESCRIPTION)
 public class SearchController {
     private ISearchPieceService searchPieceService;
@@ -74,8 +76,10 @@ public class SearchController {
 
     private Mono<PieceDto> deserializePiece(String pieceStr) {
         try {
+            log.info("{} : {}" , "Deserializing piece" , pieceStr);
             return Mono.just(objectMapper.readValue(pieceStr, PieceDto.class));
         } catch (JsonProcessingException e) {
+            log.error("{} : {}" , "Deserialization exception" ,  e.getMessage());
             return Mono.error(e);
         }
     }
