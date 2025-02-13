@@ -27,4 +27,5 @@ public class Seller {
     private LocalDateTime createAt;
     private LocalDateTime modifiedAt;
     private Wallet wallet;
+    private Boolean isActive;
 }

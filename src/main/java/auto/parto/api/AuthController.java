@@ -54,6 +54,13 @@ public class AuthController {
                         );
     }
 
+    @Operation(summary = Constants.Swagger.SEND_OTP_SUMMARY, description = Constants.Swagger.SEND_OTP_DESCRIPTION)
+    @ApiResponses({
+            @ApiResponse(responseCode = Constants.Swagger._200, description = Constants.Swagger.RESPONSE_200_OTP_SENT,
+                    content = @Content(schema = @Schema(implementation = CustomerDto.class))),
+            @ApiResponse(responseCode = Constants.Swagger._400, description = Constants.Swagger.RESPONSE_400_BAD_REQUEST),
+            @ApiResponse(responseCode = Constants.Swagger._500, description = Constants.Swagger.RESPONSE_500_INTERNAL_ERROR)
+    })
     @PostMapping("/send-otp-email")
     public Mono<CustomerDto> sendOTPToEmail(@Valid @RequestBody OtpRequestDto otpRequestDto) {
         return emailOtpSender.send(otpRequestDto)

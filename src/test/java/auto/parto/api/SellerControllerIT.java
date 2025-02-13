@@ -3,6 +3,7 @@ package auto.parto.api;
 import auto.parto.dto.SellerDto;
 import auto.parto.dto.WalletDto;
 import auto.parto.enums.CarPartType;
+import auto.parto.enums.Currency;
 import auto.parto.service.iservice.ISellerService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,7 +41,7 @@ public class SellerControllerIT {
                 .walletDto(WalletDto.builder()
                         .id("1")
                         .balance(new BigDecimal("100.00"))
-                        .currency("USD")
+                        .currency(Currency.USD)
                         .build())
                 .build();
     }
@@ -72,7 +73,7 @@ public class SellerControllerIT {
                 .walletDto(WalletDto.builder()
                         .id("1")
                         .balance(new BigDecimal("100.00"))
-                        .currency("USD")
+                        .currency(Currency.USD)
                         .build())
                 .build();
 
@@ -96,7 +97,7 @@ public class SellerControllerIT {
                 .walletDto(WalletDto.builder()
                         .id("1")
                         .balance(new BigDecimal("100.00"))
-                        .currency("USD")
+                        .currency(Currency.USD)
                         .build())
                 .build();
 
@@ -119,7 +120,7 @@ public class SellerControllerIT {
                 .walletDto(WalletDto.builder()
                         .id("1")
                         .balance(new BigDecimal("100.00"))
-                        .currency("USD")
+                        .currency(Currency.USD)
                         .build())
                 .build();
 
@@ -142,7 +143,7 @@ public class SellerControllerIT {
                 .walletDto(WalletDto.builder()
                         .id("1")
                         .balance(new BigDecimal("100.00"))
-                        .currency("USD")
+                        .currency(Currency.USD)
                         .build())
                 .build();
 
@@ -178,7 +179,7 @@ public class SellerControllerIT {
                 .walletDto(WalletDto.builder()
                         .id("1")
                         .balance(new BigDecimal("150.00"))
-                        .currency("USD")
+                        .currency(Currency.USD)
                         .build())
                 .build();
 

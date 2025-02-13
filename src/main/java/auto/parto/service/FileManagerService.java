@@ -27,9 +27,11 @@ import static org.apache.commons.io.FilenameUtils.getExtension;
 public class FileManagerService implements IFileManagerService {
     @Value("${auto.parto.images.uploads}")
     private String uploadsDirectory;
+    private IFileService fileService;
 
-    public FileManagerService(@Value("${auto.parto.images.uploads}") String uploadsDirectory) {
+    public FileManagerService(@Value("${auto.parto.images.uploads}") String uploadsDirectory , IFileService fileService) {
         this.uploadsDirectory = uploadsDirectory;
+        this.fileService = fileService;
     }
 
     @Override
@@ -60,6 +62,7 @@ public class FileManagerService implements IFileManagerService {
                                 .folderName(folderName)
                                 .build();
                 }))
+                .flatMap(fileService::save)
                 // Persist metadata in the database
                 .doOnSuccess(file -> log.info("{} : {}", Constants.FileUpload.FILE_SAVED, file));
     }

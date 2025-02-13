@@ -12,4 +12,6 @@ public interface ISellerService {
     Mono<SellerDto> getSellerById(String id);
 
     Mono<SellerDto> addFunds(String id, BigDecimal amount);
+
+    Mono<SellerDto> deactivate(String id);
 }
