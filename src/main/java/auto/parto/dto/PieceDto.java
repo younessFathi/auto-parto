@@ -37,7 +37,7 @@ public class PieceDto {
     private LocalDateTime createAt;
     private LocalDateTime modifiedAt;
     @Schema(accessMode = Schema.AccessMode.READ_ONLY)
-    private List<FileDto> images;
+    private List<String> imagesId;
 }
 // TODO: hetzner vps coolfy deployement
 // TODO: mongodb for dev env

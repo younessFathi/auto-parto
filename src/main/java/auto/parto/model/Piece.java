@@ -28,5 +28,5 @@ public class Piece {
     private LocalDateTime createAt;
     private LocalDateTime modifiedAt;
     private Category category;
-    private List<File> images;
+    private List<String> imagesId;
 }

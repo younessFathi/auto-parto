@@ -1,5 +1,6 @@
 package auto.parto.model;
 
+import auto.parto.enums.Currency;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,8 +18,8 @@ public class Wallet {
     @Id
     private String id;
     private BigDecimal balance;
-    private String currency;
-    public Wallet(String id, BigDecimal balance, String currency) {
+    private Currency currency;
+    public Wallet(String id, BigDecimal balance, Currency currency) {
         this.id = id;
         this.balance = balance;
         this.currency = currency;

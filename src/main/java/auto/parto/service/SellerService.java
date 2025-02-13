@@ -40,4 +40,14 @@ public class SellerService implements ISellerService {
                             .map(SellerMapper::toDto);
                 });
     }
+
+    @Override
+    public Mono<SellerDto> deactivate(String id) {
+        return sellerRepository.getSellerById(id)
+                .flatMap(seller -> {
+                    seller.setIsActive(false); // Assuming there is an 'active' field in Seller entity
+                    return sellerRepository.save(seller)
+                            .map(SellerMapper::toDto);
+                }); // Assuming there is a constructor to convert entity to DTO
+    }
 }

@@ -18,14 +18,7 @@ public class PieceMapper {
                     .category(piece.getCategory())
                     .createAt(piece.getCreateAt())
                     .modifiedAt(piece.getModifiedAt())
-                    .images(
-                            piece.getImages() != null ?
-                            piece.getImages()
-                                    .stream()
-                                    .map(FileMapper::toDto)
-                                    .collect(Collectors.toList()):
-                                    null
-                    )
+                    .imagesId(piece.getImagesId())
                 .build();
     }
 
@@ -39,14 +32,7 @@ public class PieceMapper {
                     .createAt(LocalDateTime.now())
                     .modifiedAt(null)
                     .category(pieceDto.getCategory())
-                    .images(
-                            pieceDto.getImages() != null ?
-                            pieceDto.getImages()
-                                    .stream()
-                                    .map(FileMapper::toEntity)
-                                    .collect(Collectors.toList()):
-                                    null
-                    )
+                    .imagesId(pieceDto.getImagesId())
                 .build();
     }
 }

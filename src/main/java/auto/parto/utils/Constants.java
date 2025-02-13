@@ -83,6 +83,11 @@ public class Constants {
         public static final String _200 = "200";
         public static final String _400 = "400";
         public static final String _401 = "401";
+        public static final String _404 = "404";
+        public static final String RESPONSE_404_PIECE_NOT_FOUND = "Piece not found";
+        public static final String RESPONSE_200_PIECE_FOUND = "Piece found";
+        public static final String GET_PIECE_SUMMARY = "Get Piece by id";
+        public static final String GET_PIECE_DESCRIPTION = "Getting piece using id";
     }
 
     public static class Email {

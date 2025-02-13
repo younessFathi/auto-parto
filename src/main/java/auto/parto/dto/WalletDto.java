@@ -1,5 +1,6 @@
 package auto.parto.dto;
 
+import auto.parto.enums.Currency;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,7 +16,7 @@ import java.math.BigDecimal;
 public class WalletDto {
     private String id;
     private BigDecimal balance;
-    private String currency;
+    private Currency currency;
 
     public void addFunds(BigDecimal amount) {
         this.balance = this.balance.add(amount);

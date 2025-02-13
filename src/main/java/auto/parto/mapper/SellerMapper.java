@@ -2,6 +2,7 @@ package auto.parto.mapper;
 
 import auto.parto.dto.SellerDto;
 import auto.parto.dto.WalletDto;
+import auto.parto.enums.Currency;
 import auto.parto.model.Seller;
 import auto.parto.model.Wallet;
 
@@ -39,7 +40,7 @@ public class SellerMapper {
                 .description(sellerDto.getDescription())
                 .createAt(LocalDateTime.now())
                 .modifiedAt(null)
-                .wallet(new Wallet(UUID.randomUUID().toString() , new BigDecimal(0) , "MAD"))
+                .wallet(new Wallet(UUID.randomUUID().toString() , new BigDecimal(0) , Currency.MAD))
                 .build();
     }
 }

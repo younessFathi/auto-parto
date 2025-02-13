@@ -49,7 +49,7 @@ class FileManagerServiceTest {
         // Mock behaviors
         when(mockFilePart.filename()).thenReturn(filename);
         when(mockFilePart.content()).thenReturn(Flux.just(createTestDataBuffer("test content")));
-
+        when(fileService.save(any())).thenReturn(Mono.just(FileDto.builder().originalFilename("image.jpg").generatedFilename(UUID.randomUUID().toString()).build()));
         // Call the method under test
         Mono<FileDto> result = fileManagerService.save(mockFilePart);
 
@@ -71,7 +71,6 @@ class FileManagerServiceTest {
 
         // Mock behaviors
         when(mockFilePart.filename()).thenReturn(filename);
-
         // Call the method under test
         Mono<FileDto> result = fileManagerService.save(mockFilePart);
 

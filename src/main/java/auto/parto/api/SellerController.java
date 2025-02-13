@@ -81,4 +81,18 @@ public class SellerController {
         return sellerService.addFunds(id, amount.negate())
                 .switchIfEmpty(Mono.error(new EntityNotFoundException("Seller not found")));
     }
+
+    @Operation(summary = "Deactivate a seller")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Seller deactivated successfully",
+                    content = { @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = SellerDto.class)) }),
+            @ApiResponse(responseCode = "404", description = "Seller not found",
+                    content = @Content)
+    })
+    @PostMapping("/{id}/deactivate")
+    public Mono<SellerDto> deactivateSeller(@PathVariable String id) {
+        return sellerService.deactivate(id)
+                .switchIfEmpty(Mono.error(new EntityNotFoundException("Seller not found")));
+    }
 }
