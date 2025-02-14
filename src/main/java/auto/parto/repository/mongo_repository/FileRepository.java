@@ -11,6 +11,8 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 @Repository
 @RequiredArgsConstructor
 @Slf4j
@@ -25,5 +27,11 @@ public class FileRepository implements IFileRepository {
     public Flux<File> getFilesByPieceId(String pieceId) {
         return reactiveMongoTemplate.find(Query.query(Criteria.where("pieceId").is(pieceId)), File.class)
                              .doOnNext(file -> log.info("File: {}", file));
+    }
+
+    @Override
+    public Flux<File> findAllByIds(List<String> imagesId) {
+        Query query = new Query(Criteria.where("_id").in(imagesId)); // Batch fetch
+        return reactiveMongoTemplate.find(query, File.class);
     }
 }

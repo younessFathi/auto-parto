@@ -21,6 +21,7 @@ public class CustomerMapper {
                 .lastName(customer.getLastName())
                 .phoneNumber(customer.getPhoneNumber())
                 .jwtKey(customer.getJwtKey())
+                .isActive(customer.getIsActive())
                 .otpDetailsDto(
                         OtpDetailsDto.builder()
                                 .otp(customer.getOtpDetails().getOtp())
@@ -36,6 +37,7 @@ public class CustomerMapper {
                 .lastName(customerDto.getLastName())
                 .phoneNumber(customerDto.getPhoneNumber())
                 .email(customerDto.getEmail())
+                .isActive(Boolean.TRUE)
                 .otpDetails(
                         OtpDetails.builder()
                                 .otp(customerDto.getOtpDetailsDto().getOtp())
@@ -53,6 +55,7 @@ public class CustomerMapper {
                 .phoneNumber(otpRequestDto.getPhoneNumber())
                 .email(otpRequestDto.getEmail())
                 .jwtKey(JwtTokenGenerator.keyGenerator(otpRequestDto.getPhoneNumber()))
+                .isActive(Boolean.TRUE)
                 .otpDetails(
                         OtpDetails.builder()
                                 .otp(otp)

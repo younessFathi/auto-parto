@@ -3,6 +3,7 @@ package auto.parto.api;
 import auto.parto.dto.FileDto;
 import auto.parto.dto.PieceDto;
 import auto.parto.dto.PieceOfferDto;
+import auto.parto.dto.PieceWithFilesDto;
 import auto.parto.enums.Category;
 import auto.parto.enums.Condition;
 import auto.parto.service.iservice.IFileManagerService;
@@ -59,15 +60,16 @@ public class SearchControllerIT {
     @Test
     @WithMockUser
     public void testGetPieceById() {
-        Mockito.when(searchPieceService.getPieceWithImagesByPieceId(anyString())).thenReturn(Mono.just(pieceDto));
+        PieceWithFilesDto pieceWithFilesDto = PieceWithFilesDto.builder().build();
+        Mockito.when(searchPieceService.getPieceWithImagesByPieceId(anyString())).thenReturn(Mono.just(pieceWithFilesDto));
 
         webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
                 .get()
                 .uri("/search/piece/12345")
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(PieceDto.class)
-                .isEqualTo(pieceDto);
+                .expectBody(PieceWithFilesDto.class)
+                .isEqualTo(pieceWithFilesDto);
     }
 
     @Test

@@ -4,6 +4,8 @@ import auto.parto.model.Seller;
 import auto.parto.repository.ISellerRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
@@ -19,6 +21,8 @@ public class SellerRepository implements ISellerRepository {
 
     @Override
     public Mono<Seller> getSellerById(String id) {
-        return reactiveMongoTemplate.findById(id, Seller.class);
+        Query query = new Query();
+        query.addCriteria(Criteria.where("_id").is(id).and("isActive").is(true));
+        return reactiveMongoTemplate.findOne(query , Seller.class);
     }
 }

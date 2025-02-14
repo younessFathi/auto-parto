@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -27,5 +29,11 @@ public class FileService implements IFileService {
         log.info("{} : {}", "Getting files by piece id" , pieceId);
         return fileRepository.getFilesByPieceId(pieceId)
                              .map(FileMapper::toDto);
+    }
+
+    @Override
+    public Flux<FileDto> findAllByIds(List<String> imagesId) {
+        return fileRepository.findAllByIds(imagesId)
+                .map(FileMapper::toDto);
     }
 }

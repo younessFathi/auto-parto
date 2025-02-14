@@ -27,4 +27,5 @@ public class Customer {
     private LocalDateTime modifiedAt;
     private OtpDetails otpDetails;
     private String jwtKey;
+    private Boolean isActive;
 }

@@ -1,5 +1,6 @@
 package auto.parto.repository.mongo_repository;
 
+import auto.parto.dto.CustomerDto;
 import auto.parto.model.Customer;
 import auto.parto.repository.ICustomerRepository;
 import lombok.AllArgsConstructor;
@@ -54,7 +55,7 @@ public class CustomerRepository implements ICustomerRepository {
 
     @Override
     public Mono<Boolean> existsById(String id) {
-        return reactiveMongoTemplate.findById(id , Customer.class).hasElement();
+        return findByIdAndIsActiveTrue(id).hasElement();
     }
 
     @Override
@@ -73,5 +74,20 @@ public class CustomerRepository implements ICustomerRepository {
                     FindAndModifyOptions.options().returnNew(true),
                     Customer.class
         );
+    }
+
+    @Override
+    public Mono<Customer> deactivateCustomer(String id) {
+        return findByIdAndIsActiveTrue(id).flatMap(customer -> {
+            customer.setIsActive(Boolean.FALSE);
+            return reactiveMongoTemplate.save(customer);
+        });
+    }
+
+    @Override
+    public Mono<Customer> findByIdAndIsActiveTrue(String id) {
+        Query query = new Query();
+        query.addCriteria(Criteria.where("_id").is(id).and("isActive").is(true));
+        return reactiveMongoTemplate.findOne(query , Customer.class);
     }
 }

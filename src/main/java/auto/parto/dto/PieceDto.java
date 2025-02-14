@@ -2,6 +2,7 @@ package auto.parto.dto;
 
 import auto.parto.enums.Category;
 import auto.parto.enums.Condition;
+import auto.parto.enums.SellerType;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -38,6 +39,12 @@ public class PieceDto {
     private LocalDateTime modifiedAt;
     @Schema(accessMode = Schema.AccessMode.READ_ONLY)
     private List<String> imagesId;
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY)
+    private Integer seeNumber;
+    @NotNull(message = "Seller type is mandatory")
+    private SellerType sellerType;
+    @NotNull(message = "Seller Rank is mandatory")
+    private Double sellerRank;
 }
 // TODO: hetzner vps coolfy deployement
 // TODO: mongodb for dev env
