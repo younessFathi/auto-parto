@@ -2,6 +2,7 @@ package auto.parto.dto;
 
 import auto.parto.enums.Condition;
 import auto.parto.enums.DeliveryMode;
+import auto.parto.enums.Duration;
 import auto.parto.enums.Status;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -58,4 +59,6 @@ public class PieceOfferDto {
     @NotNull(message = "Free delivery status is required")
     private Boolean isFreeDelivery;
     private BigDecimal deliveryPrice;
+    private Integer warranty;
+    private Duration duration;
 }

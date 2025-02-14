@@ -31,6 +31,8 @@ public class PieceOfferMapper {
                 .deliveryPrice(pieceOffer.getDeliveryPrice())
                 .imagesId(pieceOffer.getImagesId())
                 .isAvailable(pieceOffer.getIsAvailable())
+                .duration(pieceOffer.getDuration())
+                .warranty(pieceOffer.getWarranty())
                 .build();
     }
 
@@ -55,6 +57,8 @@ public class PieceOfferMapper {
                 .deliveryPrice(pieceOfferDto.getDeliveryPrice())
                 .imagesId(pieceOfferDto.getImagesId())
                 .isAvailable(pieceOfferDto.getIsAvailable())
+                .duration(pieceOfferDto.getDuration())
+                .warranty(pieceOfferDto.getWarranty())
                 .build();
     }
 

@@ -29,6 +29,8 @@ public class SecurityConfig {
                         .pathMatchers("/auth/**").permitAll()
                         .pathMatchers("/search/**").permitAll()
                         .pathMatchers("/seller/**").permitAll()
+                        .pathMatchers("/customers/**").permitAll()
+                        .pathMatchers("/images/**").permitAll()
                         .pathMatchers(SWAGGER_WHITELIST).permitAll()
                         .anyExchange().authenticated()
                 )

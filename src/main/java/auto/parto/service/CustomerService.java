@@ -34,6 +34,12 @@ public class CustomerService implements ICustomerService {
     }
 
     @Override
+    public Mono<CustomerDto> deactivateCustomer(String id) {
+        log.info("Deactivate customer by id : {} " , id);
+        return customerRepository.deactivateCustomer(id).map(CustomerMapper::toDto);
+    }
+
+    @Override
     public Mono<CustomerDto> create(OtpRequestDto otpRequestDto, String otp) {
         log.info("Creating new customer with phone number: {}", otpRequestDto.getPhoneNumber());
         return customerRepository.save(

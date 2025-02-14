@@ -2,9 +2,11 @@ package auto.parto.service;
 
 import auto.parto.dto.PieceDto;
 import auto.parto.dto.PieceOfferDto;
+import auto.parto.dto.PieceWithFilesDto;
 import auto.parto.mapper.PieceMapper;
 import auto.parto.notification.Notification;
 import auto.parto.repository.ISearchPieceRepository;
+import auto.parto.service.iservice.IFileService;
 import auto.parto.service.iservice.ISearchPieceService;
 import auto.parto.validator.ValidCustomerId;
 import auto.parto.validator.ValidPieceId;
@@ -21,18 +23,21 @@ public class SearchPieceService implements ISearchPieceService {
     private final ValidCustomerId validCustomerId;
     private final ValidPieceId validPieceId;
     private final PieceOfferService pieceOfferService;
+    private final IFileService fileService;
 
     public SearchPieceService(ISearchPieceRepository searchPieceRepository ,
                               @Qualifier("pushNotification") Notification notification,
                               ValidCustomerId validCustomerId,
                               ValidPieceId validPieceId,
-                              PieceOfferService pieceOfferService
+                              PieceOfferService pieceOfferService,
+                              IFileService fileService
     ) {
         this.searchPieceRepository = searchPieceRepository;
         this.notification = notification;
         this.validCustomerId = validCustomerId;
         this.validPieceId = validPieceId;
         this.pieceOfferService = pieceOfferService;
+        this.fileService = fileService;
     }
 
     @Override
@@ -43,10 +48,16 @@ public class SearchPieceService implements ISearchPieceService {
     }
 
     @Override
-    public Mono<PieceDto> getPieceWithImagesByPieceId(String id) {
+    public Mono<PieceWithFilesDto> getPieceWithImagesByPieceId(String id) {
         log.info("{} : {}", "Getting piece with images by piece id",  id);
         return searchPieceRepository.getPieceById(id)
-                                    .mapNotNull(PieceMapper::toDto);
+                .flatMap(piece->{
+                    if (piece.getImagesId() == null || piece.getImagesId().isEmpty())
+                        return Mono.just(PieceMapper.toDto(piece , null));
+                    return fileService.findAllByIds(piece.getImagesId())
+                            .collectList()
+                            .map(files -> PieceMapper.toDto(piece , files));
+                });
     }
 
     @Override

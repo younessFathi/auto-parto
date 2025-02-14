@@ -3,6 +3,7 @@ package auto.parto.api;
 import auto.parto.dto.FileDto;
 import auto.parto.dto.PieceDto;
 import auto.parto.dto.PieceOfferDto;
+import auto.parto.dto.PieceWithFilesDto;
 import auto.parto.exception.EntityNotFoundException;
 import auto.parto.service.iservice.IFileManagerService;
 import auto.parto.service.iservice.ISearchPieceService;
@@ -65,7 +66,7 @@ public class SearchController {
             @ApiResponse(responseCode = Constants.Swagger._500, description = Constants.Swagger.RESPONSE_500_INTERNAL_ERROR)
     })
     @GetMapping("/piece/{id}")
-    public Mono<PieceDto> getPieceById(@PathVariable String id){
+    public Mono<PieceWithFilesDto> getPieceById(@PathVariable String id){
         return searchPieceService.getPieceWithImagesByPieceId(id)
                                 .switchIfEmpty(Mono.error(new EntityNotFoundException("Piece not found")));
     }

@@ -2,6 +2,7 @@ package auto.parto.model;
 
 import auto.parto.enums.Condition;
 import auto.parto.enums.DeliveryMode;
+import auto.parto.enums.Duration;
 import auto.parto.enums.Status;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -40,4 +41,6 @@ public class PieceOffer {
     private DeliveryMode deliveryMode;
     private Boolean isFreeDelivery;
     private BigDecimal deliveryPrice;
+    private Integer warranty;
+    private Duration duration;
 }

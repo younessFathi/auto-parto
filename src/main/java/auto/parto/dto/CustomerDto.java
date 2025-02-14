@@ -21,4 +21,5 @@ public class CustomerDto {
     private OtpDetailsDto otpDetailsDto;
     @JsonIgnore
     private String jwtKey;
+    private Boolean isActive;
 }
