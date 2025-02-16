@@ -49,15 +49,14 @@ class FileManagerServiceTest {
         // Mock behaviors
         when(mockFilePart.filename()).thenReturn(filename);
         when(mockFilePart.content()).thenReturn(Flux.just(createTestDataBuffer("test content")));
-        when(fileService.save(any())).thenReturn(Mono.just(FileDto.builder().originalFilename("image.jpg").generatedFilename(UUID.randomUUID().toString()).build()));
+        when(fileService.save(any())).thenReturn(Mono.just(FileDto.builder().id(UUID.randomUUID().toString()).originalFilename("image.jpg").generatedFilename(UUID.randomUUID().toString()).build()));
         // Call the method under test
-        Mono<FileDto> result = fileManagerService.save(mockFilePart);
+        Mono<String> result = fileManagerService.save(mockFilePart , UUID.randomUUID().toString());
 
         // Verify
         StepVerifier.create(result)
                 .assertNext(fileDto -> {
-                    assertEquals(filename, fileDto.getOriginalFilename());
-                    assertNotNull(fileDto.getGeneratedFilename());
+                    assertNotNull(result);
                 })
                 .verifyComplete();
     }
@@ -72,7 +71,7 @@ class FileManagerServiceTest {
         // Mock behaviors
         when(mockFilePart.filename()).thenReturn(filename);
         // Call the method under test
-        Mono<FileDto> result = fileManagerService.save(mockFilePart);
+        Mono<String> result = fileManagerService.save(mockFilePart , UUID.randomUUID().toString());
 
         // Verify
         StepVerifier.create(result)

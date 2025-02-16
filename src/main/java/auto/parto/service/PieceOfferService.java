@@ -18,4 +18,14 @@ public class PieceOfferService implements IPieceOfferService {
         return pieceOfferRepository.save(PieceOfferMapper.toEntity(pieceOfferDto))
                                     .map(PieceOfferMapper::toDto);
     }
+
+    @Override
+    public Mono<PieceOfferDto> create(PieceOfferDto pieceOfferDto) {
+        return pieceOfferRepository.save(PieceOfferMapper.toEntity(pieceOfferDto)).map(PieceOfferMapper::toDto);
+    }
+
+    @Override
+    public Mono<PieceOfferDto> update(PieceOfferDto pieceOfferDto) {
+        return pieceOfferRepository.update(pieceOfferDto.getId() , pieceOfferDto.getImagesId()).map(PieceOfferMapper::toDto);
+    }
 }

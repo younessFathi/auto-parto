@@ -6,6 +6,8 @@ import auto.parto.dto.PieceOfferDto;
 import auto.parto.dto.PieceWithFilesDto;
 import auto.parto.exception.EntityNotFoundException;
 import auto.parto.service.iservice.IFileManagerService;
+import auto.parto.service.iservice.IPieceOfferService;
+import auto.parto.service.iservice.IPieceService;
 import auto.parto.service.iservice.ISearchPieceService;
 import auto.parto.utils.Constants;
 import auto.parto.utils.JsonUtil;
@@ -33,8 +35,9 @@ import reactor.core.publisher.Mono;
 public class SearchController {
     private ISearchPieceService searchPieceService;
     private IFileManagerService fileManagerService;
-    private JsonUtil<PieceDto> pieceDeserializer;
-    private JsonUtil<PieceOfferDto> pieceOfferDeserializer;
+    private IPieceService pieceService;
+    private IPieceOfferService pieceOfferService;
+    private JsonUtil jsonUtil;
 
     @Operation(summary = Constants.Swagger.SEARCH_PIECE_IMAGES_SUMMARY, description = Constants.Swagger.SEARCH_PIECE_IMAGES_DESCRIPTION)
     @ApiResponses({
@@ -44,18 +47,18 @@ public class SearchController {
     })
     @PostMapping(value = "/piece" , consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Mono<PieceDto> searchPieceAndNotifySellers(@RequestPart("images") Flux<FilePart> images , @RequestPart("piece") Mono<String> pieceStr){
-        return pieceStr.flatMap(str->pieceDeserializer.fromJson(str , PieceDto.class))
+        return pieceStr.flatMap(str-> jsonUtil.fromJson(str , PieceDto.class))
                        .flatMap(pieceDto -> searchPieceService.notifySellers(pieceDto))
+                       .flatMap(pieceService::create)
                        .flatMap(pieceDto -> images != null ?
-                            images.flatMap(fileManagerService::save)
-                                  .map(FileDto::getId)
+                            images.flatMap(image -> fileManagerService.save(image , pieceDto.getId()))
                                   .collectList()
                                   .map(files -> {
                                       pieceDto.setImagesId(files);
                                       return pieceDto;
                                   }):
                             Mono.just(pieceDto)
-                       ).flatMap(searchPieceService::savePieceWithImages);
+                       ).flatMap(pieceService::update);
     }
 
     @Operation(summary = Constants.Swagger.GET_PIECE_SUMMARY, description = Constants.Swagger.GET_PIECE_DESCRIPTION)
@@ -80,17 +83,17 @@ public class SearchController {
     })
     @PostMapping("/piece-offer")
     public Mono<PieceOfferDto> createOfferAndNotifyCustomer(@RequestPart("images") Flux<FilePart> images , @RequestPart("pieceOffer") Mono<String> pieceOfferStr){
-        return pieceOfferStr.flatMap(str-> pieceOfferDeserializer.fromJson(str , PieceOfferDto.class))
+        return pieceOfferStr.flatMap(str-> jsonUtil.fromJson(str , PieceOfferDto.class))
                             .flatMap(searchPieceService::notifyCustomer)
+                            .flatMap(pieceOfferService::create)
                             .flatMap(pieceOfferDto -> images != null ?
-                                    images.flatMap(fileManagerService::save)
-                                            .map(FileDto::getId)
+                                    images.flatMap(image-> fileManagerService.save(image , pieceOfferDto.getId()))
                                             .collectList()
-                                            .map(files -> {
-                                                pieceOfferDto.setImagesId(files);
+                                            .map(imagesId -> {
+                                                pieceOfferDto.setImagesId(imagesId);
                                                 return pieceOfferDto;
                                             }):
                                     Mono.just(pieceOfferDto)
-                            ).flatMap(searchPieceService::createOffer);
+                            ).flatMap(pieceOfferService::update);
     }
 }

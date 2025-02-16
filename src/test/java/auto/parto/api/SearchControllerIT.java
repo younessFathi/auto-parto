@@ -4,11 +4,13 @@ import auto.parto.dto.FileDto;
 import auto.parto.dto.PieceDto;
 import auto.parto.dto.PieceOfferDto;
 import auto.parto.dto.PieceWithFilesDto;
-import auto.parto.enums.Category;
-import auto.parto.enums.Condition;
+import auto.parto.enums.*;
 import auto.parto.service.iservice.IFileManagerService;
+import auto.parto.service.iservice.IPieceOfferService;
+import auto.parto.service.iservice.IPieceService;
 import auto.parto.service.iservice.ISearchPieceService;
 import auto.parto.utils.JsonUtil;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -17,12 +19,17 @@ import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.reactive.function.BodyInserters;
 import reactor.core.publisher.Mono;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.*;
 
@@ -38,10 +45,13 @@ public class SearchControllerIT {
     private IFileManagerService fileManagerService;
 
     @MockitoBean
-    private JsonUtil<PieceDto> pieceDeserializer;
+    private IPieceService pieceService;
 
     @MockitoBean
-    private JsonUtil<PieceOfferDto> pieceOfferDeserializer;
+    private IPieceOfferService pieceOfferService;
+
+    @MockitoBean
+    private JsonUtil jsonUtil;
 
     private PieceDto pieceDto;
     private PieceOfferDto pieceOfferDto;
@@ -77,45 +87,55 @@ public class SearchControllerIT {
     public void testCreateOfferAndNotifyCustomer() {
         // Mock JSON string
         String pieceOfferJson = """
-                {
-                  "pieceId": "7e9de0bf-e0d2-48ab-8f5b-f09aa6346eee",
-                  "customerId": "f354855f-c3a0-4520-9239-fe18096db10a",
-                  "name": "Sample Piece Offer",
-                  "description": "This is a sample piece offer description.",
-                  "price": 100.50,
-                  "currency": "USD",
-                  "condition": "NEW",
-                  "isNegotiable": true,
-                  "isAvailable": true,
-                  "status": "PENDING",
-                  "seeNumber": 10,
-                  "deliveryMode": "STANDARD",
-                  "isFreeDelivery": false,
-                  "deliveryPrice": 15.00
-                }
-                """;
+            {
+              "pieceId": "7e9de0bf-e0d2-48ab-8f5b-f09aa6346eee",
+              "customerId": "f354855f-c3a0-4520-9239-fe18096db10a",
+              "name": "Sample Piece Offer",
+              "description": "This is a sample piece offer description.",
+              "price": 100.50,
+              "currency": "USD",
+              "condition": "NEW",
+              "isNegotiable": true,
+              "isAvailable": true,
+              "status": "PENDING",
+              "seeNumber": 10,
+              "deliveryMode": "STANDARD",
+              "isFreeDelivery": false,
+              "deliveryPrice": 15.00
+            }
+            """;
 
         // Mock piece DTO
-        PieceOfferDto pieceOfferDto = new PieceOfferDto();
-        pieceOfferDto.setName("Brake Pad");
-        pieceOfferDto.setCondition(Condition.NEW);
+        PieceOfferDto pieceOfferDto = PieceOfferDto.builder()
+                .id(UUID.randomUUID().toString())
+                .pieceId("7e9de0bf-e0d2-48ab-8f5b-f09aa6346eee")
+                .customerId("f354855f-c3a0-4520-9239-fe18096db10a")
+                .name("Brake Pad")
+                .description("This is a sample piece offer description.")
+                .price(new BigDecimal(0))
+                .currency(Currency.USD)
+                .condition(Condition.NEW)
+                .isNegotiable(true)
+                .isAvailable(true)
+                .status(Status.PENDING)
+                .seeNumber(10)
+                .deliveryMode(DeliveryMode.EXPRESS)
+                .isFreeDelivery(false)
+                .deliveryPrice(new BigDecimal(11))
+                .build();
 
         // Mock FileDto (if files are processed)
         FileDto fileDto = new FileDto();
         fileDto.setId("file123");
+        FilePart mockFilePart = Mockito.mock(FilePart.class);
 
-        // Mock service behaviors
-        Mockito.when(pieceOfferDeserializer.fromJson(eq(pieceOfferJson), eq(PieceOfferDto.class)))
+        // Mock behavior
+        Mockito.when(jsonUtil.fromJson(anyString() , any()))
                 .thenReturn(Mono.just(pieceOfferDto));
-
-        Mockito.when(searchPieceService.notifyCustomer(any(PieceOfferDto.class)))
-                .thenReturn(Mono.just(pieceOfferDto));
-
-        Mockito.when(fileManagerService.save(any()))
-                .thenReturn(Mono.just(fileDto));
-
-        Mockito.when(searchPieceService.createOffer(any()))
-                .thenReturn(Mono.just(pieceOfferDto));
+        Mockito.when(searchPieceService.notifyCustomer(any())).thenReturn(Mono.just(pieceOfferDto));
+        Mockito.when(pieceOfferService.create(any())).thenReturn(Mono.just(pieceOfferDto));
+        Mockito.when(fileManagerService.save(any(), anyString())).thenReturn(Mono.just(""));
+        Mockito.when(pieceOfferService.update(any())).thenReturn(Mono.just(pieceOfferDto));
 
         // Prepare multipart form data
         MultipartBodyBuilder bodyBuilder = new MultipartBodyBuilder();
@@ -141,33 +161,52 @@ public class SearchControllerIT {
         // Mock JSON string
         String pieceJson = """
                 {
-                  "name": "Brake Pad",
-                  "description": "High-performance brake pad for sports cars.",
-                  "condition": "NEW",
-                  "category": "CAR"
+                 "id": "12345",
+                 "name": "Sample Piece",
+                 "description": "This is a sample piece description.",
+                 "price": 100.50,
+                 "currency": "USD",
+                 "condition": "NEW",
+                 "category": "CAR",
+                 "isAvailable": true,
+                 "status": "PENDING",
+                 "seeNumber": 10,
+                 "deliveryMode": "STANDARD",
+                 "isFreeDelivery": false,
+                 "deliveryPrice": 15.00,
+                 "warranty": 12,
+                 "duration": 24
                 }
                 """;
 
         // Mock piece DTO
-        PieceDto pieceDto = new PieceDto();
-        pieceDto.setName("Brake Pad");
-        pieceDto.setCategory(Category.BICYCLE);
+        PieceDto pieceDto = PieceDto.builder()
+                .id(UUID.randomUUID().toString())
+                .name("Brake Pad")
+                .description("This is a sample piece description.")
+                .condition(Condition.NEW)
+                .category(Category.BICYCLE)
+                .seeNumber(10)
+                .build();
 
         // Mock FileDto (if files are processed)
         FileDto fileDto = new FileDto();
         fileDto.setId("file123");
 
         // Mock service behaviors
-        Mockito.when(pieceDeserializer.fromJson(eq(pieceJson), eq(PieceDto.class)))
+        Mockito.when(jsonUtil.fromJson(anyString(), any()))
                 .thenReturn(Mono.just(pieceDto));
 
         Mockito.when(searchPieceService.notifySellers(any(PieceDto.class)))
                 .thenReturn(Mono.just(pieceDto));
 
-        Mockito.when(fileManagerService.save(any()))
-                .thenReturn(Mono.just(fileDto));
+        Mockito.when(fileManagerService.save(any() , anyString()))
+                .thenReturn(Mono.just(""));
 
-        Mockito.when(searchPieceService.savePieceWithImages(any()))
+        Mockito.when(pieceService.create(any()))
+                .thenReturn(Mono.just(pieceDto));
+
+        Mockito.when(pieceService.update(any()))
                 .thenReturn(Mono.just(pieceDto));
 
         // Prepare multipart form data

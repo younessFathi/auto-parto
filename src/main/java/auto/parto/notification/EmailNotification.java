@@ -20,6 +20,6 @@ public class EmailNotification implements Notification {
         String customerId = pieceOfferDto.getCustomerId();
         String pieceId = pieceOfferDto.getPieceId();
         log.info("Notify customer {} on offer {} using email notification", customerId , pieceId);
-        return null;
+        return Mono.just(pieceOfferDto);
     }
 }

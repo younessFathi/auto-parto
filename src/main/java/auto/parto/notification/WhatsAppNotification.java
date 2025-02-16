@@ -20,6 +20,6 @@ public class WhatsAppNotification implements Notification {
         String customerId = pieceOfferDto.getCustomerId();
         String pieceId = pieceOfferDto.getPieceId();
         log.info("Notify customer {} on offer {} using whatsApp notification", customerId , pieceId);
-        return null;
+        return Mono.just(pieceOfferDto);
     }
 }

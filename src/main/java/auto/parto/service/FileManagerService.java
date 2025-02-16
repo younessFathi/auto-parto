@@ -35,10 +35,9 @@ public class FileManagerService implements IFileManagerService {
     }
 
     @Override
-    public Mono<FileDto> save(FilePart image) {
+    public Mono<String> save(FilePart image , String pieceId) {
         log.info("{} : {}" , "Saving File",  image.filename());
-        String folderName = UUID.randomUUID().toString();
-        Path rootLocation = Paths.get(uploadsDirectory +"/"+folderName);
+        Path rootLocation = Paths.get(uploadsDirectory +"/"+pieceId);
         createUploadDirectory(rootLocation);
         String fileExtension = getExtension(image.filename());
         if (!isAllowedExtension(fileExtension)) {
@@ -59,10 +58,11 @@ public class FileManagerService implements IFileManagerService {
                                 .generatedFilename(generatedFileName)
                                 .id(UUID.randomUUID().toString())
                                 .originalFilename(image.filename())
-                                .folderName(folderName)
+                                .folderName(pieceId)
                                 .build();
                 }))
                 .flatMap(fileService::save)
+                .map(FileDto::getId)
                 // Persist metadata in the database
                 .doOnSuccess(file -> log.info("{} : {}", Constants.FileUpload.FILE_SAVED, file));
     }

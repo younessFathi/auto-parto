@@ -7,6 +7,8 @@ import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 @Repository
 @AllArgsConstructor
 public class PieceOfferRepository implements IPieceOfferRepository {
@@ -15,5 +17,13 @@ public class PieceOfferRepository implements IPieceOfferRepository {
     @Override
     public Mono<PieceOffer> save(PieceOffer pieceOffer) {
         return reactiveMongoTemplate.save(pieceOffer);
+    }
+
+    @Override
+    public Mono<PieceOffer> update(String id, List<String> imagesId) {
+        return reactiveMongoTemplate.findById(id , PieceOffer.class).map(pieceOffer->{
+            pieceOffer.setImagesId(imagesId);
+            return pieceOffer;
+        });
     }
 }
