@@ -1,6 +1,8 @@
 package auto.parto.utils;
 
 import auto.parto.dto.PieceDto;
+import auto.parto.dto.PieceOfferDto;
+import auto.parto.model.Piece;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,13 +12,12 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 @Component
-@Slf4j
 @AllArgsConstructor
-public class JsonUtil<T> {
-    private ObjectMapper objectMapper;
+public class JsonUtil {
+    private final ObjectMapper objectMapper;
 
-    public Mono<T> fromJson(String pieceStr, Class<T> clazz) {
-        return Mono.fromCallable(() -> objectMapper.readValue(pieceStr, clazz))
+    public <T> Mono<T> fromJson(String pieceStr , Class<T> clazz) {
+        return Mono.fromCallable(() -> objectMapper.readValue(pieceStr , clazz))
                 .onErrorResume(e -> {
                     // Handle deserialization errors
                     return Mono.error(new RuntimeException("Failed to deserialize JSON: " + e.getMessage(), e));

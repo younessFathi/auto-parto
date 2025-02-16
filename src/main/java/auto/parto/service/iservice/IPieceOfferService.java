@@ -5,4 +5,6 @@ import reactor.core.publisher.Mono;
 
 public interface IPieceOfferService {
     Mono<PieceOfferDto> save(PieceOfferDto pieceOfferDto);
+    Mono<PieceOfferDto> create(PieceOfferDto pieceOfferDto);
+    Mono<PieceOfferDto> update(PieceOfferDto pieceOfferDto);
 }

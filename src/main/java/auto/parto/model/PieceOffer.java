@@ -1,9 +1,6 @@
 package auto.parto.model;
 
-import auto.parto.enums.Condition;
-import auto.parto.enums.DeliveryMode;
-import auto.parto.enums.Duration;
-import auto.parto.enums.Status;
+import auto.parto.enums.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,7 +10,6 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.Currency;
 import java.util.List;
 
 @Document(collection = "pieceOffers")

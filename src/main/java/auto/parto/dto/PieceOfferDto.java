@@ -1,9 +1,6 @@
 package auto.parto.dto;
 
-import auto.parto.enums.Condition;
-import auto.parto.enums.DeliveryMode;
-import auto.parto.enums.Duration;
-import auto.parto.enums.Status;
+import auto.parto.enums.*;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
@@ -16,7 +13,6 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.Currency;
 import java.util.List;
 
 @Data
