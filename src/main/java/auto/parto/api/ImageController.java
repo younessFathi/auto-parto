@@ -1,36 +1,30 @@
 package auto.parto.api;
 
-import auto.parto.utils.Constants;
+import auto.parto.enums.FileRequestFlag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.PathResource;
 import org.springframework.core.io.Resource;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 
 import java.io.File;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
 @RestController
 @RequestMapping("/images")
 @Slf4j
-public class ImageRestController {
+public class ImageController {
     @Value("${auto.parto.images.uploads}")
     private String uploadsDirectory;
 
     @GetMapping("/{folderName}")
-    public Flux<Resource> listImages(@PathVariable String folderName) {
+    public Flux<Resource> listImages(@PathVariable String folderName , @RequestParam(required = false) FileRequestFlag flag) {
         // Validate the folder name
         log.info("Validating folder name {} " , folderName);
         if (!isValidFolderName(folderName)) {
+            log.error("Invalid folder name {} " , folderName);
             return Flux.error(new IllegalArgumentException("Invalid folder name."));
         }
 
@@ -39,6 +33,7 @@ public class ImageRestController {
 
         // Check if the folder exists and is indeed a directory
         if (!folder.exists() || !folder.isDirectory()) {
+            log.error("Folder not fount or is not a directory {} " , folder);
             return Flux.error(new RuntimeException("Folder not found or is not a directory."));
         }
 
@@ -47,15 +42,19 @@ public class ImageRestController {
                 name.toLowerCase().endsWith(".png") ||
                 name.toLowerCase().endsWith(".gif") ||
                 name.toLowerCase().endsWith(".jpeg"));
-
         // Create a Flux from the image files
         return Flux.create(sink -> {
-            if (files != null) {
-                for (File file : files) {
-                    Path imagePath = file.toPath();
-                    log.info("imagePath : {}" , imagePath );
+            if (files != null && files.length != 0) {
+                if(FileRequestFlag.ONE.equals(flag)){
+                    Path imagePath = files[0].toPath();
                     Resource resource = new PathResource(imagePath);
                     sink.next(resource);
+                }else {
+                    for (File file : files) {
+                        Path imagePath = file.toPath();
+                        Resource resource = new PathResource(imagePath);
+                        sink.next(resource);
+                    }
                 }
             }
             sink.complete();
