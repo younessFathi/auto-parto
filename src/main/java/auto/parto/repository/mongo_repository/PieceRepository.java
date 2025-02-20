@@ -4,8 +4,14 @@ import auto.parto.dto.PieceDto;
 import auto.parto.model.Piece;
 import auto.parto.repository.IPieceRepository;
 import lombok.AllArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
@@ -36,5 +42,20 @@ public class PieceRepository implements IPieceRepository {
     @Override
     public Mono<Piece> findById(String id) {
         return reactiveMongoTemplate.findById(id , Piece.class);
+    }
+
+    @Override
+    public Flux<Piece> getAllPieces(String id, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Query query = new Query(Criteria.where("_id").is(id))
+                .with(Sort.by(Sort.Direction.DESC, "createAt"))
+                .with(pageable);
+        return reactiveMongoTemplate.find(query , Piece.class);
+    }
+
+    @Override
+    public Mono<Long> getTotalPieces() {
+        Query query = new Query();
+        return reactiveMongoTemplate.count(query, PieceDto.class);
     }
 }

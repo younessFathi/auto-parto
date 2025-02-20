@@ -3,6 +3,7 @@ package auto.parto.dto;
 import auto.parto.enums.Category;
 import auto.parto.enums.Condition;
 import auto.parto.enums.SellerType;
+import auto.parto.enums.Status;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -31,4 +32,5 @@ public class PieceWithFilesDto {
     private LocalDateTime createAt;
     private List<FileDto> images;
     private Integer seeNumber;
+    private Status status;
 }

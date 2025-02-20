@@ -3,6 +3,7 @@ package auto.parto.dto;
 import auto.parto.enums.Category;
 import auto.parto.enums.Condition;
 import auto.parto.enums.SellerType;
+import auto.parto.enums.Status;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -45,6 +46,8 @@ public class PieceDto {
     private SellerType sellerType;
     @NotNull(message = "Seller Rank is mandatory")
     private Double sellerRank;
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY)
+    private Status status;
 }
 // TODO: hetzner vps coolfy deployement
 // TODO: mongodb for dev env
