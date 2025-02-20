@@ -1,5 +1,6 @@
 package auto.parto.service;
 
+import auto.parto.dto.PagedResponse;
 import auto.parto.dto.PieceDto;
 import auto.parto.mapper.PieceMapper;
 import auto.parto.repository.IPieceRepository;
@@ -25,5 +26,26 @@ public class PieceService implements IPieceService {
     @Override
     public Mono<PieceDto> update(PieceDto pieceDto) {
         return pieceRepository.update(pieceDto.getId() , pieceDto.getImagesId()).map(PieceMapper::toDto);
+    }
+
+    @Override
+    public Mono<PagedResponse<PieceDto>> getAllPiecesByCustomerId(String id, int page, int size) {
+        return pieceRepository.getAllPieces(id , page , size)
+                              .map(PieceMapper::toDto)
+                              .collectList()
+                              .zipWith(pieceRepository.getTotalPieces())
+                              .map(result -> {
+                                  PagedResponse<PieceDto> response = new PagedResponse<>();
+                                  response.setData(result.getT1());
+                                  response.setPage(page);
+                                  response.setSize(size);
+                                  response.setTotalItems(result.getT2());
+                                  return response;
+                              });
+    }
+
+    @Override
+    public Mono<PieceDto> getPieceDetailByPieceId(String pieceId) {
+        return pieceRepository.findById(pieceId).map(PieceMapper::toDto);
     }
 }

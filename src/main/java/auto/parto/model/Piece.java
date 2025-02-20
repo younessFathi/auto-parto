@@ -3,6 +3,7 @@ package auto.parto.model;
 import auto.parto.enums.Category;
 import auto.parto.enums.Condition;
 import auto.parto.enums.SellerType;
+import auto.parto.enums.Status;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -33,4 +34,5 @@ public class Piece {
     private Integer seeNumber;
     private SellerType sellerType;
     private Double sellerRank;
+    private Status status;
 }

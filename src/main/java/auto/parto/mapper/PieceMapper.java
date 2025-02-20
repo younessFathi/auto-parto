@@ -24,6 +24,7 @@ public class PieceMapper {
                     .sellerType(piece.getSellerType())
                     .sellerRank(piece.getSellerRank())
                     .seeNumber(piece.getSeeNumber())
+                    .status(piece.getStatus())
                 .build();
     }
 
@@ -41,6 +42,7 @@ public class PieceMapper {
                     .sellerType(pieceDto.getSellerType())
                     .sellerRank(pieceDto.getSellerRank())
                     .seeNumber(pieceDto.getSeeNumber())
+                    .status(pieceDto.getStatus())
                 .build();
     }
 
@@ -54,6 +56,7 @@ public class PieceMapper {
                 .category(piece.getCategory())
                 .createAt(piece.getCreateAt())
                 .seeNumber(piece.getSeeNumber())
+                .status(piece.getStatus())
                 .images(images)
                 .build();
     }
