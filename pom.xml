@@ -36,6 +36,8 @@
 		<jacoco.version>0.8.12</jacoco.version>
 		<flapdoodle.embed.mongo.version>4.18.1</flapdoodle.embed.mongo.version>
 		<openapi.version>2.8.4</openapi.version>
+		<java-jwt.version>4.5.0</java-jwt.version>
+		<jwks-rsa.version>0.22.1</jwks-rsa.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -95,6 +97,11 @@
 			<groupId>com.twilio.sdk</groupId>
 			<artifactId>twilio</artifactId>
 			<version>${twilio.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.auth0</groupId>
+			<artifactId>java-jwt</artifactId>
+			<version>${java-jwt.version}</version>
 		</dependency>
 	</dependencies>
 

@@ -19,7 +19,10 @@ import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/auth")
@@ -97,5 +100,31 @@ public class AuthController {
                         .flatMap(
                                 customerDto -> customerDto != null ? jwtTokenGenerator.generate(subject , customerDto):Mono.empty())
                         .switchIfEmpty(Mono.error(new OtpInvalidException(Constants.Exception.INVALID_OTP)));
+    }
+
+    @GetMapping("/checkCustomerExisting")
+    public Mono<CustomerDto> loginByClerk(ServerWebExchange exchange) {
+        String userId = (String) exchange.getAttribute("userId");
+        String email = (String) exchange.getAttribute("email");
+        String name = (String) exchange.getAttribute("name");
+        String picture = (String) exchange.getAttribute("picture");
+        CustomerDto customerDto = CustomerDto.builder()
+                .id(UUID.randomUUID().toString())
+                .email(email)
+                .firstName(name)
+                .phoneNumber("") // TODO: get phone number after auth
+                .isActive(true)
+                .picture(picture)
+                .build();
+        //TODO: add mapstruct for mapping
+        return customerService.checkIfCustomerExistClerkId(userId)
+                .flatMap(
+                        exists -> {
+                            if (!exists) {
+                                return customerService.createCustomerFromClerkAuth(customerDto);
+                            }
+                            return Mono.just(customerDto);
+                        }
+                );
     }
 }

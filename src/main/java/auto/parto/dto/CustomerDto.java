@@ -14,10 +14,12 @@ import java.util.UUID;
 @Builder
 public class CustomerDto {
     private String id;
+    private String clerkId;
     private String firstName;
     private String lastName;
     private String email;
     private String phoneNumber;
+    private String picture;
     private OtpDetailsDto otpDetailsDto;
     @JsonIgnore
     private String jwtKey;
