@@ -16,4 +16,6 @@ public interface ICustomerService {
     Mono<CustomerDto> findCustomerByEmail( @Email String email);
     Mono<Boolean> checkIfCustomerExistUsingId(String id);
     Mono<CustomerDto> deactivateCustomer(String id);
+    Mono<CustomerDto> createCustomerFromClerkAuth(CustomerDto customerDto);
+    Mono<Boolean> checkIfCustomerExistClerkId(String userId);
 }

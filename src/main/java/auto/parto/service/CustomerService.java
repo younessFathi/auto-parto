@@ -40,6 +40,18 @@ public class CustomerService implements ICustomerService {
     }
 
     @Override
+    public Mono<CustomerDto> createCustomerFromClerkAuth(CustomerDto customerDto) {
+        return customerRepository.save(
+                CustomerMapper.toEntity(customerDto)
+        ).map(CustomerMapper::toDto);
+    }
+
+    @Override
+    public Mono<Boolean> checkIfCustomerExistClerkId(String userId) {
+        return customerRepository.exists(userId, "clerkId");
+    }
+
+    @Override
     public Mono<CustomerDto> create(OtpRequestDto otpRequestDto, String otp) {
         log.info("Creating new customer with phone number: {}", otpRequestDto.getPhoneNumber());
         return customerRepository.save(
