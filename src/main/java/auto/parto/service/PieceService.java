@@ -2,7 +2,7 @@ package auto.parto.service;
 
 import auto.parto.dto.PagedResponse;
 import auto.parto.dto.PieceDto;
-import auto.parto.mapper.PieceMapper;
+import auto.parto.mapper.PieceDbMapper;
 import auto.parto.repository.IPieceRepository;
 import auto.parto.service.iservice.IPieceService;
 import lombok.AllArgsConstructor;
@@ -13,6 +13,7 @@ import reactor.core.publisher.Mono;
 @AllArgsConstructor
 public class PieceService implements IPieceService {
     private final IPieceRepository pieceRepository;
+    private final PieceDbMapper pieceDbMapper;
     @Override
     public Mono<Boolean> checkIfPieceById(String id) {
         return pieceRepository.checkIfPieceById(id);
@@ -20,18 +21,18 @@ public class PieceService implements IPieceService {
 
     @Override
     public Mono<PieceDto> create(PieceDto pieceDto) {
-        return pieceRepository.save(PieceMapper.toEntity(pieceDto)).map(PieceMapper::toDto);
+        return pieceRepository.save(pieceDbMapper.toEntity(pieceDto)).map(pieceDbMapper::toDto);
     }
 
     @Override
     public Mono<PieceDto> update(PieceDto pieceDto) {
-        return pieceRepository.update(pieceDto.getId() , pieceDto.getImagesId()).map(PieceMapper::toDto);
+        return pieceRepository.update(pieceDto.getId() , pieceDto.getImagesId()).map(pieceDbMapper::toDto);
     }
 
     @Override
     public Mono<PagedResponse<PieceDto>> getAllPiecesByCustomerId(String id, int page, int size) {
         return pieceRepository.getAllPieces(id , page , size)
-                              .map(PieceMapper::toDto)
+                              .map(pieceDbMapper::toDto)
                               .collectList()
                               .zipWith(pieceRepository.getTotalPieces())
                               .map(result -> {
@@ -46,6 +47,6 @@ public class PieceService implements IPieceService {
 
     @Override
     public Mono<PieceDto> getPieceDetailByPieceId(String pieceId) {
-        return pieceRepository.findById(pieceId).map(PieceMapper::toDto);
+        return pieceRepository.findById(pieceId).map(pieceDbMapper::toDto);
     }
 }

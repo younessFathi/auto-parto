@@ -38,4 +38,5 @@ public class SellerDto {
     private LocalDateTime modifiedAt;
     @Schema(accessMode = Schema.AccessMode.READ_ONLY)
     private WalletDto walletDto;
+    private Boolean isActive;
 }
