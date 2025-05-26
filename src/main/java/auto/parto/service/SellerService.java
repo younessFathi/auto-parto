@@ -1,7 +1,7 @@
 package auto.parto.service;
 
 import auto.parto.dto.SellerDto;
-import auto.parto.mapper.SellerMapper;
+import auto.parto.mapper.SellerDbMapper;
 import auto.parto.repository.ISellerRepository;
 import auto.parto.service.iservice.ISellerService;
 import lombok.AllArgsConstructor;
@@ -16,18 +16,19 @@ import java.math.BigDecimal;
 @Slf4j
 public class SellerService implements ISellerService {
     private ISellerRepository sellerRepository;
+    private SellerDbMapper sellerDbMapper;
 
     @Override
     public Mono<SellerDto> create(SellerDto sellerDto) {
-        return sellerRepository.save(SellerMapper.toEntity(sellerDto))
-                                .map(SellerMapper::toDto);
+        return sellerRepository.save(sellerDbMapper.toEntity(sellerDto))
+                                .map(sellerDbMapper::toDto);
     }
 
     @Override
     public Mono<SellerDto> getSellerById(String id) {
         log.info("Getting seller by id: {}", id);
         return sellerRepository.getSellerById(id)
-                                .map(SellerMapper::toDto);
+                                .map(sellerDbMapper::toDto);
     }
 
     @Override
@@ -37,7 +38,7 @@ public class SellerService implements ISellerService {
                 .flatMap(seller -> {
                     seller.getWallet().addFunds(amount);
                     return sellerRepository.save(seller)
-                            .map(SellerMapper::toDto);
+                            .map(sellerDbMapper::toDto);
                 });
     }
 
@@ -47,7 +48,7 @@ public class SellerService implements ISellerService {
                 .flatMap(seller -> {
                     seller.setIsActive(false); // Assuming there is an 'active' field in Seller entity
                     return sellerRepository.save(seller)
-                            .map(SellerMapper::toDto);
+                            .map(sellerDbMapper::toDto);
                 }); // Assuming there is a constructor to convert entity to DTO
     }
 }

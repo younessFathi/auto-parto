@@ -1,7 +1,8 @@
 package auto.parto.service;
 
 import auto.parto.dto.SellerDto;
-import auto.parto.mapper.SellerMapper;
+import auto.parto.dto.WalletDto;
+import auto.parto.mapper.SellerDbMapper;
 import auto.parto.model.Seller;
 import auto.parto.model.Wallet;
 import auto.parto.repository.ISellerRepository;
@@ -24,6 +25,9 @@ public class SellerServiceTest {
     @Mock
     private ISellerRepository sellerRepository;
 
+    @Mock
+    private SellerDbMapper sellerDbMapper;
+
     @InjectMocks
     private SellerService sellerService;
 
@@ -42,7 +46,24 @@ public class SellerServiceTest {
                 .description("Test Description")
                 .build();
 
-        seller = SellerMapper.toEntity(sellerDto);
+        seller = Seller.builder()
+                .id("1")
+                .email("test@example.com")
+                .phoneNumber("1234567890")
+                .name("Test Seller")
+                .description("Test Description")
+                .createAt(java.time.LocalDateTime.now())
+                .modifiedAt(java.time.LocalDateTime.now())
+                .isActive(true)
+                .wallet(Wallet.builder()
+                        .id("wallet1")
+                        .balance(new BigDecimal("100.00"))
+                        .currency(auto.parto.enums.Currency.MAD)
+                        .build())
+                .build();
+
+        when(sellerDbMapper.toEntity(any(SellerDto.class))).thenReturn(seller);
+        when(sellerDbMapper.toDto(any(Seller.class))).thenReturn(sellerDto);
     }
 
     @Test
@@ -96,7 +117,7 @@ public class SellerServiceTest {
 
         when(sellerRepository.getSellerById(anyString())).thenReturn(Mono.just(seller));
         when(sellerRepository.save(any(Seller.class))).thenReturn(Mono.just(updatedSeller));
-
+        when(sellerDbMapper.toDto(any(Seller.class))).thenReturn(SellerDto.builder().walletDto(WalletDto.builder().balance(new BigDecimal("150.00")).build()).build());
         Mono<SellerDto> result = sellerService.addFunds("1", amount);
 
         StepVerifier.create(result)

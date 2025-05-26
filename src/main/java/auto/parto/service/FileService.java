@@ -1,7 +1,7 @@
 package auto.parto.service;
 
 import auto.parto.dto.FileDto;
-import auto.parto.mapper.FileMapper;
+import auto.parto.mapper.FileDbMapper;
 import auto.parto.repository.IFileRepository;
 import auto.parto.service.iservice.IFileService;
 import lombok.RequiredArgsConstructor;
@@ -17,23 +17,24 @@ import java.util.List;
 @Slf4j
 public class FileService implements IFileService {
     private final IFileRepository fileRepository;
+    private final FileDbMapper fileDbMapper;
 
     @Override
     public Mono<FileDto> save(FileDto fileDto) {
-        return fileRepository.save(FileMapper.toEntity(fileDto))
-                            .map(FileMapper::toDto);
+        return fileRepository.save(fileDbMapper.toEntity(fileDto))
+                            .map(fileDbMapper::toDto);
     }
 
     @Override
     public Flux<FileDto> getFilesByPieceId(String pieceId) {
         log.info("{} : {}", "Getting files by piece id" , pieceId);
         return fileRepository.getFilesByPieceId(pieceId)
-                             .map(FileMapper::toDto);
+                             .map(fileDbMapper::toDto);
     }
 
     @Override
     public Flux<FileDto> findAllByIds(List<String> imagesId) {
         return fileRepository.findAllByIds(imagesId)
-                .map(FileMapper::toDto);
+                .map(fileDbMapper::toDto);
     }
 }

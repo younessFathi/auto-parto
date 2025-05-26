@@ -1,7 +1,7 @@
 package auto.parto.service;
 
 import auto.parto.dto.PieceOfferDto;
-import auto.parto.mapper.PieceOfferMapper;
+import auto.parto.mapper.PieceOfferDbMapper;
 import auto.parto.repository.mongo_repository.PieceOfferRepository;
 import auto.parto.service.iservice.IPieceOfferService;
 import lombok.AllArgsConstructor;
@@ -12,20 +12,23 @@ import reactor.core.publisher.Mono;
 @AllArgsConstructor
 public class PieceOfferService implements IPieceOfferService {
     private final PieceOfferRepository pieceOfferRepository;
+    private final PieceOfferDbMapper pieceOfferDbMapper;
 
     @Override
     public Mono<PieceOfferDto> save(PieceOfferDto pieceOfferDto) {
-        return pieceOfferRepository.save(PieceOfferMapper.toEntity(pieceOfferDto))
-                                    .map(PieceOfferMapper::toDto);
+        return pieceOfferRepository.save(pieceOfferDbMapper.toEntity(pieceOfferDto))
+                                    .map(pieceOfferDbMapper::toDto);
     }
 
     @Override
     public Mono<PieceOfferDto> create(PieceOfferDto pieceOfferDto) {
-        return pieceOfferRepository.save(PieceOfferMapper.toEntity(pieceOfferDto)).map(PieceOfferMapper::toDto);
+        return pieceOfferRepository.save(pieceOfferDbMapper.toEntity(pieceOfferDto))
+                                    .map(pieceOfferDbMapper::toDto);
     }
 
     @Override
     public Mono<PieceOfferDto> update(PieceOfferDto pieceOfferDto) {
-        return pieceOfferRepository.update(pieceOfferDto.getId() , pieceOfferDto.getImagesId()).map(PieceOfferMapper::toDto);
+        return pieceOfferRepository.update(pieceOfferDto.getId() , pieceOfferDto.getImagesId())
+                                    .map(pieceOfferDbMapper::toDto);
     }
 }

@@ -2,7 +2,7 @@ package auto.parto.service;
 
 import auto.parto.dto.CustomerDto;
 import auto.parto.dto.OtpRequestDto;
-import auto.parto.mapper.CustomerMapper;
+import auto.parto.mapper.CustomerDbMapper;
 import auto.parto.repository.mongo_repository.CustomerRepository;
 import auto.parto.service.iservice.ICustomerService;
 import auto.parto.utils.JwtTokenGenerator;
@@ -16,6 +16,7 @@ import reactor.core.publisher.Mono;
 @Slf4j
 public class CustomerService implements ICustomerService {
     private final CustomerRepository customerRepository;
+    private final CustomerDbMapper customerDbMapper;
 
     @Override
     public Mono<Boolean> checkIfCustomerExistUsingPhoneNumber(String phoneNumber) {
@@ -36,14 +37,14 @@ public class CustomerService implements ICustomerService {
     @Override
     public Mono<CustomerDto> deactivateCustomer(String id) {
         log.info("Deactivate customer by id : {} " , id);
-        return customerRepository.deactivateCustomer(id).map(CustomerMapper::toDto);
+        return customerRepository.deactivateCustomer(id).map(customerDbMapper::toDto);
     }
 
     @Override
     public Mono<CustomerDto> createCustomerFromClerkAuth(CustomerDto customerDto) {
         return customerRepository.save(
-                CustomerMapper.toEntity(customerDto)
-        ).map(CustomerMapper::toDto);
+                customerDbMapper.toEntity(customerDto)
+        ).map(customerDbMapper::toDto);
     }
 
     @Override
@@ -55,13 +56,13 @@ public class CustomerService implements ICustomerService {
     public Mono<CustomerDto> create(OtpRequestDto otpRequestDto, String otp) {
         log.info("Creating new customer with phone number: {}", otpRequestDto.getPhoneNumber());
         return customerRepository.save(
-                CustomerMapper.toEntity(otpRequestDto , otp)
-        ).map(CustomerMapper::toDto);
+                customerDbMapper.toEntity(otpRequestDto , otp)
+        ).map(customerDbMapper::toDto);
     }
 
     @Override
     public Mono<CustomerDto> findCustomerByPhoneNumber(String phoneNumber) {
-        return customerRepository.findBy(phoneNumber, "phoneNumber").map(CustomerMapper::toDto);
+        return customerRepository.findBy(phoneNumber, "phoneNumber").map(customerDbMapper::toDto);
     }
 
     @Override
@@ -71,7 +72,7 @@ public class CustomerService implements ICustomerService {
                             phoneNumber, sentOtp ,
                             JwtTokenGenerator.keyGenerator(phoneNumber),
                         "phoneNumber"
-                        ).map(CustomerMapper::toDto);
+                        ).map(customerDbMapper::toDto);
     }
 
     @Override
@@ -81,11 +82,11 @@ public class CustomerService implements ICustomerService {
                 email, sentOtp ,
                 JwtTokenGenerator.keyGenerator(email),
                 "email"
-        ).map(CustomerMapper::toDto);
+        ).map(customerDbMapper::toDto);
     }
 
     @Override
     public Mono<CustomerDto> findCustomerByEmail(String email) {
-        return customerRepository.findBy(email , "email").map(CustomerMapper::toDto);
+        return customerRepository.findBy(email , "email").map(customerDbMapper::toDto);
     }
 }

@@ -3,7 +3,7 @@ package auto.parto.service;
 import auto.parto.dto.PieceDto;
 import auto.parto.dto.PieceOfferDto;
 import auto.parto.dto.PieceWithFilesDto;
-import auto.parto.mapper.PieceMapper;
+import auto.parto.mapper.PieceDbMapper;
 import auto.parto.notification.Notification;
 import auto.parto.repository.ISearchPieceRepository;
 import auto.parto.service.iservice.IFileService;
@@ -24,13 +24,14 @@ public class SearchPieceService implements ISearchPieceService {
     private final ValidPieceId validPieceId;
     private final PieceOfferService pieceOfferService;
     private final IFileService fileService;
+    private final PieceDbMapper pieceDbMapper;
 
     public SearchPieceService(ISearchPieceRepository searchPieceRepository ,
                               @Qualifier("pushNotification") Notification notification,
                               ValidCustomerId validCustomerId,
                               ValidPieceId validPieceId,
                               PieceOfferService pieceOfferService,
-                              IFileService fileService
+                              IFileService fileService, PieceDbMapper pieceDbMapper
     ) {
         this.searchPieceRepository = searchPieceRepository;
         this.notification = notification;
@@ -38,6 +39,7 @@ public class SearchPieceService implements ISearchPieceService {
         this.validPieceId = validPieceId;
         this.pieceOfferService = pieceOfferService;
         this.fileService = fileService;
+        this.pieceDbMapper = pieceDbMapper;
     }
 
     @Override
@@ -53,18 +55,18 @@ public class SearchPieceService implements ISearchPieceService {
         return searchPieceRepository.getPieceById(id)
                 .flatMap(piece->{
                     if (piece.getImagesId() == null || piece.getImagesId().isEmpty())
-                        return Mono.just(PieceMapper.toDto(piece , null));
+                        return Mono.just(pieceDbMapper.toDto(piece , null));
                     return fileService.findAllByIds(piece.getImagesId())
                             .collectList()
-                            .map(files -> PieceMapper.toDto(piece , files));
+                            .map(files -> pieceDbMapper.toDto(piece , files));
                 });
     }
 
     @Override
     public Mono<PieceDto> savePieceWithImages(PieceDto pieceDto) {
         log.info("{} : {}", "Saving piece with images",  pieceDto);
-        return searchPieceRepository.saveSearchPiece(PieceMapper.toEntity(pieceDto))
-                                    .map(PieceMapper::toDto);
+        return searchPieceRepository.saveSearchPiece(pieceDbMapper.toEntity(pieceDto))
+                                    .map(pieceDbMapper::toDto);
     }
 
     @Override

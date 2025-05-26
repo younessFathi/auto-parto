@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @AllArgsConstructor
@@ -24,4 +25,6 @@ public class CustomerDto {
     @JsonIgnore
     private String jwtKey;
     private Boolean isActive;
+    private LocalDateTime createAt;
+    private LocalDateTime updatedAt;
 }
