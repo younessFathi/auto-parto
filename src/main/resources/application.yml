@@ -3,7 +3,7 @@ spring:
     name: auto-parto
   data:
     mongodb:
-      uri: mongodb://localhost:27017/auto-parto
+      uri: ${SPRING_DATA_MONGODB_URI}
       database: auto-parto
       authentication-database: admin
 
