@@ -12,6 +12,7 @@ import auto.parto.validator.ValidCustomerId;
 import auto.parto.validator.ValidPieceId;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -50,6 +51,7 @@ public class SearchPieceService implements ISearchPieceService {
     }
 
     @Override
+    @Cacheable(value = "piece" , key = "#id")
     public Mono<PieceWithFilesDto> getPieceWithImagesByPieceId(String id) {
         log.info("{} : {}", "Getting piece with images by piece id",  id);
         return searchPieceRepository.getPieceById(id)

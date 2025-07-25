@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mongo:
     image: mongo
@@ -7,10 +5,24 @@ services:
     ports:
       - "27017:27017"
     environment:
+      REDIS_PASSWORD: root
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: root
     volumes:
       - mongo-data:/data/db
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7.0-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass your_redis_password
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
 
   springboot-app:
     build: .
@@ -19,8 +31,16 @@ services:
       - "8080:8080"
     depends_on:
       - mongo
+      - redis
+    networks:
+      - app-network
     environment:
       SPRING_DATA_MONGODB_URI: mongodb://root:root@mongo:27017/auto-parto?authSource=admin
 
 volumes:
   mongo-data:
+  redis_data:
+
+networks:
+  app-network:
+    driver: bridge

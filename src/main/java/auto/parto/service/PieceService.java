@@ -6,6 +6,7 @@ import auto.parto.mapper.PieceDbMapper;
 import auto.parto.repository.IPieceRepository;
 import auto.parto.service.iservice.IPieceService;
 import lombok.AllArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -30,6 +31,7 @@ public class PieceService implements IPieceService {
     }
 
     @Override
+    @Cacheable(value = "pieces" , key = "#id + ':' + #page + ':' + #size")
     public Mono<PagedResponse<PieceDto>> getAllPiecesByCustomerId(String id, int page, int size) {
         return pieceRepository.getAllPieces(id , page , size)
                               .map(pieceDbMapper::toDto)
@@ -46,6 +48,7 @@ public class PieceService implements IPieceService {
     }
 
     @Override
+    @Cacheable(value = "pieceDetails" , key = "#pieceId")
     public Mono<PieceDto> getPieceDetailByPieceId(String pieceId) {
         return pieceRepository.findById(pieceId).map(pieceDbMapper::toDto);
     }
