@@ -1,10 +1,12 @@
 spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
   application:
     name: auto-parto
   data:
     mongodb:
-      uri: ${MONGO_URI}
-      database: auto-parto
+      uri: ${URI}
+      database: ${DB_NAME}
       authentication-database: admin
     redis:
       host: redis
@@ -15,36 +17,40 @@ spring:
           max-active: 8
           max-idle: 8
           min-idle: 0
-      cache:
-        type: redis
-        redis:
-          time-to-live: 600000 # 10 minutes
-  :mail:
-    host: smtp.gmail.com
-    port: 587
-    username: ${MAIL_USERNAME}
-    password: ${MAIL_PASSWORD}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000 # 10 minutes
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${REDACTED_CREDENTIAL:}
+            client-secret: ${REDACTED_CREDENTIAL:}
+            scope:
+              - openid
+              - profile
+              - email
+        provider:
+          google:
+            issuer-uri: https://accounts.google.com
+      resourceserver:
+        jwt:
+          issuer-uri: https://accounts.google.com
 opt:
   expiration:
     minutes: 5
-
 auto:
   parto:
     images:
       uploads: ../uploads
 
 jwt:
-  secretKey: ${SECRET_KEY}
+  secretKey: H1lq8Mx5WjD3+KPxBlj+F+Qo5rFkNc1uWy2FpiGpWXM=
   expiration: 5
 
 twilio:
-  sid: ${TWILIO_SID}
-  auth: ${TWILIO_AUTH}
+  sid: ${SID}
+  auth: ${AUTH}
 
