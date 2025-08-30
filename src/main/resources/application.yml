@@ -1,10 +1,12 @@
 spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
   application:
     name: auto-parto
   data:
     mongodb:
-      uri: ${SPRING_DATA_MONGODB_URI}
-      database: auto-parto
+      uri: ${URI}
+      database: ${DB_NAME}
       authentication-database: admin
     redis:
       host: redis
@@ -19,6 +21,23 @@ spring:
     type: redis
     redis:
       time-to-live: 600000 # 10 minutes
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${REDACTED_CREDENTIAL:}
+            client-secret: ${REDACTED_CREDENTIAL:}
+            scope:
+              - openid
+              - profile
+              - email
+        provider:
+          google:
+            issuer-uri: https://accounts.google.com
+      resourceserver:
+        jwt:
+          issuer-uri: https://accounts.google.com
 opt:
   expiration:
     minutes: 5
@@ -32,5 +51,5 @@ jwt:
   expiration: 5
 
 twilio:
-  sid: [REDACTED_TWILIO_ACCOUNT_SID]
-  auth: [REDACTED_CREDENTIAL]
+  sid: ${SID}
+  auth: ${AUTH}

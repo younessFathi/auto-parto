@@ -5,9 +5,9 @@ services:
     ports:
       - "27017:27017"
     environment:
-      REDIS_PASSWORD: root
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: root
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MONGO_INITDB_ROOT_USERNAME: ${DB_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${DB_PASSWORD}
     volumes:
       - mongo-data:/data/db
     networks:
@@ -25,8 +25,10 @@ services:
       - app-network
 
   springboot-app:
-    build: .
-    container_name: springboot-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: auto-parto-springboot-app:latest
     ports:
       - "8080:8080"
     depends_on:
@@ -35,7 +37,7 @@ services:
     networks:
       - app-network
     environment:
-      SPRING_DATA_MONGODB_URI: mongodb://root:root@mongo:27017/auto-parto?authSource=admin
+      SPRING_DATA_MONGODB_URI: ${URI}
 
 volumes:
   mongo-data:
