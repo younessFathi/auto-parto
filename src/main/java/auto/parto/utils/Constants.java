@@ -44,6 +44,7 @@ public class Constants {
         public static final String API_ERROR = "API error: {} ";
         public static final String UNEXPECTED_ERROR = "Unexpected error: {} ";
         public static final String INVALID_PHONE_NUMBER = "Invalid phone number";
+        public static final String INVALID_GCP_TOKEN = "Invalid GCP token";
     }
 
     public static class FileUpload {

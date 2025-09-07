@@ -45,6 +45,11 @@ public class OtpExceptionHandler {
         return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
+    @ExceptionHandler(InvalidGCPToken.class)
+    public ResponseEntity<Object> handleGCPTokenException(InvalidGCPToken ex) {
+        return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
     @ExceptionHandler(WebExchangeBindException.class)
     public ResponseEntity<Object> handleValidationException(WebExchangeBindException ex) {
         Map<String, String> errors = new HashMap<>();
