@@ -26,6 +26,9 @@ public class AuthControllerIT {
     @Autowired
     private WebTestClient webTestClient;
 
+    @Autowired
+    private JwtTokenGenerator jwtGenerator;
+
     @MockitoBean
     private WhatsAppOtpSender whatsAppOtpSender;
 
@@ -42,6 +45,9 @@ public class AuthControllerIT {
     private CustomerService customerService;
 
     private CustomerDto customerDto;
+
+    private String token;
+
     @BeforeEach
     public void setup() {
        customerDto =  CustomerDto.builder()
@@ -50,6 +56,7 @@ public class AuthControllerIT {
                                 .firstName("Jane")
                                 .phoneNumber("1234567890")
                                 .build();
+       token = jwtGenerator.generateToken("youness");
     }
 
     @Test
@@ -57,7 +64,6 @@ public class AuthControllerIT {
     void testSendOTP_Success() {
         String phoneNumber = "+1234567890";
         OtpRequestDto otpRequestDto = OtpRequestDto.builder().phoneNumber(phoneNumber).email("youness@gmail.com").build();
-
         when(whatsAppOtpSender.send(any())).thenReturn(Mono.just("1234"));
         when(customerService.checkIfCustomerExistUsingPhoneNumber(anyString())).thenReturn(Mono.just(false));
         when(customerService.create(any() , anyString())).thenReturn(Mono.just(customerDto));
@@ -66,6 +72,7 @@ public class AuthControllerIT {
         webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
                 .post()
                 .uri("/auth/send-otp")
+                .header("Authorization", "Bearer " + token)
                 .bodyValue(otpRequestDto)
                 .exchange()
                 .expectStatus().isOk() // Validate HTTP status
@@ -88,6 +95,7 @@ public class AuthControllerIT {
         webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
                 .post()
                 .uri("/auth/send-otp")
+                .header("Authorization", "Bearer " + token)
                 .bodyValue(otpRequestDto)
                 .exchange()
                 .expectStatus().is4xxClientError();
@@ -102,7 +110,7 @@ public class AuthControllerIT {
 
         when(customerService.findCustomerByPhoneNumber(anyString())).thenReturn(Mono.just(customerDto));
         when(otpService.validate(customerDto, otp)).thenReturn(Mono.just(new CustomerDto()));
-        when(jwtTokenGenerator.generate(anyString() , any())).thenReturn(Mono.just(
+        when(jwtTokenGenerator.encode(anyString() , any())).thenReturn(Mono.just(
                 TokenDto.builder()
                         .token("mocked-jwt-token")
                         .customerDto(customerDto)
@@ -113,6 +121,7 @@ public class AuthControllerIT {
         webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
                 .get()
                 .uri("/auth/validate-otp/1234?phoneNumber=1234567890", otp, phoneNumber)
+                .header("Authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(TokenDto.class)
@@ -132,6 +141,7 @@ public class AuthControllerIT {
         webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
                 .get()
                 .uri("/auth/validate-otp/{otp}?phoneNumber=1234567890", otp)
+                .header("Authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().is5xxServerError();
     }
@@ -145,7 +155,7 @@ public class AuthControllerIT {
 
         when(customerService.findCustomerByEmail(anyString())).thenReturn(Mono.just(customerDto));
         when(otpService.validate(customerDto, otp)).thenReturn(Mono.just(new CustomerDto()));
-        when(jwtTokenGenerator.generate(anyString() , any())).thenReturn(Mono.just(
+        when(jwtTokenGenerator.encode(anyString() , any())).thenReturn(Mono.just(
                 TokenDto.builder()
                         .token("mocked-jwt-token")
                         .customerDto(customerDto)
@@ -156,6 +166,7 @@ public class AuthControllerIT {
         webTestClient.mutateWith(SecurityMockServerConfigurers.csrf())
                 .get()
                 .uri("/auth/validate-otp/1234?email=john@example.com", otp, phoneNumber)
+                .header("Authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(TokenDto.class)

@@ -25,9 +25,9 @@ services:
       - app-network
 
   springboot-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
+    env_file:
+      - .env
     image: auto-parto-springboot-app:latest
     ports:
       - "8080:8080"
