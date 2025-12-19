@@ -34,6 +34,7 @@ public class SecurityConfig {
                 .authorizeExchange(exchange -> exchange
                         .pathMatchers("/auth/**").permitAll()
                         .pathMatchers(SWAGGER_WHITELIST).permitAll()
+                        .pathMatchers("/notifications/**").permitAll()
                         .anyExchange().authenticated()
                 )
                 .authenticationManager(reactiveAuthenticationManager)
