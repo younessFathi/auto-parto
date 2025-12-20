@@ -1,4 +1,4 @@
-package auto.parto.service;
+package auto.parto.service.notification;
 
 import auto.parto.dto.NotificationRequest;
 import lombok.extern.slf4j.Slf4j;
