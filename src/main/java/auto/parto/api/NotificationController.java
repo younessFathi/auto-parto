@@ -1,6 +1,10 @@
 package auto.parto.api;
 
 import auto.parto.dto.NotificationRequest;
+import auto.parto.service.PendingNotificationService;
+import auto.parto.service.ResilientNotificationService;
+import lombok.extern.slf4j.Slf4j;
+import org.reactivestreams.Publisher;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.ServerSentEvent;
@@ -10,19 +14,27 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 @RestController
 @RequestMapping("/notifications")
+@Slf4j
 public class NotificationController {
 
     // Use Sinks for handling multiple subscribers
     private final Sinks.Many<String> notificationSink;
     private final Map<String, Sinks.Many<String>> userSinks;
+    private final ResilientNotificationService resilientNotificationService;
+    private final PendingNotificationService pendingNotificationService;
 
-    public NotificationController() {
+    public NotificationController(ResilientNotificationService resilientNotificationService, PendingNotificationService pendingNotificationService) {
+        this.resilientNotificationService = resilientNotificationService;
+        this.pendingNotificationService = pendingNotificationService;
         this.notificationSink = Sinks.many().multicast().onBackpressureBuffer();
         this.userSinks = new ConcurrentHashMap<>();
     }
@@ -43,34 +55,50 @@ public class NotificationController {
 
     // Subscribe with user-specific notifications
     @GetMapping(value = "/subscribe/{userId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<String>> subscribeToUser(
-            @PathVariable String userId,
-            @RequestHeader(value = "Last-Event-ID", required = false) String lastEventId) {
-
-        // Handle reconnection with Last-Event-ID (for missed events)
-        System.out.println("User " + userId + " connected. Last event ID: " + lastEventId);
-
-        // Create or get user-specific sink
-        Sinks.Many<String> userSink = userSinks.computeIfAbsent(
-                userId,
-                key -> Sinks.many().multicast().onBackpressureBuffer()
-        );
-
-        // Send initial connection event
-        userSink.tryEmitNext("Connected to user notification stream");
-
-        // Return SSE stream with proper formatting
-        return userSink.asFlux()
-                .map(data -> ServerSentEvent.<String>builder()
-                        .id(String.valueOf(System.currentTimeMillis()))
-                        .event("notification")
-                        .data(data)
-                        .retry(Duration.ofSeconds(5))
-                        .build())
+    public Flux<ServerSentEvent<NotificationRequest>> subscribeToUser(@PathVariable String userId) {
+        Sinks.Many<NotificationRequest> userSink = resilientNotificationService.registerConnection(userId);
+        return Flux.concat(
+                        Flux.defer(processPendingNotifications(userId)),// PHASE 1: Send pending notifications FIRST (as soon as user subscribes)
+                        userSink.asFlux()// PHASE 2: Then stream live notifications
+                )
+                .map(buildNotification())
+                .doOnSubscribe(sub -> {
+                    log.info("User {} subscribed to SSE", userId);
+                })
                 .doOnCancel(() -> {
-                    System.out.println("User " + userId + " disconnected");
-                    cleanupUserSink(userId);
+                    log.info("User {} SSE connection closed", userId);
+                    resilientNotificationService.unregisterConnection(userId);
+                })
+                .doOnError(error -> {
+                    log.error("SSE error for user {}: {}", userId, error.getMessage());
+                    resilientNotificationService.unregisterConnection(userId);
                 });
+    }
+
+    private static Function<NotificationRequest, ServerSentEvent<NotificationRequest>> buildNotification() {
+        return notification -> {
+            // Format as proper SSE
+            return ServerSentEvent.<NotificationRequest>builder()
+                    .id(UUID.randomUUID().toString())
+                    .event(notification.type().name())
+                    .data(notification)
+                    .retry(Duration.ofSeconds(10))
+                    .build();
+        };
+    }
+
+    private Supplier<Publisher<NotificationRequest>> processPendingNotifications(String userId) {
+        return () -> {
+            log.info("Sending pending notifications to {}", userId);
+
+            // Get pending notifications as a list
+            List<NotificationRequest> pending = pendingNotificationService.getPendingNotifications(userId);
+
+            if (pending.isEmpty()) log.info("No pending notification");
+            else pendingNotificationService.clearPendingNotifications(userId);
+
+            return Flux.fromIterable(pending);
+        };
     }
 
     // Broadcast notification to all connected clients
@@ -79,28 +107,39 @@ public class NotificationController {
         return Mono.fromRunnable(() -> {
             String message = formatMessage(request);
             notificationSink.tryEmitNext(message);
-            System.out.println("Broadcasted: " + message);
+            log.info("Broadcast message {} " , message);
         });
     }
 
     // Send notification to specific user
-    @PostMapping("/send/{userId}")
-    public Mono<ResponseEntity<String>> sendToUser(
-            @PathVariable String userId,
-            @RequestBody NotificationRequest request) {
+    @PostMapping("/send")
+    public ResponseEntity<Map<String, Object>> sendToUser(
+            @RequestBody NotificationRequest notificationRequest) {
+        String userId = notificationRequest.userId();
+        log.info("Sending notification for user {} " , userId);
+        // Check if user has active connection
+        if (resilientNotificationService.hasActiveConnection(userId)) {
+            // User is online - try direct delivery
+            boolean delivered = resilientNotificationService.sendNotification(notificationRequest);
 
-        return Mono.fromSupplier(() -> {
-            String message = formatMessage(request);
-            Sinks.Many<String> userSink = userSinks.get(userId);
-
-            if (userSink != null) {
-                userSink.tryEmitNext(message);
-                return ResponseEntity.ok("Notification sent to user " + userId);
-            } else {
-                return ResponseEntity.status(404)
-                        .body("User " + userId + " is not connected");
+            if (delivered) {
+                return ResponseEntity.ok(Map.of(
+                        "status", "DELIVERED",
+                        "userId", userId,
+                        "method", "SSE"
+                ));
             }
-        });
+        }
+        pendingNotificationService.addPendingNotification(notificationRequest);
+        int pendingCount = pendingNotificationService.getPendingCount(userId);
+
+        return ResponseEntity.status(202).body(Map.of(
+                "status", "PENDING",
+                "userId", userId,
+                "method", "STORED",
+                "pendingCount", pendingCount,
+                "message", "User offline. Notification stored for later delivery."
+        ));
     }
 
     // Clean heartbeat implementation
