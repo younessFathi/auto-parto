@@ -1,4 +1,4 @@
-package auto.parto.service;
+package auto.parto.service.notification;
 
 import auto.parto.dto.NotificationRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;

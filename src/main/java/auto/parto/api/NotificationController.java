@@ -1,8 +1,8 @@
 package auto.parto.api;
 
 import auto.parto.dto.NotificationRequest;
-import auto.parto.service.PendingNotificationService;
-import auto.parto.service.ResilientNotificationService;
+import auto.parto.service.notification.PendingNotificationService;
+import auto.parto.service.notification.ResilientNotificationService;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Publisher;
 import org.springframework.http.MediaType;
