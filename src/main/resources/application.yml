@@ -53,3 +53,5 @@ jwt:
 twilio: ${REDACTED_CREDENTIAL:}
   sid: ${REDACTED_CREDENTIAL:}
   auth: ${REDACTED_CREDENTIAL:}
+notification:
+  timeout: 100
