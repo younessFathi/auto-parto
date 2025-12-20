@@ -55,3 +55,7 @@ twilio: ${REDACTED_CREDENTIAL:}
   auth: ${REDACTED_CREDENTIAL:}
 notification:
   timeout: 100
+  redis:
+    pending-prefix: "notification:pending:"
+    ttl-hours: 24
+    max-pending-per-user: 100
