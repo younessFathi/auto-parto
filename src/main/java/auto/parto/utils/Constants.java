@@ -95,4 +95,37 @@ public class Constants {
         public static final String EMAIL_SENT_SUCCESSFULLY = "Email sent successfully";
         public static final String FAILED_TO_SEND_EMAIL = "Failed to send email";
     }
+
+    public static class Notification{
+        public static final String NEW_SUBSCRIBER_CONNECTED = "New subscriber connected";
+        public static final String SUBSCRIBER_DISCONNECTED = "Subscriber disconnected";
+        public static final String SSE_CONNECTION_ERROR = "SSE connection error";
+        public static final String SSE_ERROR_RETURNING_EMPTY_FLUX = "SSE error, returning empty flux";
+        public static final String USER_SUBSCRIBED_TO_SSE = "User {} subscribed to SSE";
+        public static final String USER_SSE_CONNECTION_CLOSED = "User {} SSE connection closed";
+        public static final String SSE_ERROR_FOR_USER = "SSE error for user {}: {}";
+        public static final String SENDING_NOTIFICATION_TO_USER_TYPE = "Sending notification to user: {}, type: {}";
+        public static final String USER_HAS_ACTIVE_CONNECTION_ATTEMPTING_DIRECT_DELIVERY = "User {} has active connection, attempting direct delivery";
+        public static final String NOTIFICATION_SUCCESSFULLY_DELIVERED_TO_VIA_SSE = "Notification successfully delivered to {} via SSE";
+        public static final String DIRECT_DELIVERY_FAILED_FOR_FALLING_BACK_TO_STORAGE = "Direct delivery failed for {}, falling back to storage";
+        public static final String USER_IS_OFFLINE_STORING_NOTIFICATION = "User {} is offline, storing notification";
+        public static final String NOTIFICATION_STORED_FOR_USER = "Notification stored for user: {}";
+        public static final String FAILED_TO_STORE_NOTIFICATION_FOR_USER = "Failed to store notification for user: {}";
+        public static final String ERROR_SENDING_NOTIFICATION_TO = "Error sending notification to {}: {}";
+        public static final String INVALID_NOTIFICATION_REQUEST = "Invalid notification request";
+        public static final String STORAGE_FAILED = "Storage failed";
+        public static final String STATUS = "status";
+        public static final String USER_ID = "userId";
+        public static final String METHOD = "method";
+        public static final String TIMESTAMP = "timestamp";
+        public static final String MESSAGE = "message";
+        public static final String NOTIFICATION_DELIVERED_SUCCESSFULLY = "Notification delivered successfully";
+        public static final String STORED = "STORED";
+        public static final String SSE = "SSE";
+        public static final String USER_OFFLINE_NOTIFICATION_STORED_FOR_LATER_DELIVERY = "User offline. Notification stored for later delivery.";
+        public static final String ERROR = "error";
+        public static final String FAILED_TO_PROCESS_NOTIFICATION = "Failed to process notification";
+        public static final String HEARTBEAT = "heartbeat";
+        public static final String SENT_HEARTBEAT_AT = "Sent heartbeat at {} ";
+    }
 }

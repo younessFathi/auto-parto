@@ -5,6 +5,7 @@ import auto.parto.service.BasicCircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.util.ArrayDeque;
 import java.util.List;
@@ -19,6 +20,7 @@ public class PendingNotificationService {
 
     private final SSENotificationService sseService;
     private final BasicCircuitBreaker circuitBreaker;
+    private final HybridNotificationStore hybridNotificationStore;
 
     // Store pending notifications per user
     private final Map<String, Queue<NotificationRequest>> pendingNotifications = new ConcurrentHashMap<>();
@@ -65,26 +67,10 @@ public class PendingNotificationService {
     /**
      * Add notification to pending queue
      */
-    public void addPendingNotification(NotificationRequest notification) {
-        String userId = notification.userId();
-        pendingNotifications.compute(userId, (key, queue) -> {
-            if (queue == null) {
-                queue = new ArrayDeque<>();
-            }
-
-            // Enforce size limit
-            if (queue.size() >= MAX_PENDING_PER_USER) {
-                // Remove oldest notification
-                NotificationRequest removed = queue.poll();
-                log.warn("Pending queue full for user {}, removed oldest: {}", userId, removed.id());
-            }
-
-            queue.offer(notification);
-            return queue;
-        });
-
-        log.info("Added pending notification for user {} (queue size: {})",
-                userId, pendingNotifications.get(userId).size());
+    public Mono<Boolean> addPendingNotification(NotificationRequest notification) {
+       return hybridNotificationStore.storePending(notification)
+               .doOnSuccess(sub -> log.info("Added pending notification for user {}", notification.userId()))
+               .then(Mono.just(Boolean.TRUE));
     }
 
     /**

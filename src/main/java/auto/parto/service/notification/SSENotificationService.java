@@ -169,4 +169,7 @@ public class SSENotificationService {
             sink.emitComplete(Sinks.EmitFailureHandler.FAIL_FAST);
         }
     }
+    public  Sinks.Many<NotificationRequest> getUserConnections(String userId){
+        return userConnections.get(userId);
+    }
 }
