@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
@@ -14,27 +13,31 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Map;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class RedisNotificationStore {
 
     private final ReactiveRedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
+    private final String pendingPrefix;
+    private final int ttlHours;
+    private final int maxPendingPerUser;
 
-    @Value("${notification.redis.pending-prefix:notification:pending:}")
-    private String pendingPrefix;
-
-    @Value("${notification.redis.ttl-hours:24}")
-    private int ttlHours;
-
-    @Value("${notification.redis.max-pending-per-user:100}")
-    private int maxPendingPerUser;
+    public RedisNotificationStore(ReactiveRedisTemplate<String, String> redisTemplate,
+                                  ObjectMapper objectMapper,
+                                  @Value("${notification.redis.pending-prefix:notification:pending:}") String pendingPrefix,
+                                  @Value("${notification.redis.ttl-hours:24}") int ttlHours,
+                                  @Value("${notification.redis.max-pending-per-user:100}") int maxPendingPerUser) {
+        this.redisTemplate = redisTemplate;
+        this.objectMapper = objectMapper;
+        this.pendingPrefix = pendingPrefix;
+        this.ttlHours = ttlHours;
+        this.maxPendingPerUser = maxPendingPerUser;
+    }
 
     // Initialize with JavaTimeModule for LocalDateTime support
     @PostConstruct
@@ -90,7 +93,7 @@ public class RedisNotificationStore {
 
         return redisTemplate.opsForList()
                 .range(key, 0, -1) // Get all items
-                .flatMapSequential(this::deserializeNotification)
+                .flatMapSequential(json -> deserializeNotification(json))
                 .collectList()
                 .flatMapMany(notifications -> {
                     if (!notifications.isEmpty()) {
@@ -234,6 +237,7 @@ public class RedisNotificationStore {
     }
 
     private Mono<NotificationRequest> deserializeNotification(String json) {
+        log.info("deserializeNotification {}" , json);
         return Mono.fromCallable(() -> objectMapper.readValue(json, NotificationRequest.class))
                 .onErrorResume(e -> {
                     log.error("Failed to deserialize notification JSON: {}", e.getMessage());

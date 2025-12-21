@@ -14,13 +14,18 @@ services:
       - app-network
 
   redis:
-    image: redis:7.0-alpine
+    image: redis:7-alpine
     container_name: redis
     ports:
       - "6379:6379"
-    command: redis-server --requirepass your_redis_password
+    command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - app-network
 
@@ -31,6 +36,8 @@ services:
     image: auto-parto-springboot-app:latest
     ports:
       - "8080:8080"
+    volumes:
+      - ~/.m2:/root/.m2
     depends_on:
       - mongo
       - redis
@@ -38,6 +45,9 @@ services:
       - app-network
     environment:
       SPRING_DATA_MONGODB_URI: ${URI}
+      MAVEN_OPTS: -Dmaven.repo.local=/root/.m2/repository
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
 
 volumes:
   mongo-data:
