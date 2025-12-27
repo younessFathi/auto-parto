@@ -1,55 +1,70 @@
 services:
+  #
+  # springboot-app:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     args:
+  #       - MAVEN_OPTS=-Dmaven.repo.local=/root/.m2/repository
+  #   image: auto-parto-springboot-app:latest
+  #   container_name: springboot-app
+  #   ports:
+  #     - "8080:8080"
+  #   # Use named volume for Maven cache
+  #   volumes:
+  #     - maven-cache:/root/.m2
+  #     - ./target:/app/target:z
+  #   environment:
+  #     SPRING_DATA_MONGODB_URI: ${URI}
+  #     SPRING_DATA_REDIS_HOST: redis
+  #     SPRING_DATA_REDIS_PORT: 6379
+  #   # Don't restart on code changes during development
+  #   restart: unless-stopped
+  #   networks:
+  #     - app-network
+  #   depends_on:
+  #     mongo:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+
   mongo:
-    image: mongo
+    image: mongo:8.0
     container_name: mongodb
     ports:
       - "27017:27017"
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
-      MONGO_INITDB_ROOT_USERNAME: ${DB_USER}
-      MONGO_INITDB_ROOT_PASSWORD: ${DB_PASSWORD}
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
     volumes:
       - mongo-data:/data/db
     networks:
       - app-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     container_name: redis
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
+    networks:
+      - app-network
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    networks:
-      - app-network
-
-  springboot-app:
-    build: .
-    env_file:
-      - .env
-    image: auto-parto-springboot-app:latest
-    ports:
-      - "8080:8080"
-    volumes:
-      - ~/.m2:/root/.m2
-    depends_on:
-      - mongo
-      - redis
-    networks:
-      - app-network
-    environment:
-      SPRING_DATA_MONGODB_URI: ${URI}
-      MAVEN_OPTS: -Dmaven.repo.local=/root/.m2/repository
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATA_REDIS_PORT: 6379
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
+  maven-cache:  # Persistent Maven cache
+    driver: local
   mongo-data:
   redis_data:
 

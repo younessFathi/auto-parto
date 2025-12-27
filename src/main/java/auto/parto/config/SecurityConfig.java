@@ -35,6 +35,7 @@ public class SecurityConfig {
                         .pathMatchers("/auth/**").permitAll()
                         .pathMatchers(SWAGGER_WHITELIST).permitAll()
                         .pathMatchers("/notifications/**").permitAll()
+                        .pathMatchers("/api/v1/notifications/fcm/**").permitAll()
                         .anyExchange().authenticated()
                 )
                 .authenticationManager(reactiveAuthenticationManager)
