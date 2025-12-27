@@ -5,8 +5,10 @@ spring:
     name: auto-parto
   data:
     mongodb:
-      uri: ${URI:mongodb://root:root@mongo:27017/auto-parto?authSource=admin}
-      database: ${DB_NAME:auto-parto}
+      uri: mongodb://root:root@localhost:27017/auto-parto?authSource=admin
+      username: root
+      password: root
+      database: auto-parto
       authentication-database: admin
     redis:
       host: ${REDIS_HOST:localhost}
@@ -60,3 +62,14 @@ notification:
     pending-prefix: "notification:pending:"
     ttl-hours: 24
     max-pending-per-user: 100
+
+firebase:
+  credentials:
+    path: classpath:auto-parto-pn-firebase.json
+  messaging:
+    retry:
+      max-attempts: 3
+      backoff-delay: 1000
+    circuit-breaker:
+      failure-threshold: 5
+      reset-timeout: 30000

@@ -31,5 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
-
+/null
 .env
+**/resources/*-firebase.json
+# Local FCM Test files
+test-fcm.html
+firebase-messaging-sw.js
