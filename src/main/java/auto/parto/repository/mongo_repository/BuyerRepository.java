@@ -1,7 +1,6 @@
 package auto.parto.repository.mongo_repository;
 
-import auto.parto.dto.CustomerDto;
-import auto.parto.model.Customer;
+import auto.parto.model.Buyer;
 import auto.parto.repository.ICustomerRepository;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,20 +18,20 @@ import java.time.LocalDateTime;
 @Repository
 @AllArgsConstructor
 @Slf4j
-public class CustomerRepository implements ICustomerRepository {
+public class BuyerRepository implements ICustomerRepository {
     private final ReactiveMongoTemplate reactiveMongoTemplate;
     @Override
-    public Flux<Customer> findAll() {
-        return reactiveMongoTemplate.findAll(Customer.class);
+    public Flux<Buyer> findAll() {
+        return reactiveMongoTemplate.findAll(Buyer.class);
     }
 
     @Override
-    public Mono<Customer> findById(String id) {
-        return reactiveMongoTemplate.findById(id, Customer.class);
+    public Mono<Buyer> findById(String id) {
+        return reactiveMongoTemplate.findById(id, Buyer.class);
     }
 
     @Override
-    public Mono<Customer> save(Customer customer) {
+    public Mono<Buyer> save(Buyer customer) {
         try {
             return reactiveMongoTemplate.save(customer);
         }catch (Exception e){
@@ -42,15 +41,15 @@ public class CustomerRepository implements ICustomerRepository {
     }
 
     @Override
-    public Mono<Customer> findBy(String value, String field) {
+    public Mono<Buyer> findBy(String value, String field) {
         Query query = new Query(Criteria.where(field).is(value));
-        return reactiveMongoTemplate.findOne(query, Customer.class);
+        return reactiveMongoTemplate.findOne(query, Buyer.class);
     }
 
     @Override
     public Mono<Boolean> exists(String value, String field) {
         Query query = new Query(Criteria.where(field).is(value));
-        return reactiveMongoTemplate.exists(query, Customer.class);
+        return reactiveMongoTemplate.exists(query, Buyer.class);
     }
 
     @Override
@@ -59,7 +58,7 @@ public class CustomerRepository implements ICustomerRepository {
     }
 
     @Override
-    public Mono<Customer> updateGeneratedOtp(String phoneNumber, String sentOtp, String jwtKey, String field) {
+    public Mono<Buyer> updateGeneratedOtp(String phoneNumber, String sentOtp, String jwtKey, String field) {
         Query query = new Query(Criteria.where(field).is(phoneNumber));
 
         Update update = new Update();
@@ -72,12 +71,12 @@ public class CustomerRepository implements ICustomerRepository {
                     query,
                     update,
                     FindAndModifyOptions.options().returnNew(true),
-                    Customer.class
+                    Buyer.class
         );
     }
 
     @Override
-    public Mono<Customer> deactivateCustomer(String id) {
+    public Mono<Buyer> deactivateCustomer(String id) {
         return findByIdAndIsActiveTrue(id).flatMap(customer -> {
             customer.setIsActive(Boolean.FALSE);
             return reactiveMongoTemplate.save(customer);
@@ -85,9 +84,9 @@ public class CustomerRepository implements ICustomerRepository {
     }
 
     @Override
-    public Mono<Customer> findByIdAndIsActiveTrue(String id) {
+    public Mono<Buyer> findByIdAndIsActiveTrue(String id) {
         Query query = new Query();
         query.addCriteria(Criteria.where("_id").is(id).and("isActive").is(true));
-        return reactiveMongoTemplate.findOne(query , Customer.class);
+        return reactiveMongoTemplate.findOne(query , Buyer.class);
     }
 }

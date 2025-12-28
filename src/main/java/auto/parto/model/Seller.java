@@ -18,7 +18,8 @@ import java.time.LocalDateTime;
 public class Seller {
     @Id
     private String id;
-    private String name;
+    private String firstName;
+    private String lastName;
     private String email;
     private String phoneNumber;
     private Address address;
@@ -28,4 +29,6 @@ public class Seller {
     private LocalDateTime modifiedAt;
     private Wallet wallet;
     private Boolean isActive;
+    private String jwtKey;
+    private OtpDetails otpDetails;
 }

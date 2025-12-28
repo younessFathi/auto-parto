@@ -25,7 +25,7 @@ import java.util.List;
 public class PieceDto {
     @Schema(accessMode = Schema.AccessMode.READ_ONLY)
     private String id;
-    @NotBlank(message = "Customer ID is mandatory")
+    @NotBlank(message = "Buyer ID is mandatory")
     private String customerId;
     @NotBlank(message = "Name is mandatory")
     @Size(max = 100, message = "Name must be less than 100 characters")

@@ -16,6 +16,7 @@ public class FcmNotification {
 
     private String title;
     private String body;
+    private String buyerProfileId;
 
     @Builder.Default
     private Map<String, String> data = new HashMap<>();
@@ -34,7 +35,7 @@ public class FcmNotification {
     }
 
     // Helper method for car part search notifications
-    public static FcmNotification newSearchMatch(String partName, String location, String searchId) {
+    public static FcmNotification newSearchMatch(String partName, String location, String searchId , String buyerProfileId) {
         return FcmNotification.builder()
                 .title("🔍 New Car Part Search")
                 .body(String.format("Buyer in %s needs %s", location, partName))
@@ -44,6 +45,7 @@ public class FcmNotification {
                         "searchId", searchId,
                         "partName", partName,
                         "location", location,
+                        "buyer-profile", buyerProfileId,
                         "timestamp", String.valueOf(System.currentTimeMillis())
                 ))
                 .channelId("urgent-searches") // Android channel

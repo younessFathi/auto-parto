@@ -18,9 +18,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 @Service
 @Slf4j
+@AllArgsConstructor
 public class DeviceTokenService {
 
     private final Map<String, List<DeviceToken>> userTokens = new ConcurrentHashMap<>();
+    private static final String USER_TOKENS_PREFIX = "fcm:user:tokens:";
+    private static final String TOKEN_OWNER_PREFIX = "fcm:token:owner:";
+    private final RedisNotificationStore redisNotificationStore;
 
     @Data
     @Builder
@@ -39,7 +43,6 @@ public class DeviceTokenService {
      * Register a new device token
      */
     public Mono<Boolean> registerToken(String userId, RegisterTokenRequest request) {
-        return Mono.fromCallable(() -> {
             DeviceToken deviceToken = DeviceToken.builder()
                     .token(request.getToken())
                     .platform(request.getPlatform())
@@ -49,46 +52,18 @@ public class DeviceTokenService {
                     .appVersion(request.getAppVersion())
                     .build();
 
-            userTokens.compute(userId, (key, tokens) -> {
-                if (tokens == null) {
-                    tokens = new CopyOnWriteArrayList<>();
-                }
+            String userKey = USER_TOKENS_PREFIX + userId;
+            String ownerKey = TOKEN_OWNER_PREFIX + request.getToken();
 
-                // Remove old tokens (same token or same device)
-                tokens.removeIf(t ->
-                        t.getToken().equals(request.getToken()) ||
-                                isSameDevice(t, request)
-                );
-
-                tokens.add(deviceToken);
-
-                // Keep only last 3 active tokens per user
-                if (tokens.size() > 3) {
-                    tokens.sort(Comparator.comparing(DeviceToken::getLastUsed).reversed());
-                    tokens = new CopyOnWriteArrayList<>(tokens.subList(0, 3));
-                }
-
-                return tokens;
-            });
-
-            log.info("Registered token for user {}: {}", userId, maskToken(request.getToken()));
-            return true;
-        });
+        return redisNotificationStore.registerDeviceToken(deviceToken , userKey , ownerKey , userId , request);
     }
 
     /**
-     * Get all active tokens for a user
+     * Get all active tokens for a user from Redis
      */
-    public List<String> getActiveTokens(String userId) {
-        List<DeviceToken> tokens = userTokens.get(userId);
-        if (tokens == null) {
-            return List.of();
-        }
-
-        return tokens.stream()
-                .filter(DeviceToken::isActive)
-                .map(DeviceToken::getToken)
-                .toList();
+    public Mono<List<String>> getActiveTokens(String userId) {
+        String userKey = USER_TOKENS_PREFIX + userId;
+        return redisNotificationStore.getActiveTokens(userId, userKey);
     }
 
     /**

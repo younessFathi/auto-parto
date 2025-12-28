@@ -1,8 +1,8 @@
 package auto.parto.mapper;
 
-import auto.parto.dto.CustomerDto;
+import auto.parto.dto.BuyerDto;
 import auto.parto.dto.OtpRequestDto;
-import auto.parto.model.Customer;
+import auto.parto.model.Buyer;
 import auto.parto.model.OtpDetails;
 import auto.parto.utils.JwtTokenGenerator;
 import org.mapstruct.InjectionStrategy;
@@ -13,16 +13,17 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Mapper(componentModel = "spring" , injectionStrategy = InjectionStrategy.CONSTRUCTOR, uses = {OtpDbMapper.class})
-public interface CustomerDbMapper {
+public interface BuyerDbMapper {
 
     @Mapping(source = "otpDetails", target = "otpDetailsDto")
-    CustomerDto toDto(Customer customer);
+    BuyerDto toDto(Buyer customer);
 
     @Mapping(source = "otpDetailsDto", target = "otpDetails")
-    Customer toEntity(CustomerDto customerDto);
+    Buyer toEntity(BuyerDto customerDto);
 
-    default Customer toEntity(OtpRequestDto otpRequestDto , String otp) {
-        return Customer.builder()
+
+    default Buyer toEntity(OtpRequestDto otpRequestDto , String otp) {
+        return Buyer.builder()
                 .id(UUID.randomUUID().toString())
                 .firstName(otpRequestDto.getFirstName())
                 .lastName(otpRequestDto.getLastName())

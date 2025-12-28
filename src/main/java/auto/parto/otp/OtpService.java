@@ -1,7 +1,7 @@
 package auto.parto.otp;
 
-import auto.parto.dto.CustomerDto;
 import auto.parto.dto.OtpDetailsDto;
+import auto.parto.dto.OtpVerifiable;
 import auto.parto.exception.OtpExpiredException;
 import auto.parto.exception.OtpInvalidException;
 import auto.parto.utils.Constants;
@@ -10,7 +10,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import java.util.Random;
-import java.util.UUID;
 
 @Component
 @Slf4j
@@ -19,22 +18,20 @@ public class OtpService {
     @Value("${opt.expiration.minutes}")
     private long otpExpirationMinutes;
 
-    public Mono<String> generate() {
-        return Mono.just(
-                String.format(Constants.OTPConstants.FORMAT, rand.nextInt(10000))
-        );
+    public String generate() {
+        return String.format(Constants.OTPConstants.FORMAT, rand.nextInt(10000));
     }
 
-    public Mono<CustomerDto> validate(CustomerDto customerDto, String otp) {
+    public <T extends OtpVerifiable> Mono<T> validate(T user, String otp) {
         try {
-            log.info("{} : {}" , Constants.OTPConstants.VALIDATE_OTP_CODE_FOR, customerDto.getId());
-            OtpDetailsDto cachedOtp = customerDto.getOtpDetailsDto();
-            checkOtp(customerDto.getId(), otp, cachedOtp);
+            log.info("{} : {}" , Constants.OTPConstants.VALIDATE_OTP_CODE_FOR, user.getId());
+            OtpDetailsDto cachedOtp = user.getOtpDetailsDto();
+            checkOtp(user.getId(), otp, cachedOtp);
         } catch (Exception e) {
             return Mono.error(e);
         }
-        log.info("{} : {}" , Constants.OTPConstants.END_OF_OTP_VALIDATION_FOR, customerDto.getId() );
-        return Mono.just(customerDto);
+        log.info("{} : {}" , Constants.OTPConstants.END_OF_OTP_VALIDATION_FOR, user.getId());
+        return Mono.just(user);
     }
 
     private void checkOtp(String id, String otp, OtpDetailsDto cachedOtp) {

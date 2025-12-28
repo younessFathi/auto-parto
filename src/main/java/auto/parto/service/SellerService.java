@@ -1,5 +1,6 @@
 package auto.parto.service;
 
+import auto.parto.dto.OtpRequestDto;
 import auto.parto.dto.SellerDto;
 import auto.parto.mapper.SellerDbMapper;
 import auto.parto.repository.ISellerRepository;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Service
 @AllArgsConstructor
@@ -22,6 +24,11 @@ public class SellerService implements ISellerService {
     public Mono<SellerDto> create(SellerDto sellerDto) {
         return sellerRepository.save(sellerDbMapper.toEntity(sellerDto))
                                 .map(sellerDbMapper::toDto);
+    }
+
+    @Override
+    public Mono<SellerDto> create(OtpRequestDto request, String otp) {
+        return null;
     }
 
     @Override
@@ -50,5 +57,24 @@ public class SellerService implements ISellerService {
                     return sellerRepository.save(seller)
                             .map(sellerDbMapper::toDto);
                 }); // Assuming there is a constructor to convert entity to DTO
+    }
+
+    @Override
+    public Mono<Boolean> checkIfSellerExistUsingPhoneNumber(String phoneNumber) {
+        return null;
+    }
+
+    @Override
+    public Mono<SellerDto> updateGeneratedOtpByEmail(String email, String sentOtp) {
+        return null;
+    }
+
+    @Override
+    public Mono<SellerDto> findSellerByEmail(String email) {
+        return null;
+    }
+
+    public Mono<List<String>> findMatchingSellers() {
+        return Mono.just(List.of());
     }
 }

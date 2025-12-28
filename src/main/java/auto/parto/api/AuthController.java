@@ -1,23 +1,17 @@
 package auto.parto.api;
 
-import auto.parto.annotation.otp.ValidOtp;
-import auto.parto.dto.CustomerDto;
-import auto.parto.dto.OtpRequestDto;
-import auto.parto.dto.TokenDto;
+import auto.parto.dto.*;
+import auto.parto.enums.CustomerType;
 import auto.parto.exception.InvalidGCPToken;
-import auto.parto.exception.OtpInvalidException;
 import auto.parto.otp.*;
-import auto.parto.service.iservice.ICustomerService;
+import auto.parto.service.iservice.AuthStrategy;
+import auto.parto.service.iservice.IBuyerService;
+import auto.parto.service.iservice.OtpValidationStrategy;
 import auto.parto.utils.Constants;
 import auto.parto.utils.JwtTokenGenerator;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.SneakyThrows;
@@ -32,7 +26,11 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/auth")
@@ -40,27 +38,28 @@ import java.util.UUID;
 @Tag(name = Constants.Swagger.TAG_AUTH, description = Constants.Swagger.TAG_AUTH_DESCRIPTION)
 @Slf4j
 public class AuthController {
-    private final WhatsAppOtpSender whatsAppOtpSender;
-    private final EmailOtpSender emailOtpSender;
-    private final OtpService otpService;
+    private final EmailService emailService;
     private final JwtTokenGenerator jwtTokenGenerator;
-    private final ICustomerService customerService;
+    private final IBuyerService buyerService;
     private final GoogleIdTokenVerifier googleVerifier;
+    // Map to hold strategies: Key = CustomerType, Value = Strategy Implementation
+    private final Map<CustomerType, AuthStrategy> authStrategies;
+    private final Map<CustomerType, OtpValidationStrategy<?>> otpValidationStrategies;
+    private final OtpService otpService;
+
 
     public AuthController(
-            WhatsAppOtpSender whatsAppOtpSender,
-            EmailOtpSender emailOtpSender,
-            OtpService otpService,
+            EmailService emailService,
             JwtTokenGenerator jwtTokenGenerator,
-            ICustomerService customerService,
+            IBuyerService buyerService,
+            List<AuthStrategy> strategies,
+            List<OtpValidationStrategy<?>> otpValidationStrategies,
             @Value("${spring.security.oauth2.client.registration.google.client-id}") String gcpClientId,
-            @Value("${spring.security.oauth2.client.provider.google.issuer-uri}") String url
-    ){
-        this.whatsAppOtpSender = whatsAppOtpSender;
-        this.emailOtpSender = emailOtpSender;
-        this.otpService = otpService;
+            @Value("${spring.security.oauth2.client.provider.google.issuer-uri}") String url,
+            OtpService otpService){
+        this.emailService = emailService;
         this.jwtTokenGenerator = jwtTokenGenerator;
-        this.customerService = customerService;
+        this.buyerService = buyerService;
         this.googleVerifier = new GoogleIdTokenVerifier.Builder(
                                         new NetHttpTransport(),
                                         GsonFactory.getDefaultInstance()
@@ -68,83 +67,42 @@ public class AuthController {
                                 .setAudience(Collections.singletonList(gcpClientId))
                                 .setIssuer(url)
                                 .build();
-
+        this.authStrategies = strategies.stream()
+                .collect(Collectors.toMap(AuthStrategy::getSupportedType, Function.identity()));
+        this.otpValidationStrategies = otpValidationStrategies.stream()
+                .collect(Collectors.toMap(OtpValidationStrategy::getSupportedType, Function.identity()));
+        this.otpService = otpService;
     }
 
-
-    @Operation(summary = Constants.Swagger.SEND_OTP_SUMMARY, description = Constants.Swagger.SEND_OTP_DESCRIPTION)
-    @ApiResponses({
-            @ApiResponse(responseCode = Constants.Swagger._200, description = Constants.Swagger.RESPONSE_200_OTP_SENT,
-                    content = @Content(schema = @Schema(implementation = CustomerDto.class))),
-            @ApiResponse(responseCode = Constants.Swagger._400, description = Constants.Swagger.RESPONSE_400_BAD_REQUEST),
-            @ApiResponse(responseCode = Constants.Swagger._500, description = Constants.Swagger.RESPONSE_500_INTERNAL_ERROR)
-    })
-    @PostMapping("/send-otp")
-    public Mono<CustomerDto> sendOTP(@Valid @RequestBody OtpRequestDto otpRequestDto) {
-        return whatsAppOtpSender.send(otpRequestDto)
-                        .flatMap(sentOtp -> customerService.checkIfCustomerExistUsingPhoneNumber(otpRequestDto.getPhoneNumber())
-                                .flatMap(
-                                    exists -> {
-                                        return !exists ?
-                                                customerService.create(otpRequestDto , sentOtp):
-                                                customerService.updateGeneratedOtpByPhoneNumber(otpRequestDto.getPhoneNumber(), sentOtp);
-                                    }
-                                )
-                        );
-    }
-
-    @Operation(summary = Constants.Swagger.SEND_OTP_SUMMARY, description = Constants.Swagger.SEND_OTP_DESCRIPTION)
-    @ApiResponses({
-            @ApiResponse(responseCode = Constants.Swagger._200, description = Constants.Swagger.RESPONSE_200_OTP_SENT,
-                    content = @Content(schema = @Schema(implementation = CustomerDto.class))),
-            @ApiResponse(responseCode = Constants.Swagger._400, description = Constants.Swagger.RESPONSE_400_BAD_REQUEST),
-            @ApiResponse(responseCode = Constants.Swagger._500, description = Constants.Swagger.RESPONSE_500_INTERNAL_ERROR)
-    })
     @PostMapping("/send-otp-email")
-    public Mono<CustomerDto> sendOTPToEmail(@Valid @RequestBody OtpRequestDto otpRequestDto) {
-        return emailOtpSender.send(otpRequestDto)
-                .flatMap(sentOtp -> customerService.checkIfCustomerExistUsingEmail(otpRequestDto.getEmail())
-                        .flatMap(
-                                exists -> {
-                                    return !exists ?
-                                            customerService.create(otpRequestDto , sentOtp):
-                                            customerService.updateGeneratedOtpByEmail(otpRequestDto.getEmail(), sentOtp);
-                                }
-                        )
-                );
+    public Mono<Object> sendOTPToEmail(@Valid @RequestBody OtpRequestDto otpRequestDto) {
+        return emailService.sendOTPEmail(otpRequestDto.getEmail(), otpService.generate())
+                .flatMap(sentOtp -> {
+                            AuthStrategy strategy = authStrategies.get(otpRequestDto.getCustomerType());
+                            if (strategy == null) {
+                                return Mono.error(new IllegalArgumentException("Unsupported customer type: " + otpRequestDto.getCustomerType()));
+                            }
+                            return strategy.create(otpRequestDto, sentOtp);
+                });
     }
 
 
-    @Operation(summary = Constants.Swagger.VALIDATE_OTP_SUMMARY, description = Constants.Swagger.VALIDATE_OTP_DESCRIPTION)
-    @ApiResponses({
-            @ApiResponse(responseCode = Constants.Swagger._200, description =Constants.Swagger.RESPONSE_200_OTP_VALID,
-                    content = @Content(schema = @Schema(implementation = TokenDto.class))),
-            @ApiResponse(responseCode = Constants.Swagger._400, description = Constants.Swagger.INVALID_OTP_OR_PHONE_NUMBER),
-            @ApiResponse(responseCode = Constants.Swagger._401, description = Constants.Swagger.RESPONSE_401_UNAUTHORIZED),
-            @ApiResponse(responseCode = Constants.Swagger._500, description = Constants.Swagger.RESPONSE_500_INTERNAL_ERROR)
-    })
-    @GetMapping("/validate-otp/{otp}")
-    public Mono<TokenDto> validateOTP(@ValidOtp @PathVariable String otp , @RequestParam(required = false) String phoneNumber , @RequestParam(required = false) String email) {
-        if (phoneNumber == null && email == null) {
-            return Mono.error(new OtpInvalidException(Constants.Exception.INVALID_OTP));
+    @PostMapping("/validate-otp")
+    public Mono<TokenDto<?>> validateOTP(@RequestBody ValidateOtpRequest validateOtpRequest) {
+        OtpValidationStrategy<?> strategy = otpValidationStrategies.get(validateOtpRequest.getCustomerType());
+        if (strategy == null) {
+            return Mono.error(new IllegalArgumentException("Unsupported customer type: " + validateOtpRequest.getCustomerType()));
         }
-        Mono<CustomerDto> customer =  phoneNumber != null ? customerService.findCustomerByPhoneNumber(phoneNumber) : customerService.findCustomerByEmail(email);
-        String subject = phoneNumber != null ? phoneNumber : email;
-        return customer
-                        .flatMap(
-                                customerDto -> otpService.validate(customerDto , otp))
-                        .flatMap(
-                                customerDto -> customerDto != null ? jwtTokenGenerator.encode(subject , customerDto):Mono.empty())
-                        .switchIfEmpty(Mono.error(new OtpInvalidException(Constants.Exception.INVALID_OTP)));
+        return strategy.validate(validateOtpRequest.getOtp(), validateOtpRequest.getEmail()).map(token -> (TokenDto<?>) token);
     }
 
     @GetMapping("/checkCustomerExisting")
-    public Mono<CustomerDto> loginByClerk(ServerWebExchange exchange) {
+    public Mono<BuyerDto> loginByClerk(ServerWebExchange exchange) {
         String userId = (String) exchange.getAttribute("userId");
         String email = (String) exchange.getAttribute("email");
         String name = (String) exchange.getAttribute("name");
         String picture = (String) exchange.getAttribute("picture");
-        CustomerDto customerDto = CustomerDto.builder()
+        BuyerDto customerDto = BuyerDto.builder()
                 .id(UUID.randomUUID().toString())
                 .email(email)
                 .firstName(name)
@@ -153,11 +111,11 @@ public class AuthController {
                 .picture(picture)
                 .build();
         //TODO: add mapstruct for mapping
-        return customerService.checkIfCustomerExistClerkId(userId)
+        return buyerService.checkIfBuyerExistClerkId(userId)
                 .flatMap(
                         exists -> {
                             if (!exists) {
-                                return customerService.createCustomerFromClerkAuth(customerDto);
+                                return buyerService.createBuyerFromClerkAuth(customerDto);
                             }
                             return Mono.just(customerDto);
                         }

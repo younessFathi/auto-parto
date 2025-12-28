@@ -2,6 +2,7 @@ package auto.parto.dto;
 
 import auto.parto.annotation.phoneNumber.ValidPhoneNumber;
 import auto.parto.enums.CarPartType;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
@@ -19,7 +20,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class SellerDto {
+public class SellerDto implements OtpVerifiable , JwtKeyProvider {
     @Schema(accessMode = Schema.AccessMode.READ_ONLY)
     private String id;
     @NotBlank(message = "Name is required")
@@ -39,4 +40,7 @@ public class SellerDto {
     @Schema(accessMode = Schema.AccessMode.READ_ONLY)
     private WalletDto walletDto;
     private Boolean isActive;
+    private OtpDetailsDto otpDetailsDto;
+    @JsonIgnore
+    private String jwtKey;
 }

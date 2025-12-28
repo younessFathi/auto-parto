@@ -1,7 +1,9 @@
 package auto.parto.service.notification;
 
 import auto.parto.dto.NotificationRequest;
+import auto.parto.dto.RegisterTokenRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -13,8 +15,13 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -26,6 +33,7 @@ public class RedisNotificationStore {
     private final String pendingPrefix;
     private final int ttlHours;
     private final int maxPendingPerUser;
+    private static final Duration TOKEN_TTL = Duration.ofDays(60); // Expire inactive tokens
 
     public RedisNotificationStore(ReactiveRedisTemplate<String, String> redisTemplate,
                                   ObjectMapper objectMapper,
@@ -243,5 +251,104 @@ public class RedisNotificationStore {
                     log.error("Failed to deserialize notification JSON: {}", e.getMessage());
                     return Mono.empty();
                 });
+    }
+
+    public String maskToken(String token) {
+        if (token == null || token.length() < 10) {
+            return "***";
+        }
+        return token.substring(0, 6) + "..." + token.substring(token.length() - 4);
+    }
+
+    private boolean isSameDevice(DeviceTokenService.DeviceToken existing, RegisterTokenRequest newRequest) {
+        return existing.getPlatform().equals(newRequest.getPlatform()) &&
+                existing.getAppVersion().equals(newRequest.getAppVersion());
+    }
+
+    // --- JSON Helpers ---
+
+    private List<DeviceTokenService.DeviceToken> deserializeTokens(String json) {
+        try {
+            return objectMapper.readValue(json, new TypeReference<ArrayList<DeviceTokenService.DeviceToken>>() {});
+        } catch (IOException e) {
+            log.error("Failed to deserialize tokens", e);
+            return new ArrayList<>();
+        }
+    }
+
+    private String serializeTokens(List<DeviceTokenService.DeviceToken> tokens) {
+        try {
+            return objectMapper.writeValueAsString(tokens);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to serialize tokens", e);
+        }
+    }
+
+    /**
+     * Mark token as invalid in Redis
+     */
+    public Mono<Void> markTokenInvalid(String token , String ownerKey , String userKey) {
+
+        // 1. Find who owns this token
+        return redisTemplate.opsForValue().get(ownerKey)
+                .flatMap(userId -> {
+                    // 2. Get their tokens
+                    return redisTemplate.opsForValue().get(userKey)
+                            .map(this::deserializeTokens)
+                            .flatMap(tokens -> {
+                                // 3. Remove the invalid token
+                                boolean removed = tokens.removeIf(t -> t.getToken().equals(token));
+                                if (removed) {
+                                    // 4. Save back to Redis
+                                    return redisTemplate.opsForValue().set(userKey, serializeTokens(tokens), TOKEN_TTL);
+                                }
+                                return Mono.empty();
+                            });
+                })
+                // 5. Clean up the owner key
+                .then(redisTemplate.opsForValue().delete(ownerKey))
+                .doOnSuccess(v -> log.warn("Marked token as invalid: {}", maskToken(token)))
+                .then();
+    }
+
+    /**
+     * Get all active tokens for a user from Redis
+     */
+    public Mono<List<String>> getActiveTokens(String userId , String userKey) {
+        return redisTemplate.opsForValue().get(userKey)
+                .map(this::deserializeTokens)
+                .map(tokens -> tokens.stream()
+                        .filter(DeviceTokenService.DeviceToken::isActive)
+                        .map(DeviceTokenService.DeviceToken::getToken)
+                        .toList())
+                .defaultIfEmpty(List.of());
+    }
+
+
+    public Mono<Boolean> registerDeviceToken(DeviceTokenService.DeviceToken newDeviceToken , String userKey , String ownerKey , String userId , RegisterTokenRequest request){
+        return redisTemplate.opsForValue().get(userKey)
+                .defaultIfEmpty("[]")
+                .map(this::deserializeTokens)
+                .map(tokens -> {
+                    // Remove existing token if present (to update it) or if same device
+                    tokens.removeIf(t -> t.getToken().equals(request.getToken()) || isSameDevice(t, request));
+                    tokens.add(newDeviceToken);
+
+                    // Keep only last 3 active tokens per user
+                    if (tokens.size() > 3) {
+                        tokens.sort(Comparator.comparing(DeviceTokenService.DeviceToken::getLastUsed).reversed());
+                        return tokens.subList(0, 3);
+                    }
+                    return tokens;
+                })
+                .flatMap(tokens -> {
+                    String json = serializeTokens(tokens);
+                    // Save user tokens and the reverse mapping (token -> userId)
+                    return Mono.when(
+                            redisTemplate.opsForValue().set(userKey, json, TOKEN_TTL),
+                            redisTemplate.opsForValue().set(ownerKey, userId, TOKEN_TTL)
+                    ).thenReturn(true);
+                })
+                .doOnSuccess(v -> log.info("Registered token for user {}: {}", userId, maskToken(request.getToken())));
     }
 }

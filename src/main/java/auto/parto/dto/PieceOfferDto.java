@@ -25,7 +25,7 @@ public class PieceOfferDto {
     private String id;
     @NotBlank(message = "Piece ID is required")
     private String pieceId; // id of piece request
-    @NotBlank(message = "Customer ID is required")
+    @NotBlank(message = "Buyer ID is required")
     private String customerId;
     @NotBlank(message = "Name is required")
     private String name;

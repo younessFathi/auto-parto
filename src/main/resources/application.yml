@@ -73,3 +73,10 @@ firebase:
     circuit-breaker:
       failure-threshold: 5
       reset-timeout: 30000
+resend:
+  api-key: ${REDACTED_CREDENTIAL:}
+otp:
+  template: classpath:templates/otp-template.html
+  subject: Verify your Auto Parto account
+  from: onboarding@resend.dev
+
