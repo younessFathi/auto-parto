@@ -1,8 +1,8 @@
 package auto.parto.otp;
 
-import auto.parto.dto.CustomerDto;
+import auto.parto.dto.BuyerDto;
 import reactor.core.publisher.Mono;
 
 public interface OtpValidator {
-    Mono<CustomerDto> validate(CustomerDto customerDto, String otp);
+    Mono<BuyerDto> validate(BuyerDto customerDto, String otp);
 }

@@ -1,5 +1,6 @@
 package auto.parto.service.notification;
 
+import auto.parto.exception.NoActiveTokensException;
 import com.google.firebase.messaging.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,6 +11,7 @@ import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.reactor.circuitbreaker.operator.CircuitBreakerOperator;
+
 import java.time.Duration;
 import java.util.List;
 
@@ -28,38 +30,63 @@ public class ResilientFcmService {
      * Send notification to a single user
      */
     public Mono<FcmDeliveryResult> sendToUser(String userId, FcmNotification notification) {
-        List<String> tokens = deviceTokenService.getActiveTokens(userId);
-
-        if (tokens.isEmpty()) {
-            log.warn("No active tokens for user: {}", userId);
-            return Mono.just(FcmDeliveryResult.noTokens(userId));
-        }
-
-        // Try to send to all tokens
-        return Flux.fromIterable(tokens)
-                .flatMap(token -> sendToToken(token, notification))
-                .collectList()
-                .map(results -> {
-                    boolean anySuccess = results.stream().anyMatch(FcmDeliveryResult::isSuccess);
-                    List<String> failedTokens = results.stream()
-                            .filter(r -> !r.isSuccess())
-                            .map(FcmDeliveryResult::getToken)
-                            .toList();
-
-                    return FcmDeliveryResult.builder()
+        return deviceTokenService.getActiveTokens(userId)
+                // 1. Filter ensures that if the list is empty, the Mono becomes empty
+                .filter(tokens -> !tokens.isEmpty())
+                // 2. Now switchIfEmpty will trigger correctly
+                .switchIfEmpty(Mono.error(new NoActiveTokensException(
+                        String.format("No active tokens for user %s", userId)
+                )))
+                // 3. Process the tokens
+                .flatMap(tokens -> sendToAllTokens(userId, tokens, notification))
+                // 4. Handle "No Tokens" gracefully (don't retry, just report failure)
+                .onErrorResume(NoActiveTokensException.class, e -> {
+                    log.warn(e.getMessage());
+                    return Mono.just(FcmDeliveryResult.builder()
                             .userId(userId)
-                            .success(anySuccess)
-                            .failedTokens(failedTokens)
-                            .totalTokens(tokens.size())
-                            .successfulTokens(tokens.size() - failedTokens.size())
-                            .build();
+                            .success(false)
+                            .totalTokens(0)
+                            .successfulTokens(0)
+                            .failedTokens(List.of())
+                            .error("No active tokens found")
+                            .build());
                 })
+                // 5. Handle unexpected errors (Queue for retry)
                 .onErrorResume(e -> {
                     log.error("Failed to send FCM to user {}: {}", userId, e.getMessage());
-                    // Queue for retry
                     return pushQueue.enqueueForRetry(userId, notification)
                             .thenReturn(FcmDeliveryResult.failed(userId, e.getMessage()));
                 });
+    }
+
+    /**
+     * Helper to iterate over tokens and collect results
+     */
+    private Mono<FcmDeliveryResult> sendToAllTokens(String userId, List<String> tokens, FcmNotification notification) {
+        return Flux.fromIterable(tokens)
+                .flatMap(token -> sendToToken(token, notification))
+                .collectList()
+                .map(results -> buildDeliveryResult(userId, tokens.size(), results));
+    }
+
+    /**
+     * Helper to build the final result object
+     */
+    private FcmDeliveryResult buildDeliveryResult(String userId, int totalTokens, List<FcmDeliveryResult> results) {
+        boolean anySuccess = results.stream().anyMatch(FcmDeliveryResult::isSuccess);
+
+        List<String> failedTokens = results.stream()
+                .filter(r -> !r.isSuccess())
+                .map(FcmDeliveryResult::getToken)
+                .toList();
+
+        return FcmDeliveryResult.builder()
+                .userId(userId)
+                .success(anySuccess)
+                .failedTokens(failedTokens)
+                .totalTokens(totalTokens)
+                .successfulTokens(totalTokens - failedTokens.size())
+                .build();
     }
 
     /**
@@ -68,9 +95,9 @@ public class ResilientFcmService {
     public Mono<BatchFcmResult> sendToUsers(List<String> userIds, FcmNotification notification) {
         return Flux.fromIterable(userIds)
                 .flatMap(userId -> sendToUser(userId, notification)
-                        .map(result -> new BatchFcmResult.UserDeliveryResult(userId, result , null))
+                        .map(result -> new BatchFcmResult.UserDeliveryResult(userId, result, null))
                         .onErrorResume(e -> Mono.just(
-                                new BatchFcmResult.UserDeliveryResult(userId, FcmDeliveryResult.failed(userId, e.getMessage()) , null)
+                                new BatchFcmResult.UserDeliveryResult(userId, FcmDeliveryResult.failed(userId, e.getMessage()), null)
                         ))
                 )
                 .collectList()

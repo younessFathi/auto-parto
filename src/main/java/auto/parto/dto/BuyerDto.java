@@ -1,19 +1,19 @@
 package auto.parto.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.google.auth.oauth2.JwtProvider;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
 @Builder
-public class CustomerDto {
+public class BuyerDto implements OtpVerifiable , JwtKeyProvider {
     private String id;
     private String clerkId;
     private String firstName;

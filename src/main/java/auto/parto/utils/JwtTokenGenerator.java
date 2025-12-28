@@ -1,6 +1,7 @@
 package auto.parto.utils;
 
-import auto.parto.dto.CustomerDto;
+import auto.parto.dto.BuyerDto;
+import auto.parto.dto.JwtKeyProvider;
 import auto.parto.dto.TokenDto;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -36,20 +37,20 @@ public class JwtTokenGenerator {
     private long expirationTime;
     private static final String AUTHORITIES_KEY = "roles";
 
-    public Mono<TokenDto> encode(String value , CustomerDto customerDto) {
+    public <T extends JwtKeyProvider> Mono<TokenDto<T>> encode(String value , T user) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expirationTime);
         String token = Jwts.builder()
                             .setSubject(value)
-                            .signWith(new SecretKeySpec(customerDto.getJwtKey().getBytes(), SignatureAlgorithm.HS256.getJcaName())
+                            .signWith(new SecretKeySpec(user.getJwtKey().getBytes(), SignatureAlgorithm.HS256.getJcaName())
                                 ,SignatureAlgorithm.HS512)
                             .setIssuedAt(now)
                             .setExpiration(expiryDate)
                             .compact();
         return Mono.just(
-                TokenDto.builder()
+                TokenDto.<T>builder()
                         .token(token)
-                        .customerDto(customerDto)
+                        .user(user)
                         .build()
         );
     }

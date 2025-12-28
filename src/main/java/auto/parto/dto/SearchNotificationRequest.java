@@ -12,6 +12,7 @@ public class SearchNotificationRequest {
     private String carMake;
     private String carModel;
     private String buyerLocation;
+    private String imageUrl;
     private Double maxPrice;
     private String urgency; // "IMMEDIATE", "WITHIN_DAY", "FLEXIBLE"
 }

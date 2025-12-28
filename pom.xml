@@ -48,6 +48,7 @@
 		<firebase.verison>9.7.0</firebase.verison>
 		<spring-retry.version>2.0.12</spring-retry.version>
 		<resilience4j-circuitbreaker.version>2.3.0</resilience4j-circuitbreaker.version>
+		<resend.version>4.11.0</resend.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -182,6 +183,11 @@
 			<groupId>io.github.resilience4j</groupId>
 			<artifactId>resilience4j-reactor</artifactId>
 			<version>${resilience4j-circuitbreaker.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.resend</groupId>
+			<artifactId>resend-java</artifactId>
+			<version>${resend.version}</version>
 		</dependency>
 	</dependencies>
 

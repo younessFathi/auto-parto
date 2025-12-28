@@ -23,7 +23,7 @@ import java.util.UUID;
 public class Piece {
     @Id
     private String id;
-    private String customerId;      // Customer who search the car part
+    private String customerId;      // Buyer who search the car part
     private String name;           // Name of the car part (e.g., "Brake Pad")
     private String description;      // Description of the part
     private Condition condition;

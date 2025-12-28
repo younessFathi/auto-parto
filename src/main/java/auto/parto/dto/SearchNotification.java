@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.Set;
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -31,6 +32,8 @@ public class SearchNotification {
     private Integer quantity;
     private String urgency; // IMMEDIATE, WITHIN_DAY, FLEXIBLE
     private String searchType; // IMAGE, TEXT, VIN, PART_NUMBER
+    private String imageUrl;
+
 
     // Metadata
     private LocalDateTime createdAt;
@@ -47,6 +50,7 @@ public class SearchNotification {
                 .userId(userId)
                 .partName(partName)
                 .searchType("IMAGE")
+                .imageUrl(imageUrl)
                 .urgency("WITHIN_DAY")
                 .createdAt(LocalDateTime.now())
                 .expiresAt(LocalDateTime.now().plusDays(1))
@@ -113,7 +117,6 @@ public class SearchNotification {
     }
 
     private static String generateId() {
-        return "search-" + System.currentTimeMillis() + "-" +
-                (int)(Math.random() * 1000);
+        return "search-" + UUID.randomUUID().toString();
     }
 }

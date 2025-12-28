@@ -1,6 +1,8 @@
 package auto.parto.api;
 
 import auto.parto.dto.*;
+import auto.parto.exception.NoMatchigSellersFoundException;
+import auto.parto.service.SellerService;
 import auto.parto.service.notification.*;
 import com.google.firebase.FirebaseApp;
 import jakarta.validation.Valid;
@@ -8,17 +10,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
-
-import java.io.Serializable;
-import java.security.Principal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/notifications/fcm")
@@ -29,12 +27,13 @@ public class FcmNotificationController {
 
     private final ResilientFcmService fcmService;
     private final DeviceTokenService deviceTokenService;
+    private final SellerService sellerService;
 
     /**
      * Register device token from React Native app
      */
     @PostMapping("/register")
-    public Mono<ResponseEntity<Map<String, ? extends Serializable>>> registerToken(
+    public Mono<ResponseEntity<Map<String, Object>>> registerToken(
             @Valid @RequestBody RegisterTokenRequest request) {
 
         String userId = request.getUserId();
@@ -103,8 +102,33 @@ public class FcmNotificationController {
                 request.getPartName(), request.getCarMake());
 
         // Create search notification
-        SearchNotification search = SearchNotification.builder()
-                .id(request.getSearchId())
+        SearchNotification search = buildSearchNotification(request);
+
+        // Find matching sellers (from your search service)
+        return sellerService.findMatchingSellers()
+                .switchIfEmpty(Mono.error(new NoMatchigSellersFoundException("No matching sellers found")))
+                .flatMap(sellersId ->
+                        fcmService.sendToUsers(sellersId, buildFcmNotification(search))
+                                .map(result -> {
+                                    log.info("Search notification results: {}/{} successful",
+                                            result.getSuccessfulUsers(), result.getTotalUsers());
+                                    return ResponseEntity.ok(result);
+                                })
+                                .onErrorResume(error -> {
+                                    log.error("Failed to notify sellers: {}", error.getMessage(), error);
+                                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                            .body(BatchFcmResult.builder()
+                                                    .totalUsers(sellersId.size())
+                                                    .successfulUsers(0)
+                                                    .failedUsers(sellersId.size())
+                                                    .build()));
+                                })
+                );
+    }
+
+    private static SearchNotification buildSearchNotification(SearchNotificationRequest request) {
+       return SearchNotification.builder()
+                .id(UUID.randomUUID().toString())
                 .userId(request.getBuyerId())
                 .partName(request.getPartName())
                 .carMake(request.getCarMake())
@@ -113,45 +137,17 @@ public class FcmNotificationController {
                 .maxPrice(request.getMaxPrice())
                 .urgency(request.getUrgency())
                 .searchTime(LocalDateTime.now())
+                .imageUrl(request.getImageUrl())
                 .build();
+    }
 
-        // Find matching sellers (from your search service)
-        List<String> sellerIds = findMatchingSellers(search);
-
-        if (sellerIds.isEmpty()) {
-            log.warn("No matching sellers found for search: {}", request.getSearchId());
-            return Mono.just(ResponseEntity.ok(BatchFcmResult.builder()
-                    .totalUsers(0)
-                    .successfulUsers(0)
-                    .failedUsers(0)
-                    .results(List.of())
-                    .build()));
-        }
-
-        log.info("Found {} matching sellers for search {}", sellerIds.size(), request.getSearchId());
-
-        // Create FCM notification
-        FcmNotification notification = FcmNotification.newSearchMatch(
+    private static FcmNotification buildFcmNotification(SearchNotification search) {
+        return FcmNotification.newSearchMatch(
                 search.getPartName(),
                 search.getBuyerLocation(),
-                search.getId()
+                search.getId(),
+                search.getUserId()
         );
-
-        return fcmService.sendToUsers(sellerIds, notification)
-                .map(result -> {
-                    log.info("Search notification results: {}/{} successful",
-                            result.getSuccessfulUsers(), result.getTotalUsers());
-                    return ResponseEntity.ok(result);
-                })
-                .onErrorResume(error -> {
-                    log.error("Failed to notify sellers: {}", error.getMessage(), error);
-                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                            .body(BatchFcmResult.builder()
-                                    .totalUsers(sellerIds.size())
-                                    .successfulUsers(0)
-                                    .failedUsers(sellerIds.size())
-                                    .build()));
-                });
     }
 
     /**
@@ -223,19 +219,17 @@ public class FcmNotificationController {
     @GetMapping("/stats/{userId}")
     //@PreAuthorize("#userId == authentication.principal.id or hasRole('ADMIN')")
     public Mono<ResponseEntity<Map<String, Object>>> getUserStats(@PathVariable String userId) {
-        return Mono.fromCallable(() -> {
-            List<String> tokens = deviceTokenService.getActiveTokens(userId);
-
-            return Map.<String, Object>of(
-                    "userId", userId,
-                    "activeTokens", tokens.size(),
-                    "hasTokens", !tokens.isEmpty(),
-                    "tokens", tokens.stream()
-                            .map(t -> t.substring(0, 8) + "..." + t.substring(t.length() - 4))
-                            .toList(),
-                    "timestamp", LocalDateTime.now()
-            );
-        }).map(ResponseEntity::ok);
+        return deviceTokenService.getActiveTokens(userId)
+                .map(tokens -> ResponseEntity.ok().body(
+                        Map.of(
+                                "userId", userId,
+                                "activeTokens", tokens.size(),
+                                "hasTokens", !tokens.isEmpty(),
+                                "tokens", tokens.stream()
+                                        .map(t -> t.substring(0, 8) + "..." + t.substring(t.length() - 4))
+                                        .toList(),
+                                "timestamp", LocalDateTime.now()
+                        )));
     }
 
     /**

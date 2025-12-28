@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 @NoArgsConstructor
-public class TokenDto {
+public class TokenDto<T extends JwtKeyProvider> {
     private String token;
-    private CustomerDto customerDto;
+    private T user;
 }
