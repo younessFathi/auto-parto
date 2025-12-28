@@ -33,7 +33,7 @@ build/
 .vscode/
 /null
 .env
-**/resources/*-firebase.json
+src/main/resources/auto-parto-pn-firebase.json
 # Local FCM Test files
 test-fcm.html
 firebase-messaging-sw.js
