@@ -7,7 +7,7 @@ import lombok.Data;
 public class RegisterTokenRequest {
 
     @NotBlank(message = "FCM token is required")
-    private String token;
+    private String deviceToken;
 
     @NotBlank(message = "Platform is required")
     private String platform; // "android", "ios", "web"

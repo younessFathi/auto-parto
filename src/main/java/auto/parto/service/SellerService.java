@@ -5,6 +5,7 @@ import auto.parto.dto.SellerDto;
 import auto.parto.mapper.SellerDbMapper;
 import auto.parto.repository.ISellerRepository;
 import auto.parto.service.iservice.ISellerService;
+import auto.parto.utils.JwtTokenGenerator;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,7 +29,7 @@ public class SellerService implements ISellerService {
 
     @Override
     public Mono<SellerDto> create(OtpRequestDto request, String otp) {
-        return null;
+        return sellerRepository.save(sellerDbMapper.toEntity(request, otp)).map(sellerDbMapper::toDto);
     }
 
     @Override
@@ -60,21 +61,34 @@ public class SellerService implements ISellerService {
     }
 
     @Override
-    public Mono<Boolean> checkIfSellerExistUsingPhoneNumber(String phoneNumber) {
-        return null;
+    public Mono<Boolean> checkIfSellerExistUsingPhoneNumber(String email) {
+        return sellerRepository.exists(email, "email");
     }
 
     @Override
     public Mono<SellerDto> updateGeneratedOtpByEmail(String email, String sentOtp) {
-        return null;
+        log.info("Updating generated OTP for email: {}", email);
+        return sellerRepository.updateGeneratedOtp(
+                            email,
+                            sentOtp,
+                            JwtTokenGenerator.keyGenerator(email),
+                        "email"
+                ).map(sellerDbMapper::toDto);
     }
 
     @Override
     public Mono<SellerDto> findSellerByEmail(String email) {
-        return null;
+        return sellerRepository.findBy(email, "email").map(sellerDbMapper::toDto);
+    }
+
+    @Override
+    public Mono<SellerDto> activateUser(SellerDto sellerDto) {
+        log.info("Activate seller with id {}" , sellerDto.getId());
+        sellerDto.setIsActive(true);
+        return sellerRepository.save(sellerDbMapper.toEntity(sellerDto)).map(sellerDbMapper::toDto);
     }
 
     public Mono<List<String>> findMatchingSellers() {
-        return Mono.just(List.of());
+        return sellerRepository.findMatchingSellers();
     }
 }

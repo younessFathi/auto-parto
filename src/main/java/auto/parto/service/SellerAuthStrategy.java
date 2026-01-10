@@ -14,7 +14,7 @@ public class SellerAuthStrategy implements AuthStrategy {
     private final ISellerService sellerService; // Assuming you have this
     @Override
     public Mono<Object> create(OtpRequestDto request, String sentOtp) {
-        return sellerService.checkIfSellerExistUsingPhoneNumber(request.getPhoneNumber())
+        return sellerService.checkIfSellerExistUsingPhoneNumber(request.getEmail())
                 .flatMap(exists -> !exists ?
                         sellerService.create(request, sentOtp) :
                         sellerService.updateGeneratedOtpByEmail(request.getEmail(), sentOtp)

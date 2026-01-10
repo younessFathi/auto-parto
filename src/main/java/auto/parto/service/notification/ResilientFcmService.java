@@ -37,11 +37,11 @@ public class ResilientFcmService {
                 .switchIfEmpty(Mono.error(new NoActiveTokensException(
                         String.format("No active tokens for user %s", userId)
                 )))
-                // 3. Process the tokens
+                // 3. Process the tokens // multi devices support
                 .flatMap(tokens -> sendToAllTokens(userId, tokens, notification))
                 // 4. Handle "No Tokens" gracefully (don't retry, just report failure)
                 .onErrorResume(NoActiveTokensException.class, e -> {
-                    log.warn(e.getMessage());
+                    log.warn("No active tokens found for user {}" , e.getMessage());
                     return Mono.just(FcmDeliveryResult.builder()
                             .userId(userId)
                             .success(false)

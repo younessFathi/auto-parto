@@ -21,6 +21,7 @@ import java.util.UUID;
 public interface SellerDbMapper {
     @Mapping(target = "walletDto", source = "wallet")
     @Mapping(target = "addressDto", source = "address")
+    @Mapping(source = "otpDetails", target = "otpDetailsDto")
     SellerDto toDto(Seller seller);
     @Mapping(target = "wallet", source = "walletDto")
     @Mapping(target = "address", source = "addressDto")
@@ -36,7 +37,7 @@ public interface SellerDbMapper {
                 .createAt(LocalDateTime.now())
                 .modifiedAt(null)
                 .jwtKey(JwtTokenGenerator.keyGenerator(otpRequestDto.getPhoneNumber()))
-                .isActive(Boolean.TRUE)
+                .isActive(Boolean.FALSE)
                 .otpDetails(
                         OtpDetails.builder()
                                 .otp(otp)

@@ -165,12 +165,12 @@ public class PushNotificationQueue {
      * Calculate exponential backoff
      */
     private long calculateBackoff(int retryCount) {
-        switch (retryCount) {
-            case 1: return 5000;    // 5 seconds
-            case 2: return 30000;   // 30 seconds
-            case 3: return 300000;  // 5 minutes
-            default: return 5000;
-        }
+        return switch (retryCount) {
+            case 1 -> 5000;    // 5 seconds
+            case 2 -> 30000;   // 30 seconds
+            case 3 -> 300000;  // 5 minutes
+            default -> 5000;
+        };
     }
 
     /**

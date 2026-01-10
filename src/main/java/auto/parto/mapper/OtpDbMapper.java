@@ -6,7 +6,6 @@ import org.mapstruct.Mapper;
 
 @Mapper(componentModel = "spring")
 public interface OtpDbMapper {
-
     OtpDetailsDto toDto(OtpDetails otp);
     OtpDetails toEntity(OtpDetailsDto otpDto);
 }

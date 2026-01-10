@@ -331,7 +331,7 @@ public class RedisNotificationStore {
                 .map(this::deserializeTokens)
                 .map(tokens -> {
                     // Remove existing token if present (to update it) or if same device
-                    tokens.removeIf(t -> t.getToken().equals(request.getToken()) || isSameDevice(t, request));
+                    tokens.removeIf(t -> t.getToken().equals(request.getDeviceToken()) || isSameDevice(t, request));
                     tokens.add(newDeviceToken);
 
                     // Keep only last 3 active tokens per user
@@ -349,6 +349,6 @@ public class RedisNotificationStore {
                             redisTemplate.opsForValue().set(ownerKey, userId, TOKEN_TTL)
                     ).thenReturn(true);
                 })
-                .doOnSuccess(v -> log.info("Registered token for user {}: {}", userId, maskToken(request.getToken())));
+                .doOnSuccess(v -> log.info("Registered token for user {}: {}", userId, maskToken(request.getDeviceToken())));
     }
 }

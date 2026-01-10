@@ -3,6 +3,7 @@ package auto.parto.utils;
 import auto.parto.dto.BuyerDto;
 import auto.parto.dto.JwtKeyProvider;
 import auto.parto.dto.TokenDto;
+import auto.parto.enums.CustomerType;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -31,19 +32,20 @@ import java.util.function.Function;
 @Component
 @Slf4j
 public class JwtTokenGenerator {
+    public static final String ROLE_PREFIX = "ROLE_";
     @Value("${jwt.secretKey}")
     private String secretKey;
     @Value("${jwt.expiration}")
     private long expirationTime;
     private static final String AUTHORITIES_KEY = "roles";
 
-    public <T extends JwtKeyProvider> Mono<TokenDto<T>> encode(String value , T user) {
+    public <T extends JwtKeyProvider> Mono<TokenDto<T>> encode(String value , T user , CustomerType type) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expirationTime);
         String token = Jwts.builder()
                             .setSubject(value)
-                            .signWith(new SecretKeySpec(user.getJwtKey().getBytes(), SignatureAlgorithm.HS256.getJcaName())
-                                ,SignatureAlgorithm.HS512)
+                            .claim(AUTHORITIES_KEY , ROLE_PREFIX + type.name())
+                            .signWith(getSigningKey(), SignatureAlgorithm.HS512)
                             .setIssuedAt(now)
                             .setExpiration(expiryDate)
                             .compact();
@@ -108,7 +110,7 @@ public class JwtTokenGenerator {
                     .getBody();
             return claims.getExpiration().after(new java.util.Date());
         } catch (Exception e) {
-            log.debug("exception {} " , e.getMessage());
+            log.info("exception {} " , e.getMessage());
             return false;
         }
     }

@@ -2,7 +2,6 @@ package auto.parto.service;
 
 import auto.parto.dto.BuyerDto;
 import auto.parto.dto.OtpRequestDto;
-import auto.parto.enums.CustomerType;
 import auto.parto.mapper.BuyerDbMapper;
 import auto.parto.mapper.SellerDbMapper;
 import auto.parto.repository.ISellerRepository;
@@ -55,6 +54,13 @@ public class BuyerService implements IBuyerService {
     @Override
     public Mono<Boolean> checkIfBuyerExistClerkId(String userId) {
         return buyerRepository.exists(userId, "clerkId");
+    }
+
+    @Override
+    public Mono<BuyerDto> activateUser(BuyerDto buyerDto) {
+        log.info("Activate buyer with id {} " , buyerDto.getId());
+        buyerDto.setIsActive(true);
+        return buyerRepository.save(buyerDbMapper.toEntity(buyerDto)).map(buyerDbMapper::toDto);
     }
 
     @Override

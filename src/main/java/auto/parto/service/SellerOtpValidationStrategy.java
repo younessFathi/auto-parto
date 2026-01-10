@@ -16,16 +16,17 @@ import reactor.core.publisher.Mono;
 @Service
 @RequiredArgsConstructor
 public class SellerOtpValidationStrategy implements OtpValidationStrategy<SellerDto> {
-    private ISellerService sellerService;
-    private OtpService otpService;
-    private JwtTokenGenerator jwtTokenGenerator;
+    private final ISellerService sellerService;
+    private final OtpService otpService;
+    private final JwtTokenGenerator jwtTokenGenerator;
 
     @Override
     public Mono<TokenDto<SellerDto>> validate(String otp, String email) {
         return sellerService.findSellerByEmail(email)
                 .flatMap(user -> otpService.validate(user , otp))
                 .onErrorResume(e -> Mono.error(new OtpInvalidException(Constants.Exception.INVALID_OTP)))
-                .flatMap(user -> jwtTokenGenerator.encode(email , user))
+                .flatMap(sellerService::activateUser)
+                .flatMap(user -> jwtTokenGenerator.encode(email , user , CustomerType.SELLER))
                 .switchIfEmpty(Mono.error(new OtpInvalidException(Constants.Exception.INVALID_OTP)));
     }
 

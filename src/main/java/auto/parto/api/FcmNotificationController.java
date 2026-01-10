@@ -4,12 +4,15 @@ import auto.parto.dto.*;
 import auto.parto.exception.NoMatchigSellersFoundException;
 import auto.parto.service.SellerService;
 import auto.parto.service.notification.*;
+import auto.parto.utils.SecurityHelper;
 import com.google.firebase.FirebaseApp;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -28,6 +31,7 @@ public class FcmNotificationController {
     private final ResilientFcmService fcmService;
     private final DeviceTokenService deviceTokenService;
     private final SellerService sellerService;
+    private final SecurityHelper securityHelper;
 
     /**
      * Register device token from React Native app
@@ -54,14 +58,44 @@ public class FcmNotificationController {
      * Send notification to specific user (e.g., notify buyer about seller response)
      */
     @PostMapping("/send")
-    //@PreAuthorize("hasAnyRole('SELLER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SELLER', 'BUYER' ,  'ADMIN')")
     public Mono<ResponseEntity<FcmDeliveryResult>> sendToUser(
-            @Valid @RequestBody FcmRequest request) {
+            @Valid @RequestBody FcmRequest request,
+            Authentication authentication) {
 
-        log.info("Sending FCM notification to user: {}, title: {}",
-                request.getUserId(), request.getTitle());
+        return securityHelper.validateSender(authentication)
+                        .flatMap(isValid->{
+                            if (!isValid){
+                                log.warn("Unauthorized notification attempt by inactive user: {} " , authentication.getName());
+                                return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+                            }
+                            log.info("Sending FCM notification to user: {}, title: {}",
+                                    request.getUserId(), request.getTitle());
 
-        FcmNotification notification = FcmNotification.builder()
+                            FcmNotification notification = buildFcmNotification(request);
+                            return fcmService.sendToUser(request.getUserId(), notification)
+                                    .map(result -> {
+                                        if (result.isSuccess()) {
+                                            log.info("Notification sent successfully to user: {}, messageId: {}",
+                                                    request.getUserId(), result.getMessageId());
+                                            return ResponseEntity.ok(result);
+                                        } else {
+                                            log.warn("Notification failed for user: {}, error: {}",
+                                                    request.getUserId(), result.getError());
+                                            return ResponseEntity.status(HttpStatus.ACCEPTED).body(result);
+                                        }
+                                    })
+                                    .onErrorResume(error -> {
+                                        log.error("Error sending notification to user {}: {}",
+                                                request.getUserId(), error.getMessage(), error);
+                                        return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                                .body(FcmDeliveryResult.failed(request.getUserId(), error.getMessage())));
+                                    });
+                        });
+    }
+
+    private static FcmNotification buildFcmNotification(FcmRequest request) {
+        return FcmNotification.builder()
                 .title(request.getTitle())
                 .body(request.getBody())
                 .data(request.getData())
@@ -69,32 +103,13 @@ public class FcmNotificationController {
                         FcmNotification.NotificationPriority.HIGH :
                         FcmNotification.NotificationPriority.NORMAL)
                 .build();
-
-        return fcmService.sendToUser(request.getUserId(), notification)
-                .map(result -> {
-                    if (result.isSuccess()) {
-                        log.info("Notification sent successfully to user: {}, messageId: {}",
-                                request.getUserId(), result.getMessageId());
-                        return ResponseEntity.ok(result);
-                    } else {
-                        log.warn("Notification failed for user: {}, error: {}",
-                                request.getUserId(), result.getError());
-                        return ResponseEntity.status(HttpStatus.ACCEPTED).body(result);
-                    }
-                })
-                .onErrorResume(error -> {
-                    log.error("Error sending notification to user {}: {}",
-                            request.getUserId(), error.getMessage(), error);
-                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                            .body(FcmDeliveryResult.failed(request.getUserId(), error.getMessage())));
-                });
     }
 
     /**
      * Notify sellers about new car part search
      */
     @PostMapping("/notify/search")
-    //@PreAuthorize("hasRole('BUYER')")
+    @PreAuthorize("hasRole('BUYER')")
     public Mono<ResponseEntity<BatchFcmResult>> notifySellersAboutSearch(
             @Valid @RequestBody SearchNotificationRequest request) {
 
@@ -106,6 +121,7 @@ public class FcmNotificationController {
 
         // Find matching sellers (from your search service)
         return sellerService.findMatchingSellers()
+                .filter(sellersId -> !sellersId.isEmpty())
                 .switchIfEmpty(Mono.error(new NoMatchigSellersFoundException("No matching sellers found")))
                 .flatMap(sellersId ->
                         fcmService.sendToUsers(sellersId, buildFcmNotification(search))
@@ -142,10 +158,11 @@ public class FcmNotificationController {
     }
 
     private static FcmNotification buildFcmNotification(SearchNotification search) {
+        log.info("Building FCM notification for search: {}" , search);
         return FcmNotification.newSearchMatch(
                 search.getPartName(),
                 search.getBuyerLocation(),
-                search.getId(),
+                UUID.randomUUID().toString(),
                 search.getUserId()
         );
     }
@@ -154,7 +171,7 @@ public class FcmNotificationController {
      * Notify buyer about seller's response
      */
     @PostMapping("/notify/response")
-    //@PreAuthorize("hasRole('SELLER')")
+    @PreAuthorize("hasRole('SELLER')")
     public Mono<ResponseEntity<FcmDeliveryResult>> notifyBuyerAboutResponse(
             @Valid @RequestBody SellerResponseRequest request) {
 
@@ -183,7 +200,7 @@ public class FcmNotificationController {
      * Send urgent notification (for price alerts, stock alerts, etc.)
      */
     @PostMapping("/urgent")
-    //@PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public Mono<ResponseEntity<BatchFcmResult>> sendUrgentNotification(
             @Valid @RequestBody UrgentNotificationRequest request) {
 
@@ -217,7 +234,7 @@ public class FcmNotificationController {
      * Get user's notification delivery stats
      */
     @GetMapping("/stats/{userId}")
-    //@PreAuthorize("#userId == authentication.principal.id or hasRole('ADMIN')")
+    @PreAuthorize("#userId == authentication.principal.id or hasRole('ADMIN')")
     public Mono<ResponseEntity<Map<String, Object>>> getUserStats(@PathVariable String userId) {
         return deviceTokenService.getActiveTokens(userId)
                 .map(tokens -> ResponseEntity.ok().body(
@@ -257,12 +274,5 @@ public class FcmNotificationController {
                         ));
             }
         });
-    }
-
-    // Helper methods
-    private List<String> findMatchingSellers(SearchNotification search) {
-        // Implement your seller matching logic here
-        // This should call your SearchMatchingService
-        return List.of(); // Return list of seller IDs
     }
 }

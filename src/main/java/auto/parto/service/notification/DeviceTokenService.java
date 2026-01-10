@@ -10,11 +10,9 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 @Service
 @Slf4j
@@ -43,19 +41,21 @@ public class DeviceTokenService {
      * Register a new device token
      */
     public Mono<Boolean> registerToken(String userId, RegisterTokenRequest request) {
-            DeviceToken deviceToken = DeviceToken.builder()
-                    .token(request.getToken())
-                    .platform(request.getPlatform())
-                    .registeredAt(LocalDateTime.now())
-                    .lastUsed(LocalDateTime.now())
-                    .active(true)
-                    .appVersion(request.getAppVersion())
-                    .build();
-
-            String userKey = USER_TOKENS_PREFIX + userId;
-            String ownerKey = TOKEN_OWNER_PREFIX + request.getToken();
-
+        DeviceToken deviceToken = buildDeviceToken(request);
+        String userKey = USER_TOKENS_PREFIX + userId;
+        String ownerKey = TOKEN_OWNER_PREFIX + request.getDeviceToken();
         return redisNotificationStore.registerDeviceToken(deviceToken , userKey , ownerKey , userId , request);
+    }
+
+    private static DeviceToken buildDeviceToken(RegisterTokenRequest request) {
+       return DeviceToken.builder()
+                .token(request.getDeviceToken())
+                .platform(request.getPlatform())
+                .registeredAt(LocalDateTime.now())
+                .lastUsed(LocalDateTime.now())
+                .active(true)
+                .appVersion(request.getAppVersion())
+                .build();
     }
 
     /**
