@@ -61,7 +61,7 @@ public class SellerService implements ISellerService {
     }
 
     @Override
-    public Mono<Boolean> checkIfSellerExistUsingPhoneNumber(String email) {
+    public Mono<Boolean> checkIfSellerExistUsingEmail(String email) {
         return sellerRepository.exists(email, "email");
     }
 
