@@ -9,6 +9,7 @@ import com.google.firebase.FirebaseApp;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,7 +18,6 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -28,6 +28,7 @@ import java.util.UUID;
 @Validated
 public class FcmNotificationController {
 
+    public static final String UNAUTHORIZED_NOTIFICATION_ATTEMPT_BY_INACTIVE_USER = "Unauthorized notification attempt by inactive user: {} ";
     private final ResilientFcmService fcmService;
     private final DeviceTokenService deviceTokenService;
     private final SellerService sellerService;
@@ -59,16 +60,14 @@ public class FcmNotificationController {
      */
     @PostMapping("/send")
     @PreAuthorize("hasAnyRole('SELLER', 'BUYER' ,  'ADMIN')")
-    public Mono<ResponseEntity<FcmDeliveryResult>> sendToUser(
+    public Mono<ResponseEntity<?>> sendToUser(
             @Valid @RequestBody FcmRequest request,
             Authentication authentication) {
 
-        return securityHelper.validateSender(authentication)
+        return securityHelper.validateAuthentication(authentication)
                         .flatMap(isValid->{
-                            if (!isValid){
-                                log.warn("Unauthorized notification attempt by inactive user: {} " , authentication.getName());
-                                return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
-                            }
+                            Mono<ResponseEntity<Object>> UNAUTHORIZED = checkAuthentication(authentication.getName(), isValid);
+                            if (UNAUTHORIZED != null) return UNAUTHORIZED;
                             log.info("Sending FCM notification to user: {}, title: {}",
                                     request.getUserId(), request.getTitle());
 
@@ -110,36 +109,52 @@ public class FcmNotificationController {
      */
     @PostMapping("/notify/search")
     @PreAuthorize("hasRole('BUYER')")
-    public Mono<ResponseEntity<BatchFcmResult>> notifySellersAboutSearch(
-            @Valid @RequestBody SearchNotificationRequest request) {
+    public Mono<ResponseEntity<?>> notifySellersAboutSearch(
+            @Valid @RequestBody SearchNotificationRequest request,
+            Authentication authentication) {
 
-        log.info("Notifying sellers about new search: {} for {}",
-                request.getPartName(), request.getCarMake());
+        return securityHelper.validateBuyer(authentication).flatMap(
+                isValid -> {
+                    Mono<ResponseEntity<Object>> UNAUTHORIZED = checkAuthentication(authentication.getName(), isValid);
+                    if (UNAUTHORIZED != null) return UNAUTHORIZED;
+                    log.info("Notifying sellers about new search: {} for {}",
+                            request.getPartName(), request.getCarMake());
 
-        // Create search notification
-        SearchNotification search = buildSearchNotification(request);
+                    // Create search notification
+                    SearchNotification search = buildSearchNotification(request);
 
-        // Find matching sellers (from your search service)
-        return sellerService.findMatchingSellers()
-                .filter(sellersId -> !sellersId.isEmpty())
-                .switchIfEmpty(Mono.error(new NoMatchigSellersFoundException("No matching sellers found")))
-                .flatMap(sellersId ->
-                        fcmService.sendToUsers(sellersId, buildFcmNotification(search))
-                                .map(result -> {
-                                    log.info("Search notification results: {}/{} successful",
-                                            result.getSuccessfulUsers(), result.getTotalUsers());
-                                    return ResponseEntity.ok(result);
-                                })
-                                .onErrorResume(error -> {
-                                    log.error("Failed to notify sellers: {}", error.getMessage(), error);
-                                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                            .body(BatchFcmResult.builder()
-                                                    .totalUsers(sellersId.size())
-                                                    .successfulUsers(0)
-                                                    .failedUsers(sellersId.size())
-                                                    .build()));
-                                })
-                );
+                    // Find matching sellers (from your search service)
+                    return sellerService.findMatchingSellers()
+                            .filter(sellersId -> !sellersId.isEmpty())
+                            .switchIfEmpty(Mono.error(new NoMatchigSellersFoundException("No matching sellers found")))
+                            .flatMap(sellersId ->
+                                    fcmService.sendToUsers(sellersId, buildFcmNotification(search))
+                                            .map(result -> {
+                                                log.info("Search notification results: {}/{} successful",
+                                                        result.getSuccessfulUsers(), result.getTotalUsers());
+                                                return ResponseEntity.ok(result);
+                                            })
+                                            .onErrorResume(error -> {
+                                                log.error("Failed to notify sellers: {}", error.getMessage(), error);
+                                                return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                                        .body(BatchFcmResult.builder()
+                                                                .totalUsers(sellersId.size())
+                                                                .successfulUsers(0)
+                                                                .failedUsers(sellersId.size())
+                                                                .build()));
+                                            })
+                            );
+                }
+        );
+    }
+
+    @Nullable
+    private static Mono<ResponseEntity<Object>> checkAuthentication(String name, Boolean isValid) {
+        if (!isValid) {
+            log.warn(UNAUTHORIZED_NOTIFICATION_ATTEMPT_BY_INACTIVE_USER, name);
+            return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+        }
+        return null;
     }
 
     private static SearchNotification buildSearchNotification(SearchNotificationRequest request) {
@@ -172,28 +187,34 @@ public class FcmNotificationController {
      */
     @PostMapping("/notify/response")
     @PreAuthorize("hasRole('SELLER')")
-    public Mono<ResponseEntity<FcmDeliveryResult>> notifyBuyerAboutResponse(
-            @Valid @RequestBody SellerResponseRequest request) {
+    public Mono<ResponseEntity<?>> notifyBuyerAboutResponse(
+            @Valid @RequestBody SellerResponseRequest request,
+            Authentication authentication) {
+       return securityHelper.validateSeller(authentication)
+                        .flatMap(isValid -> {
+                            Mono<ResponseEntity<Object>> UNAUTHORIZED = checkAuthentication(authentication.getName(), isValid);
+                            if (UNAUTHORIZED != null) return UNAUTHORIZED;
 
-        log.info("Seller {} responding to search {}",
-                request.getSellerId(), request.getSearchId());
+                            log.info("Seller {} responding to search {}",
+                                    request.getSellerId(), request.getSearchId());
 
-        FcmNotification notification = FcmNotification.sellerResponse(
-                request.getSellerName(),
-                request.getPartName(),
-                request.getResponseId()
-        );
+                            FcmNotification notification = FcmNotification.sellerResponse(
+                                    request.getSellerName(),
+                                    request.getPartName(),
+                                    request.getResponseId()
+                            );
 
-        return fcmService.sendToUser(request.getBuyerId(), notification)
-                .map(result -> {
-                    if (result.isSuccess()) {
-                        log.info("Buyer notified about seller response: {}", request.getResponseId());
-                        return ResponseEntity.ok(result);
-                    } else {
-                        log.warn("Failed to notify buyer about response: {}", result.getError());
-                        return ResponseEntity.status(HttpStatus.ACCEPTED).body(result);
-                    }
-                });
+                            return fcmService.sendToUser(request.getBuyerId(), notification)
+                                    .map(result -> {
+                                        if (result.isSuccess()) {
+                                            log.info("Buyer notified about seller response: {}", request.getResponseId());
+                                            return ResponseEntity.ok(result);
+                                        } else {
+                                            log.warn("Failed to notify buyer about response: {}", result.getError());
+                                            return ResponseEntity.status(HttpStatus.ACCEPTED).body(result);
+                                        }
+                                    });
+                        });
     }
 
     /**
@@ -201,33 +222,41 @@ public class FcmNotificationController {
      */
     @PostMapping("/urgent")
     @PreAuthorize("hasRole('ADMIN')")
-    public Mono<ResponseEntity<BatchFcmResult>> sendUrgentNotification(
-            @Valid @RequestBody UrgentNotificationRequest request) {
+    public Mono<ResponseEntity<?>> sendUrgentNotification(
+            @Valid @RequestBody UrgentNotificationRequest request,
+            Authentication authentication) {
 
-        log.warn("Sending urgent notification: {}", request.getTitle());
+        return securityHelper.validateAdmin(authentication)
+                .flatMap(
+                        isValid -> {
+                            Mono<ResponseEntity<Object>> UNAUTHORIZED = checkAuthentication(authentication.getName(), isValid);
+                            if (UNAUTHORIZED != null) return UNAUTHORIZED;
+                            log.warn("Sending urgent notification: {}", request.getTitle());
 
-        FcmNotification notification = FcmNotification.builder()
-                .title("🚨 " + request.getTitle())
-                .body(request.getMessage())
-                .priority(FcmNotification.NotificationPriority.HIGH)
-                .data(request.getMetadata())
-                .channelId("urgent-alerts")
-                .build();
+                            FcmNotification notification = FcmNotification.builder()
+                                    .title("🚨 " + request.getTitle())
+                                    .body(request.getMessage())
+                                    .priority(FcmNotification.NotificationPriority.HIGH)
+                                    .data(request.getMetadata())
+                                    .channelId("urgent-alerts")
+                                    .build();
 
-        return fcmService.sendToUsers(request.getUserIds(), notification)
-                .doOnSuccess(result ->
-                        log.info("Urgent notification sent to {}/{} users",
-                                result.getSuccessfulUsers(), result.getTotalUsers()))
-                .map(ResponseEntity::ok)
-                .onErrorResume(error -> {
-                    log.error("Failed to send urgent notification: {}", error.getMessage());
-                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                            .body(BatchFcmResult.builder()
-                                    .totalUsers(request.getUserIds().size())
-                                    .successfulUsers(0)
-                                    .failedUsers(request.getUserIds().size())
-                                    .build()));
-                });
+                            return fcmService.sendToUsers(request.getUserIds(), notification)
+                                    .doOnSuccess(result ->
+                                            log.info("Urgent notification sent to {}/{} users",
+                                                    result.getSuccessfulUsers(), result.getTotalUsers()))
+                                    .map(ResponseEntity::ok)
+                                    .onErrorResume(error -> {
+                                        log.error("Failed to send urgent notification: {}", error.getMessage());
+                                        return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                                .body(BatchFcmResult.builder()
+                                                        .totalUsers(request.getUserIds().size())
+                                                        .successfulUsers(0)
+                                                        .failedUsers(request.getUserIds().size())
+                                                        .build()));
+                                    });
+                        }
+                );
     }
 
     /**
@@ -253,26 +282,33 @@ public class FcmNotificationController {
      * Health check endpoint
      */
     @GetMapping("/health")
-    public Mono<ResponseEntity<Map<String, Object>>> healthCheck() {
-        return Mono.fromCallable(() -> {
-            try {
-                // Check if Firebase is initialized
-                FirebaseApp.getInstance();
+    @PreAuthorize("hasRole('ADMIN')")
+    public Mono<ResponseEntity<?>> healthCheck(Authentication authentication) {
+        return securityHelper.validateAdmin(authentication)
+                .flatMap(isValid ->{
+                    Mono<ResponseEntity<Object>> UNAUTHORIZED = checkAuthentication(authentication.getName(), isValid);
+                    if (UNAUTHORIZED != null) return UNAUTHORIZED;
+                    return Mono.fromCallable(() -> {
+                        try {
+                            // Check if Firebase is initialized
+                            FirebaseApp.getInstance();
 
-                return ResponseEntity.ok(Map.of(
-                        "status", "UP",
-                        "service", "FCM",
-                        "timestamp", LocalDateTime.now(),
-                        "firebase", "CONNECTED"
-                ));
-            } catch (Exception e) {
-                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                        .body(Map.of(
-                                "status", "DOWN",
-                                "error", e.getMessage(),
-                                "timestamp", LocalDateTime.now()
-                        ));
-            }
-        });
+                            return ResponseEntity.ok(Map.of(
+                                    "status", "UP",
+                                    "service", "FCM",
+                                    "timestamp", LocalDateTime.now(),
+                                    "firebase", "CONNECTED"
+                            ));
+                        } catch (Exception e) {
+                            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                                    .body(Map.of(
+                                            "status", "DOWN",
+                                            "error", e.getMessage(),
+                                            "timestamp", LocalDateTime.now()
+                                    ));
+                        }
+                    });
+                });
+
     }
 }
