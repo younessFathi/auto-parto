@@ -16,6 +16,7 @@ import org.hibernate.validator.constraints.Length;
 @NoArgsConstructor
 @Builder
 public class OtpRequestDto {
+    //confirmed via sms
     private String phoneNumber;
     @Length(min = 3, max = 15)
     private String firstName;

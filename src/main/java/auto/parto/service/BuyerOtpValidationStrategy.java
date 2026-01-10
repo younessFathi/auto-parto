@@ -25,7 +25,8 @@ public class BuyerOtpValidationStrategy implements OtpValidationStrategy<BuyerDt
         return buyerService.findBuyerByEmail(email)
                 .flatMap(user -> otpService.validate(user , otp))
                 .onErrorResume(e -> Mono.error(new OtpInvalidException(Constants.Exception.INVALID_OTP)))
-                .flatMap(customerDto -> jwtTokenGenerator.encode(email , customerDto))
+                .flatMap(buyerService::activateUser)
+                .flatMap(user -> jwtTokenGenerator.encode(email , user , CustomerType.BUYER))
                 .switchIfEmpty(Mono.error(new OtpInvalidException(Constants.Exception.INVALID_OTP)));
     }
 

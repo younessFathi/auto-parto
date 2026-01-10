@@ -10,17 +10,10 @@ import reactor.core.publisher.Mono;
 @RequestMapping("customers")
 @AllArgsConstructor
 public class BuyerController {
-    private final IBuyerService customerService;
+    private final IBuyerService buyerService;
 
     @PutMapping("/{id}/deactivate")
     public Mono<BuyerDto> deactivateSeller(@PathVariable String id) {
-        return customerService.deactivateBuyer(id);
+        return buyerService.deactivateBuyer(id);
     }
-
-    @PostMapping("/create/profile")
-    public Mono<BuyerDto> createProfile(@RequestBody BuyerDto buyerDto) {
-        return customerService.createBuyerFromClerkAuth(buyerDto);
-    }
-
-
 }

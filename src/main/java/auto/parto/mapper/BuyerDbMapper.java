@@ -32,7 +32,7 @@ public interface BuyerDbMapper {
                 .createAt(LocalDateTime.now())
                 .modifiedAt(null)
                 .jwtKey(JwtTokenGenerator.keyGenerator(otpRequestDto.getPhoneNumber()))
-                .isActive(Boolean.TRUE)
+                .isActive(Boolean.FALSE)
                 .otpDetails(
                         OtpDetails.builder()
                                 .otp(otp)

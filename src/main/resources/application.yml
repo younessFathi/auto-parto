@@ -13,7 +13,7 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      password:
+      password: ${REDIS_PASSWORD:root}
       lettuce:
         pool:
           max-active: 8
@@ -75,6 +75,8 @@ firebase:
       reset-timeout: 30000
 resend: ${REDACTED_CREDENTIAL:}
   api-key: ${REDACTED_CREDENTIAL:}
+  enable: false
+
 otp:
   template: classpath:templates/otp-template.html
   subject: Verify your Auto Parto account
