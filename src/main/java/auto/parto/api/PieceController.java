@@ -47,6 +47,12 @@ public class PieceController {
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page number (starting from 0)", example = "0")
             @RequestParam(defaultValue = "10") int size){
+        if (page < 0) {
+            return Mono.error(new IllegalArgumentException("page must be >= 0"));
+        }
+        if (size < 1 || size > 100) {
+            return Mono.error(new IllegalArgumentException("size must be between 1 and 100"));
+        }
         return pieceService.getAllPiecesByCustomerId(customerId , page , size).map(
                 pieceDtoPagedResponse -> {
                     if (pieceDtoPagedResponse.getData().isEmpty()){
