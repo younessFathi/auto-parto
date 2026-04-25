@@ -4,8 +4,10 @@ import auto.parto.dto.PagedResponse;
 import auto.parto.dto.PieceDto;
 import auto.parto.mapper.PieceDbMapper;
 import auto.parto.repository.IPieceRepository;
+import org.springframework.cache.annotation.CacheEvict;
 import auto.parto.service.iservice.IPieceService;
 import lombok.AllArgsConstructor;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -21,11 +23,19 @@ public class PieceService implements IPieceService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(value = "pieces", allEntries = true),
+            @CacheEvict(value = "pieceDetails", allEntries = true)
+    })
     public Mono<PieceDto> create(PieceDto pieceDto) {
         return pieceRepository.save(pieceDbMapper.toEntity(pieceDto)).map(pieceDbMapper::toDto);
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(value = "pieces", allEntries = true),
+            @CacheEvict(value = "pieceDetails", key = "#pieceDto.id")
+    })
     public Mono<PieceDto> update(PieceDto pieceDto) {
         return pieceRepository.update(pieceDto.getId() , pieceDto.getImagesId()).map(pieceDbMapper::toDto);
     }
