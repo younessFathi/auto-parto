@@ -5,14 +5,19 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.mongodb.core.FindAndModifyOptions;
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -31,15 +36,26 @@ class PieceOfferRepositoryTest {
 
     @Test
     void updatePersistsUpdatedImages() {
-        PieceOffer offer = PieceOffer.builder().id("offer-1").imagesId(List.of("old")).build();
-        when(reactiveMongoTemplate.findById("offer-1", PieceOffer.class)).thenReturn(Mono.just(offer));
-        when(reactiveMongoTemplate.save(org.mockito.ArgumentMatchers.any(PieceOffer.class)))
-                .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        when(reactiveMongoTemplate.findAndModify(
+                org.mockito.ArgumentMatchers.any(Query.class),
+                org.mockito.ArgumentMatchers.any(Update.class),
+                org.mockito.ArgumentMatchers.any(FindAndModifyOptions.class),
+                eq(PieceOffer.class))
+        ).thenReturn(Mono.just(PieceOffer.builder().id("offer-1").imagesId(List.of("img-a", "img-b")).build()));
 
         StepVerifier.create(pieceOfferRepository.update("offer-1", List.of("img-a", "img-b")))
                 .assertNext(updated -> assertThat(updated.getImagesId()).containsExactly("img-a", "img-b"))
                 .verifyComplete();
 
-        verify(reactiveMongoTemplate).save(org.mockito.ArgumentMatchers.any(PieceOffer.class));
+        ArgumentCaptor<Query> queryCaptor = ArgumentCaptor.forClass(Query.class);
+        ArgumentCaptor<Update> updateCaptor = ArgumentCaptor.forClass(Update.class);
+        verify(reactiveMongoTemplate).findAndModify(
+                queryCaptor.capture(),
+                updateCaptor.capture(),
+                org.mockito.ArgumentMatchers.any(FindAndModifyOptions.class),
+                eq(PieceOffer.class)
+        );
+        assertThat(queryCaptor.getValue().getQueryObject().get("_id")).isEqualTo("offer-1");
+        assertThat(updateCaptor.getValue().getUpdateObject().toJson()).contains("imagesId");
     }
 }

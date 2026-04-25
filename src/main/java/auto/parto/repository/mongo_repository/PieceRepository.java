@@ -7,8 +7,10 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
+import org.springframework.data.mongodb.core.FindAndModifyOptions;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -32,10 +34,10 @@ public class PieceRepository implements IPieceRepository {
 
     @Override
     public Mono<Piece> update(String id, List<String> imagesId) {
-        return findById(id).map(piece -> {
-            piece.setImagesId(imagesId);
-            return piece;
-        }).flatMap(reactiveMongoTemplate::save);
+        Query query = new Query(Criteria.where("_id").is(id));
+        Update update = new Update().set("imagesId", imagesId);
+        FindAndModifyOptions options = FindAndModifyOptions.options().returnNew(true);
+        return reactiveMongoTemplate.findAndModify(query, update, options, Piece.class);
     }
 
     @Override
