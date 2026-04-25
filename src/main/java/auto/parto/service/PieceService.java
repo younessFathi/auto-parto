@@ -36,7 +36,7 @@ public class PieceService implements IPieceService {
         return pieceRepository.getAllPieces(id , page , size)
                               .map(pieceDbMapper::toDto)
                               .collectList()
-                              .zipWith(pieceRepository.getTotalPieces())
+                              .zipWith(pieceRepository.getTotalPieces(id))
                               .map(result -> {
                                   PagedResponse<PieceDto> response = new PagedResponse<>();
                                   response.setData(result.getT1());

@@ -14,5 +14,5 @@ public interface IPieceRepository {
     Mono<Piece> update(String id, List<String> imagesId);
     Mono<Piece> findById(String id);
     Flux<Piece> getAllPieces(String id , int page , int size);
-    Mono<Long> getTotalPieces();
+    Mono<Long> getTotalPieces(String customerId);
 }

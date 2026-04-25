@@ -1,6 +1,5 @@
 package auto.parto.repository.mongo_repository;
 
-import auto.parto.dto.PieceDto;
 import auto.parto.model.Piece;
 import auto.parto.repository.IPieceRepository;
 import lombok.AllArgsConstructor;
@@ -47,15 +46,15 @@ public class PieceRepository implements IPieceRepository {
     @Override
     public Flux<Piece> getAllPieces(String id, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        Query query = new Query(Criteria.where("_id").is(id))
+        Query query = new Query(Criteria.where("customerId").is(id))
                 .with(Sort.by(Sort.Direction.DESC, "createAt"))
                 .with(pageable);
         return reactiveMongoTemplate.find(query , Piece.class);
     }
 
     @Override
-    public Mono<Long> getTotalPieces() {
-        Query query = new Query();
-        return reactiveMongoTemplate.count(query, PieceDto.class);
+    public Mono<Long> getTotalPieces(String customerId) {
+        Query query = new Query(Criteria.where("customerId").is(customerId));
+        return reactiveMongoTemplate.count(query, Piece.class);
     }
 }
