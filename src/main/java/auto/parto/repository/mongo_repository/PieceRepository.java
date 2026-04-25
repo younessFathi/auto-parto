@@ -35,7 +35,7 @@ public class PieceRepository implements IPieceRepository {
         return findById(id).map(piece -> {
             piece.setImagesId(imagesId);
             return piece;
-        });
+        }).flatMap(reactiveMongoTemplate::save);
     }
 
     @Override

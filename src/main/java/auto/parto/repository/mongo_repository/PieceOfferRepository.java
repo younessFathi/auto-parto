@@ -24,6 +24,6 @@ public class PieceOfferRepository implements IPieceOfferRepository {
         return reactiveMongoTemplate.findById(id , PieceOffer.class).map(pieceOffer->{
             pieceOffer.setImagesId(imagesId);
             return pieceOffer;
-        });
+        }).flatMap(reactiveMongoTemplate::save);
     }
 }

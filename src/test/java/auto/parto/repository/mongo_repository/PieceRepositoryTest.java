@@ -14,6 +14,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -64,5 +66,19 @@ class PieceRepositoryTest {
         ArgumentCaptor<Query> queryCaptor = ArgumentCaptor.forClass(Query.class);
         verify(reactiveMongoTemplate).count(queryCaptor.capture(), eq(Piece.class));
         assertThat(queryCaptor.getValue().getQueryObject().get("customerId")).isEqualTo("customer-2");
+    }
+
+    @Test
+    void updatePersistsUpdatedImages() {
+        Piece piece = Piece.builder().id("piece-1").imagesId(List.of("old")).build();
+        when(reactiveMongoTemplate.findById("piece-1", Piece.class)).thenReturn(Mono.just(piece));
+        when(reactiveMongoTemplate.save(org.mockito.ArgumentMatchers.any(Piece.class)))
+                .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(pieceRepository.update("piece-1", List.of("img-1", "img-2")))
+                .assertNext(updated -> assertThat(updated.getImagesId()).containsExactly("img-1", "img-2"))
+                .verifyComplete();
+
+        verify(reactiveMongoTemplate).save(org.mockito.ArgumentMatchers.any(Piece.class));
     }
 }
