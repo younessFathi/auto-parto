@@ -32,4 +32,24 @@ class OtpExceptionHandlerTest {
         assertThat(response.getBody().getRequestId()).isEqualTo("req-789");
         assertThat(response.getBody().getPath()).isEqualTo("/auth/validate-otp/1234");
     }
+
+    @Test
+    void handlesUnexpectedExceptionsWithInternalServerErrorPayload() {
+        OtpExceptionHandler handler = new OtpExceptionHandler();
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/pieces/customer1").build()
+        );
+        exchange.getAttributes().put(CorrelationIdWebFilter.REQUEST_ID_ATTRIBUTE, "req-900");
+
+        ResponseEntity<ApiErrorResponse> response = handler.handleUnexpectedException(
+                new RuntimeException("boom"),
+                exchange
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("An unexpected error occurred");
+        assertThat(response.getBody().getRequestId()).isEqualTo("req-900");
+        assertThat(response.getBody().getPath()).isEqualTo("/pieces/customer1");
+    }
 }
