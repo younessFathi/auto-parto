@@ -29,7 +29,7 @@
 	<properties>
 		<java.version>21</java.version>
 		<twilio.version>10.6.3</twilio.version>
-		<lombok.version>1.18.36</lombok.version>
+		<lombok.version>1.18.46</lombok.version>
 		<spring.security.test.version>6.4.1</spring.security.test.version>
 		<surefire.version>3.0.0</surefire.version>
 		<failsafe.version>3.0.0</failsafe.version>

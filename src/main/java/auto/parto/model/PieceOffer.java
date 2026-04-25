@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.math.BigDecimal;
@@ -13,6 +15,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Document(collection = "pieceOffers")
+@CompoundIndexes({
+        @CompoundIndex(name = "offer_piece_created_idx", def = "{'pieceId': 1, 'createAt': -1}"),
+        @CompoundIndex(name = "offer_customer_status_idx", def = "{'customerId': 1, 'status': 1}")
+})
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
