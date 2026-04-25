@@ -1,4 +1,4 @@
-image: maven:3.9.4-eclipse-temurin-21
+image: maven:3.9.10-eclipse-temurin-21
 
 stages:
   - build
@@ -12,13 +12,12 @@ cache:
   key: "$CI_COMMIT_REF_SLUG"
   paths:
     - .m2/repository # Cache Maven dependencies
-    - target/        # Cache build output
 
 build:
   stage: build
   script:
     - echo "Starting Build..."
-    - mvn clean compile
+    - mvn -B -e clean compile
   artifacts:
     paths:
       - target/
@@ -28,16 +27,20 @@ test:
   stage: test
   script:
     - echo "Running Tests..."
-    - mvn test
+    - mvn -B -e clean test || (echo "Surefire reports:" && ls -la target/surefire-reports && sed -n '1,200p' target/surefire-reports/*.txt && exit 1)
   artifacts:
+    paths:
+      - target/surefire-reports/
     reports:
       junit: target/surefire-reports/*.xml # Store test results for GitLab visualization
 
 integration-test:
   stage: test
   script:
-    - mvn verify
+    - mvn -B -e clean verify || (echo "Failsafe reports:" && ls -la target/failsafe-reports && sed -n '1,200p' target/failsafe-reports/*.txt && exit 1)
   artifacts:
+    paths:
+      - target/failsafe-reports/
     reports:
       junit: target/failsafe-reports/*.xml
 
@@ -45,7 +48,7 @@ package:
   stage: package
   script:
     - echo "Packaging Application..."
-    - mvn package -DskipTests
+    - mvn -B -e clean package -DskipTests
   artifacts:
     paths:
       - target/*.jar # Store the packaged JAR file
