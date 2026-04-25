@@ -32,7 +32,11 @@ class PieceControllerValidationIT {
         webTestClient.get()
                 .uri("/pieces/customer1?page=-1&size=10")
                 .exchange()
-                .expectStatus().isBadRequest();
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.message").isEqualTo("page must be >= 0")
+                .jsonPath("$.path").isEqualTo("/pieces/customer1");
     }
 
     @Test
@@ -41,7 +45,11 @@ class PieceControllerValidationIT {
         webTestClient.get()
                 .uri("/pieces/customer1?page=0&size=101")
                 .exchange()
-                .expectStatus().isBadRequest();
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.message").isEqualTo("size must be between 1 and 100")
+                .jsonPath("$.path").isEqualTo("/pieces/customer1");
     }
 
     @Test
@@ -58,5 +66,20 @@ class PieceControllerValidationIT {
                 .uri("/pieces/customer1?page=0&size=10")
                 .exchange()
                 .expectStatus().isOk();
+    }
+
+    @Test
+    @WithMockUser
+    void returnsNotFoundWhenPieceDetailDoesNotExist() {
+        when(pieceService.getPieceDetailByPieceId(anyString())).thenReturn(Mono.empty());
+
+        webTestClient.get()
+                .uri("/pieces/piece-404/detail")
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.message").isEqualTo("Piece not found with id: piece-404")
+                .jsonPath("$.path").isEqualTo("/pieces/piece-404/detail");
     }
 }

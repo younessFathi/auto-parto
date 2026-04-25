@@ -81,6 +81,12 @@ public class OtpExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), exchange, null);
     }
 
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiErrorResponse> handleUnexpectedException(Exception ex,
+                                                                      ServerWebExchange exchange) {
+        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred", exchange, null);
+    }
+
     private ResponseEntity<ApiErrorResponse> buildErrorResponse(HttpStatus status,
                                                                 String message,
                                                                 ServerWebExchange exchange,

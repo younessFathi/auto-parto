@@ -2,6 +2,7 @@ package auto.parto.api;
 
 import auto.parto.dto.PagedResponse;
 import auto.parto.dto.PieceDto;
+import auto.parto.exception.EntityNotFoundException;
 import auto.parto.service.iservice.IPieceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -82,13 +83,8 @@ public class PieceController {
     public Mono<ResponseEntity<PieceDto>> getPieceDetailByPieceId(
             @Parameter(description = "ID of the piece", required = true, example = "piece1")
             @PathVariable String pieceId){
-        return pieceService.getPieceDetailByPieceId(pieceId).map(
-                pieceDto -> {
-                    if (pieceDto == null){
-                        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
-                    }
-                    return ResponseEntity.status(HttpStatus.OK).body(pieceDto);
-                }
-        );
+        return pieceService.getPieceDetailByPieceId(pieceId)
+                .switchIfEmpty(Mono.error(new EntityNotFoundException("Piece not found with id: " + pieceId)))
+                .map(pieceDto -> ResponseEntity.status(HttpStatus.OK).body(pieceDto));
     }
 }
