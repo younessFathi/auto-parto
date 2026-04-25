@@ -9,41 +9,43 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ProductionConfigValidationTest {
 
     @Test
-    void skipsValidationWhenProfileIsNotProd() {
+    void skipsValidationWhenProdProfileIsNotActive() {
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles("dev");
-        ProductionConfigValidation validator = new ProductionConfigValidation(environment);
+        ProductionConfigValidation validation = new ProductionConfigValidation(environment);
 
-        assertThatCode(validator::afterPropertiesSet).doesNotThrowAnyException();
+        assertThatCode(validation::afterPropertiesSet).doesNotThrowAnyException();
     }
 
     @Test
     void failsFastWhenProdSecretsAreMissing() {
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles("prod");
-        ProductionConfigValidation validator = new ProductionConfigValidation(environment);
+        ProductionConfigValidation validation = new ProductionConfigValidation(environment);
 
-        assertThatThrownBy(validator::afterPropertiesSet)
+        assertThatThrownBy(validation::afterPropertiesSet)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("spring.security.oauth2.client.registration.google.client-id")
                 .hasMessageContaining("jwt.secretKey")
-                .hasMessageContaining("resend.api-key");
+                .hasMessageContaining("resend.api-key")
+                .hasMessageContaining("spring.data.mongodb.uri")
+                .hasMessageContaining("spring.data.redis.password");
     }
 
     @Test
-    void passesWhenRequiredProdPropertiesAreSet() {
+    void passesWhenAllRequiredProdPropertiesAreProvided() {
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles("prod");
-        environment.setProperty("spring.security.oauth2.client.registration.google.client-id", "id");
-        environment.setProperty("spring.security.oauth2.client.registration.google.client-secret", "secret");
+        environment.setProperty("spring.security.oauth2.client.registration.google.client-id", "client-id");
+        environment.setProperty("spring.security.oauth2.client.registration.google.client-secret", "client-secret");
         environment.setProperty("jwt.secretKey", "jwt-secret");
-        environment.setProperty("twilio.sid", "sid");
-        environment.setProperty("twilio.auth", "auth");
+        environment.setProperty("twilio.sid", "twilio-sid");
+        environment.setProperty("twilio.auth", "twilio-auth");
         environment.setProperty("resend.api-key", "resend");
-        environment.setProperty("spring.data.mongodb.uri", "mongodb://user:pass@mongo:27017/db");
-        environment.setProperty("spring.data.redis.password", "redis-pass");
-        ProductionConfigValidation validator = new ProductionConfigValidation(environment);
+        environment.setProperty("spring.data.mongodb.uri", "mongodb://mongo:27017/auto-parto");
+        environment.setProperty("spring.data.redis.password", "redis-secret");
 
-        assertThatCode(validator::afterPropertiesSet).doesNotThrowAnyException();
+        ProductionConfigValidation validation = new ProductionConfigValidation(environment);
+        assertThatCode(validation::afterPropertiesSet).doesNotThrowAnyException();
     }
 }
