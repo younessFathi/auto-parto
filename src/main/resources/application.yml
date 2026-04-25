@@ -50,12 +50,12 @@ auto:
       uploads: ../uploads
 
 jwt:
-  secretKey: A4UQ29eR6l0b35ifBXl1GnzIEdGrfcD3VeUJzffA1V3dFfiPdU5ks4hXROQCOw4TnewzqEEzdYVYIX69ej+NiQ==
+  secretKey: ${JWT_SECRET}
   expiration: 3600_000
 
 twilio:
-  sid: ${SID:[REDACTED_TWILIO_ACCOUNT_SID]}
-  auth: ${AUTH:[REDACTED_CREDENTIAL]}
+  sid: ${SID}
+  auth: ${AUTH}
 notification:
   timeout: 100
   redis:
