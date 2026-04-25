@@ -11,9 +11,20 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.utility.DockerImageName;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@TestPropertySource(properties = {
+    "RESEND_API_KEY=dummy",
+    "CLIENT_ID=dummy",
+    "CLIENT_SECRET=dummy",
+    "JWT_SECRET=dummy_secret_key_which_is_long_enough_for_hs256_algo_12345",
+    "SID=dummy",
+    "AUTH=dummy",
+    "REDIS_PASSWORD=",
+    "URI=mongodb://localhost:27017/test"
+})
 @ActiveProfiles("test")
 @Testcontainers
 public abstract class BaseIntegrationTest {

@@ -9,6 +9,7 @@ import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
 import reactor.test.StepVerifier;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,7 +31,7 @@ class PieceRepositoryIT extends BaseIntegrationTest {
     void shouldSaveAndFindPiece() {
         Piece newPiece = Piece.builder()
                 .customerId("cust-123")
-                .createAt(LocalDateTime.now())
+                .createAt(LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS))
                 .imagesId(List.of("img-1"))
                 .build();
 
@@ -48,9 +49,9 @@ class PieceRepositoryIT extends BaseIntegrationTest {
 
     @Test
     void shouldGetAllPiecesWithPagination() {
-        Piece piece1 = Piece.builder().customerId("cust-456").createAt(LocalDateTime.now().minusDays(1)).build();
-        Piece piece2 = Piece.builder().customerId("cust-456").createAt(LocalDateTime.now()).build();
-        Piece piece3 = Piece.builder().customerId("cust-456").createAt(LocalDateTime.now().plusDays(1)).build();
+        Piece piece1 = Piece.builder().customerId("cust-456").createAt(LocalDateTime.now().minusDays(1).truncatedTo(ChronoUnit.MILLIS)).build();
+        Piece piece2 = Piece.builder().customerId("cust-456").createAt(LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS)).build();
+        Piece piece3 = Piece.builder().customerId("cust-456").createAt(LocalDateTime.now().plusDays(1).truncatedTo(ChronoUnit.MILLIS)).build();
         
         reactiveMongoTemplate.insertAll(List.of(piece1, piece2, piece3)).blockLast();
 
