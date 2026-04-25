@@ -1,32 +1,25 @@
 services:
-  #
-  # springboot-app:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #     args:
-  #       - MAVEN_OPTS=-Dmaven.repo.local=/root/.m2/repository
-  #   image: auto-parto-springboot-app:latest
-  #   container_name: springboot-app
-  #   ports:
-  #     - "8080:8080"
-  #   # Use named volume for Maven cache
-  #   volumes:
-  #     - maven-cache:/root/.m2
-  #     - ./target:/app/target:z
-  #   environment:
-  #     SPRING_DATA_MONGODB_URI: ${URI}
-  #     SPRING_DATA_REDIS_HOST: redis
-  #     SPRING_DATA_REDIS_PORT: 6379
-  #   # Don't restart on code changes during development
-  #   restart: unless-stopped
-  #   networks:
-  #     - app-network
-  #   depends_on:
-  #     mongo:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
+  springboot-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: auto-parto-springboot-app:latest
+    container_name: springboot-app
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATA_MONGODB_URI: ${URI}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    restart: unless-stopped
+    networks:
+      - app-network
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   mongo:
     image: mongo:8.0
@@ -63,8 +56,6 @@ services:
       retries: 5
 
 volumes:
-  maven-cache:  # Persistent Maven cache
-    driver: local
   mongo-data:
   redis_data:
 
