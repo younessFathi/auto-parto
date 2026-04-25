@@ -1,73 +1,102 @@
 package auto.parto.advicer;
 
+import auto.parto.config.CorrelationIdWebFilter;
+import auto.parto.dto.ApiErrorResponse;
 import auto.parto.exception.*;
-import auto.parto.utils.Constants;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.support.WebExchangeBindException;
+import org.springframework.web.server.ServerWebExchange;
+import jakarta.validation.ConstraintViolationException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class OtpExceptionHandler {
 
     @ExceptionHandler(OtpInvalidException.class)
-    public ResponseEntity<Object> handleOtpInvalidException(OtpInvalidException ex) {
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
+    public ResponseEntity<ApiErrorResponse> handleOtpInvalidException(OtpInvalidException ex, ServerWebExchange exchange) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), exchange, null);
     }
 
     @ExceptionHandler(OtpExpiredException.class)
-    public ResponseEntity<Object> handleOtpExpiredException(OtpExpiredException ex) {
-        return buildErrorResponse(HttpStatus.GONE, ex.getMessage());
+    public ResponseEntity<ApiErrorResponse> handleOtpExpiredException(OtpExpiredException ex, ServerWebExchange exchange) {
+        return buildErrorResponse(HttpStatus.GONE, ex.getMessage(), exchange, null);
     }
 
     @ExceptionHandler(OtpTooManyRequestsException.class)
-    public ResponseEntity<Object> handleOtpTooManyRequestsException(OtpTooManyRequestsException ex) {
-        return buildErrorResponse(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+    public ResponseEntity<ApiErrorResponse> handleOtpTooManyRequestsException(OtpTooManyRequestsException ex, ServerWebExchange exchange) {
+        return buildErrorResponse(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), exchange, null);
     }
 
     @ExceptionHandler(TwilioException.class)
-    public ResponseEntity<Object> handleTwilioException(TwilioException ex) {
-        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, Constants.Exception.AN_UNEXPECTED_ERROR_OCCURRED);
+    public ResponseEntity<ApiErrorResponse> handleTwilioException(TwilioException ex, ServerWebExchange exchange) {
+        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred", exchange, null);
     }
 
     @ExceptionHandler(FileUploadException.class)
-    public ResponseEntity<Object> handleFileException(FileUploadException ex) {
-        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage());
+    public ResponseEntity<ApiErrorResponse> handleFileException(FileUploadException ex, ServerWebExchange exchange) {
+        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), exchange, null);
     }
 
     @ExceptionHandler(EntityNotFoundException.class)
-    public ResponseEntity<Object> handleEntityException(EntityNotFoundException ex) {
-        return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
+    public ResponseEntity<ApiErrorResponse> handleEntityException(EntityNotFoundException ex, ServerWebExchange exchange) {
+        return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), exchange, null);
     }
 
     @ExceptionHandler(InvalidGCPToken.class)
-    public ResponseEntity<Object> handleGCPTokenException(InvalidGCPToken ex) {
-        return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
+    public ResponseEntity<ApiErrorResponse> handleGCPTokenException(InvalidGCPToken ex, ServerWebExchange exchange) {
+        return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), exchange, null);
     }
 
     @ExceptionHandler(WebExchangeBindException.class)
-    public ResponseEntity<Object> handleValidationException(WebExchangeBindException ex) {
+    public ResponseEntity<ApiErrorResponse> handleValidationException(WebExchangeBindException ex, ServerWebExchange exchange) {
         Map<String, String> errors = new HashMap<>();
         ex.getBindingResult().getFieldErrors().forEach(error -> {
             errors.put(error.getField(), error.getDefaultMessage());
         });
-        return ResponseEntity.badRequest().body(errors);
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, "Validation failed", exchange, errors);
     }
 
-    // Generic exception handler (optional)
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiErrorResponse> handleConstraintViolationException(ConstraintViolationException ex,
+                                                                               ServerWebExchange exchange) {
+        Map<String, String> details = ex.getConstraintViolations().stream()
+                .collect(Collectors.toMap(
+                        violation -> violation.getPropertyPath().toString(),
+                        violation -> violation.getMessage(),
+                        (first, second) -> first
+                ));
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, "Validation failed", exchange, details);
+    }
 
-    private ResponseEntity<Object> buildErrorResponse(HttpStatus status, String message) {
-        Map<String, Object> errorDetails = new HashMap<>();
-        errorDetails.put(Constants.Exception.TIMESTAMP, LocalDateTime.now());
-        errorDetails.put(Constants.Exception.STATUS, status.value());
-        errorDetails.put(Constants.Exception.ERROR, status.getReasonPhrase());
-        errorDetails.put(Constants.Exception.MESSAGE, message);
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiErrorResponse> handleIllegalArgumentException(IllegalArgumentException ex,
+                                                                           ServerWebExchange exchange) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), exchange, null);
+    }
 
-        return new ResponseEntity<>(errorDetails, status);
+    private ResponseEntity<ApiErrorResponse> buildErrorResponse(HttpStatus status,
+                                                                String message,
+                                                                ServerWebExchange exchange,
+                                                                Map<String, String> details) {
+        Object requestIdValue = exchange.getAttribute(CorrelationIdWebFilter.REQUEST_ID_ATTRIBUTE);
+        String requestId = requestIdValue == null ? null : requestIdValue.toString();
+        ApiErrorResponse errorResponse = ApiErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(status.value())
+                .error(status.getReasonPhrase())
+                .message(message)
+                .path(exchange.getRequest().getPath().value())
+                .requestId(requestId)
+                .details(details)
+                .build();
+
+        return new ResponseEntity<>(errorResponse, status);
     }
 }
