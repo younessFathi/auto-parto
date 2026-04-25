@@ -5,15 +5,11 @@ spring:
     name: auto-parto
   data:
     mongodb:
-      uri: mongodb://root:root@localhost:27017/auto-parto?authSource=admin
-      username: root
-      password: root
-      database: auto-parto
-      authentication-database: admin
+      uri: ${URI}
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:root}
+      password: ${REDIS_PASSWORD}
       lettuce:
         pool:
           max-active: 8
