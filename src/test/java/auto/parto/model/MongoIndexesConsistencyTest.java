@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MongoIndexesConsistencyTest {
 
     @Test
-    void pieceDefinesCustomerDrivenIndexesForPaginationAndStatusQueries() {
+    void pieceDefinesCustomerFocusedIndexesForQueryAndPaginationPaths() {
         CompoundIndexes indexes = Piece.class.getAnnotation(CompoundIndexes.class);
         assertThat(indexes).isNotNull();
 
@@ -22,7 +22,7 @@ class MongoIndexesConsistencyTest {
     }
 
     @Test
-    void pieceOfferDefinesPieceAndCustomerDrivenIndexes() {
+    void pieceOfferDefinesPieceAndCustomerStatusIndexesForOfferQueries() {
         CompoundIndexes indexes = PieceOffer.class.getAnnotation(CompoundIndexes.class);
         assertThat(indexes).isNotNull();
 

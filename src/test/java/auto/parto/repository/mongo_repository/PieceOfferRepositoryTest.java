@@ -49,13 +49,15 @@ class PieceOfferRepositoryTest {
 
         ArgumentCaptor<Query> queryCaptor = ArgumentCaptor.forClass(Query.class);
         ArgumentCaptor<Update> updateCaptor = ArgumentCaptor.forClass(Update.class);
+        ArgumentCaptor<FindAndModifyOptions> optionsCaptor = ArgumentCaptor.forClass(FindAndModifyOptions.class);
         verify(reactiveMongoTemplate).findAndModify(
                 queryCaptor.capture(),
                 updateCaptor.capture(),
-                org.mockito.ArgumentMatchers.any(FindAndModifyOptions.class),
+                optionsCaptor.capture(),
                 eq(PieceOffer.class)
         );
         assertThat(queryCaptor.getValue().getQueryObject().get("_id")).isEqualTo("offer-1");
         assertThat(updateCaptor.getValue().getUpdateObject().toJson()).contains("imagesId");
+        assertThat(optionsCaptor.getValue().isReturnNew()).isTrue();
     }
 }
