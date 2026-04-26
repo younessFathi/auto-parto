@@ -1,4 +1,17 @@
 auto:
   parto:
     images:
-      uploads:  src/test/resources/upload
+      uploads: src/test/resources/upload
+
+# Disable Firebase in tests/CI — the credentials file does not exist in the pipeline
+firebase:
+  enabled: false
+  credentials:
+    path: classpath:firebase-dummy.json
+  messaging:
+    retry:
+      max-attempts: 1
+      backoff-delay: 100
+    circuit-breaker:
+      failure-threshold: 5
+      reset-timeout: 30000
