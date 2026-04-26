@@ -1,19 +1,25 @@
 package auto.parto.config;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.utility.DockerImageName;
 
+/**
+ * Base class for all integration tests.
+ * Spins up real MongoDB and Redis containers via Testcontainers.
+ * The MongoDB URI is auto-wired by @ServiceConnection; the URI dummy
+ * property below is only needed to satisfy the Spring placeholder resolver
+ * before the container starts — the real URI overrides it at runtime.
+ */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(properties = {
     "RESEND_API_KEY=dummy",
@@ -23,10 +29,11 @@ import org.testcontainers.utility.DockerImageName;
     "SID=dummy",
     "AUTH=dummy",
     "REDIS_PASSWORD=",
-    "URI=mongodb://localhost:27017/test"
+    "URI=mongodb://localhost:27017/test" // overridden at runtime by @ServiceConnection
 })
 @ActiveProfiles("test")
 @Testcontainers
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 public abstract class BaseIntegrationTest {
 
     @Container
@@ -41,16 +48,5 @@ public abstract class BaseIntegrationTest {
     static void redisProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.data.redis.host", redisContainer::getHost);
         registry.add("spring.data.redis.port", () -> redisContainer.getMappedPort(6379));
-    }
-
-    @BeforeAll
-    static void beforeAll() {
-        // Testcontainers starts automatically because of @Container,
-        // but we can add any custom setup here if needed.
-    }
-
-    @AfterAll
-    static void afterAll() {
-        // Containers are stopped automatically by Testcontainers.
     }
 }
