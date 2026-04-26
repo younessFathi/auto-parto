@@ -1,7 +1,6 @@
 package auto.parto.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.google.auth.oauth2.JwtProvider;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
