@@ -39,8 +39,6 @@ class ProductionConfigValidationTest {
         environment.setProperty("spring.security.oauth2.client.registration.google.client-id", "client-id");
         environment.setProperty("spring.security.oauth2.client.registration.google.client-secret", "client-secret");
         environment.setProperty("jwt.secretKey", "jwt-secret");
-        environment.setProperty("twilio.sid", "twilio-sid");
-        environment.setProperty("twilio.auth", "twilio-auth");
         environment.setProperty("resend.api-key", "resend");
         environment.setProperty("spring.data.mongodb.uri", "mongodb://mongo:27017/auto-parto");
         environment.setProperty("spring.data.redis.password", "redis-secret");

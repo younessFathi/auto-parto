@@ -49,9 +49,6 @@ jwt:
   secretKey: ${JWT_SECRET}
   expiration: 3600_000
 
-twilio: ${REDACTED_CREDENTIAL:}
-  sid: ${SID}
-  auth: ${AUTH}
 notification:
   timeout: 100
   redis:

@@ -28,8 +28,6 @@ public class ProductionConfigValidation implements InitializingBean {
         validateRequiredProperty("spring.security.oauth2.client.registration.google.client-id", missingProperties);
         validateRequiredProperty("spring.security.oauth2.client.registration.google.client-secret", missingProperties);
         validateRequiredProperty("jwt.secretKey", missingProperties);
-        validateRequiredProperty("twilio.sid", missingProperties);
-        validateRequiredProperty("twilio.auth", missingProperties);
         validateRequiredProperty("resend.api-key", missingProperties);
         validateRequiredProperty("spring.data.mongodb.uri", missingProperties);
         validateRequiredProperty("spring.data.redis.password", missingProperties);

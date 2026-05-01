@@ -17,8 +17,6 @@ class SecurityConfigurationPlaceholdersTest {
         assertThat(applicationConfig).contains("client-id: ${CLIENT_ID}");
         assertThat(applicationConfig).contains("client-secret: ${CLIENT_SECRET}");
         assertThat(applicationConfig).contains("secretKey: ${JWT_SECRET}");
-        assertThat(applicationConfig).contains("sid: ${SID}");
-        assertThat(applicationConfig).contains("auth: ${AUTH}");
         assertThat(applicationConfig).contains("api-key: ${RESEND_API_KEY}");
 
         assertThat(applicationConfig).doesNotContain("GOCSPX-");
