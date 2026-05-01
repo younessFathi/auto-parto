@@ -6,7 +6,6 @@ import auto.parto.dto.TokenDto;
 import auto.parto.enums.CustomerType;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,6 +18,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
@@ -28,6 +28,8 @@ import java.util.Base64;
 import java.util.Collection;
 import java.util.Date;
 import java.util.function.Function;
+
+import static io.jsonwebtoken.Jwts.*;
 
 @Component
 @Slf4j
@@ -43,11 +45,11 @@ public class JwtTokenGenerator {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expirationTime);
         String token = Jwts.builder()
-                            .setSubject(value)
+                            .subject(value)
                             .claim(AUTHORITIES_KEY , ROLE_PREFIX + type.name())
-                            .signWith(getSigningKey(), SignatureAlgorithm.HS512)
-                            .setIssuedAt(now)
-                            .setExpiration(expiryDate)
+                            .signWith(getSigningKey())
+                            .issuedAt(now)
+                            .expiration(expiryDate)
                             .compact();
         return Mono.just(
                 TokenDto.<T>builder()
@@ -57,9 +59,9 @@ public class JwtTokenGenerator {
         );
     }
 
-    private Key getSigningKey() {
+    private SecretKey getSigningKey() {
         byte[] decodedKey = Base64.getDecoder().decode(secretKey);
-        return Keys.hmacShaKeyFor(decodedKey); // generates HMAC-SHA512 key
+        return Keys.hmacShaKeyFor(decodedKey);
     }
 
     public Mono<TokenDto> encode(String value) {
@@ -73,16 +75,16 @@ public class JwtTokenGenerator {
 
     public String generateToken(String value) {
         byte[] decodedKey = Base64.getDecoder().decode(secretKey);
-        Key key = new SecretKeySpec(decodedKey, 0, decodedKey.length, "HmacSHA512");
+        Key key = Keys.hmacShaKeyFor(decodedKey);
         long nowMillis = System.currentTimeMillis();
         Date now = new Date(nowMillis);
-        Date expiryDate = new Date(nowMillis + expirationTime); // one hour
+        Date expiryDate = new Date(nowMillis + expirationTime);
         String token = Jwts.builder()
-                .setSubject(value)                // Subject (user identifier)
-                .setIssuedAt(now)                     // Issue time
-                .setExpiration(expiryDate)                   // Expiration time
-                .claim("role", "ADMIN")               // Custom claim
-                .signWith(key, SignatureAlgorithm.HS512) // Sign with secret key
+                .subject(value)
+                .issuedAt(now)
+                .expiration(expiryDate)
+                .claim("role", "ADMIN")
+                .signWith(key)
                 .compact();
         return token;
     }
@@ -102,12 +104,11 @@ public class JwtTokenGenerator {
 
     public Boolean validateToken(String token) {
         try {
-            Claims claims = Jwts.parserBuilder()
-                    .setSigningKey(getSigningKey())
-                    .setAllowedClockSkewSeconds(30)
+            Claims claims = Jwts.parser()
+                    .verifyWith(getSigningKey())
                     .build()
-                    .parseClaimsJws(token)
-                    .getBody();
+                    .parseSignedClaims(token)
+                    .getPayload();
             return claims.getExpiration().after(new java.util.Date());
         } catch (Exception e) {
             log.info("exception {} " , e.getMessage());
@@ -116,7 +117,13 @@ public class JwtTokenGenerator {
     }
 
     private Claims extractAllClaims(String token) {
-        return Jwts.parserBuilder().setSigningKey(secretKey).build().parseClaimsJws(token).getBody();
+        byte[] decodedKey = Base64.getDecoder().decode(secretKey);
+        SecretKey key = Keys.hmacShaKeyFor(decodedKey);
+        return Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {

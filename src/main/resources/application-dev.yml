@@ -50,7 +50,5 @@ jwt:
   secretKey: H1lq8Mx5WjD3+KPxBlj+F+Qo5rFkNc1uWy2FpiGpWXM=
   expiration: 5
 
-twilio:
-  sid: ${SID}
-  auth: ${AUTH}
+
 

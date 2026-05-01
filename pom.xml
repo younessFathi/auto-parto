@@ -28,7 +28,7 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
-		<twilio.version>10.6.3</twilio.version>
+		
 		<lombok.version>1.18.46</lombok.version>
 		<spring.security.test.version>6.4.1</spring.security.test.version>
 		<surefire.version>3.0.0</surefire.version>
@@ -49,6 +49,8 @@
 		<spring-retry.version>2.0.12</spring-retry.version>
 		<resilience4j-circuitbreaker.version>2.3.0</resilience4j-circuitbreaker.version>
 		<resend.version>4.11.0</resend.version>
+		<jjwt.version>0.12.6</jjwt.version>
+		<commons-io.version>2.16.1</commons-io.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -108,11 +110,7 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-redis-reactive</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>com.twilio.sdk</groupId>
-			<artifactId>twilio</artifactId>
-			<version>${twilio.version}</version>
-		</dependency>
+		
 		<dependency>
 			<groupId>com.auth0</groupId>
 			<artifactId>java-jwt</artifactId>
@@ -209,6 +207,28 @@
 			<artifactId>testcontainers-redis</artifactId>
 			<version>2.2.2</version>
 			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-api</artifactId>
+			<version>${jjwt.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-impl</artifactId>
+			<version>${jjwt.version}</version>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-jackson</artifactId>
+			<version>${jjwt.version}</version>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>commons-io</groupId>
+			<artifactId>commons-io</artifactId>
+			<version>${commons-io.version}</version>
 		</dependency>
 	</dependencies>
 

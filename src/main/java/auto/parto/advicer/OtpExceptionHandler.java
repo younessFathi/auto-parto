@@ -34,11 +34,6 @@ public class OtpExceptionHandler {
         return buildErrorResponse(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), exchange, null);
     }
 
-    @ExceptionHandler(TwilioException.class)
-    public ResponseEntity<ApiErrorResponse> handleTwilioException(TwilioException ex, ServerWebExchange exchange) {
-        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred", exchange, null);
-    }
-
     @ExceptionHandler(FileUploadException.class)
     public ResponseEntity<ApiErrorResponse> handleFileException(FileUploadException ex, ServerWebExchange exchange) {
         return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), exchange, null);
