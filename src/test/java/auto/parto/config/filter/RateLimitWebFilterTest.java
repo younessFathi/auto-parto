@@ -13,9 +13,10 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
 import java.net.InetSocketAddress;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,7 +47,7 @@ class RateLimitWebFilterTest {
                 .build();
         MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
-        when(rateLimitService.isAllowed(anyString())).thenReturn(Mono.just(true));
+        when(rateLimitService.isAllowed(anyString(), anyInt(), any(Duration.class))).thenReturn(Mono.just(true));
         when(chain.filter(exchange)).thenReturn(Mono.empty());
 
         filter.filter(exchange, chain).block();
@@ -60,7 +61,7 @@ class RateLimitWebFilterTest {
                 .build();
         MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
-        when(rateLimitService.isAllowed(anyString())).thenReturn(Mono.just(false));
+        when(rateLimitService.isAllowed(anyString(), anyInt(), any(Duration.class))).thenReturn(Mono.just(false));
 
         filter.filter(exchange, chain).block();
 
@@ -75,7 +76,7 @@ class RateLimitWebFilterTest {
                 .build();
         MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
-        when(rateLimitService.isAllowed("10.0.0.1")).thenReturn(Mono.just(true));
+        when(rateLimitService.isAllowed(eq("10.0.0.1"), anyInt(), any(Duration.class))).thenReturn(Mono.just(true));
         when(chain.filter(exchange)).thenReturn(Mono.empty());
 
         filter.filter(exchange, chain).block();
@@ -93,7 +94,7 @@ class RateLimitWebFilterTest {
                     .build();
             MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
-            when(rateLimitService.isAllowed(anyString())).thenReturn(Mono.just(true));
+            when(rateLimitService.isAllowed(anyString(), anyInt(), any(Duration.class))).thenReturn(Mono.just(true));
             when(chain.filter(exchange)).thenReturn(Mono.empty());
 
             filter.filter(exchange, chain).block();
@@ -108,7 +109,7 @@ class RateLimitWebFilterTest {
                 .build();
         MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
-        when(rateLimitService.isAllowed("192.168.1.1")).thenReturn(Mono.just(true));
+        when(rateLimitService.isAllowed(eq("192.168.1.1"), anyInt(), any(Duration.class))).thenReturn(Mono.just(true));
         when(chain.filter(exchange)).thenReturn(Mono.empty());
 
         filter.filter(exchange, chain).block();
