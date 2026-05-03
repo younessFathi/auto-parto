@@ -2,6 +2,7 @@ package auto.parto.service;
 
 import auto.parto.dto.OtpRequestDto;
 import auto.parto.dto.SellerDto;
+import auto.parto.exception.InsufficientBalanceException;
 import auto.parto.mapper.SellerDbMapper;
 import auto.parto.repository.ISellerRepository;
 import auto.parto.service.iservice.ISellerService;
@@ -47,6 +48,13 @@ public class SellerService implements ISellerService {
         log.info("Adding funds to seller with id: {}", id);
         return sellerRepository.getSellerById(id)
                 .flatMap(seller -> {
+                    BigDecimal currentBalance = seller.getWallet().getBalance();
+                    BigDecimal newBalance = currentBalance.add(amount);
+                    if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
+                        log.warn("Insufficient balance for seller {}: current={}, requested={}",
+                                id, currentBalance, amount);
+                        throw new InsufficientBalanceException("Insufficient balance");
+                    }
                     seller.getWallet().addFunds(amount);
                     return sellerRepository.save(seller)
                             .map(sellerDbMapper::toDto);
