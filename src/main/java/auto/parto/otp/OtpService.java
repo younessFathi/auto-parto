@@ -9,17 +9,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
-import java.util.Random;
+import java.security.SecureRandom;
 
 @Component
 @Slf4j
 public class OtpService {
-    private final Random rand = new Random();
+    private final SecureRandom secureRandom = new SecureRandom();
     @Value("${opt.expiration.minutes}")
     private long otpExpirationMinutes;
 
     public String generate() {
-        return String.format(Constants.OTPConstants.FORMAT, rand.nextInt(10000));
+        int otp = secureRandom.nextInt(1_000_000);
+        return String.format("%06d", otp);
     }
 
     public <T extends OtpVerifiable> Mono<T> validate(T user, String otp) {
