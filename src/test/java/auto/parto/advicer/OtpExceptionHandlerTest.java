@@ -3,6 +3,7 @@ package auto.parto.advicer;
 import auto.parto.config.CorrelationIdWebFilter;
 import auto.parto.dto.ApiErrorResponse;
 import auto.parto.exception.OtpInvalidException;
+import auto.parto.exception.OtpLockedException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -51,5 +52,24 @@ class OtpExceptionHandlerTest {
         assertThat(response.getBody().getMessage()).isEqualTo("An unexpected error occurred");
         assertThat(response.getBody().getRequestId()).isEqualTo("req-900");
         assertThat(response.getBody().getPath()).isEqualTo("/pieces/customer1");
+    }
+
+    @Test
+    void handlesOtpLockedExceptionWithLockedStatus() {
+        OtpExceptionHandler handler = new OtpExceptionHandler();
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/auth/validate-otp/1234").build()
+        );
+        exchange.getAttributes().put(CorrelationIdWebFilter.REQUEST_ID_ATTRIBUTE, "req-lock-001");
+
+        ResponseEntity<ApiErrorResponse> response = handler.handleOtpLockedException(
+                new OtpLockedException("Account is locked due to too many failed attempts"),
+                exchange
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.LOCKED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Account is locked due to too many failed attempts");
+        assertThat(response.getBody().getRequestId()).isEqualTo("req-lock-001");
     }
 }
