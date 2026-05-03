@@ -11,7 +11,7 @@ public interface ICustomerRepository {
     Mono<Buyer> findBy(String phoneNumber, String field);
     Mono<Boolean> exists(String phoneNumber, String field);
     Mono<Boolean> existsById(String id);
-    Mono<Buyer> updateGeneratedOtp(String phoneNumber, String sentOtp, String s, String field);
+    Mono<Buyer> updateGeneratedOtp(String phoneNumber, String sentOtp, String field);
     Mono<Buyer> deactivateCustomer(String id);
     Mono<Buyer> findByIdAndIsActiveTrue(String id);
 }

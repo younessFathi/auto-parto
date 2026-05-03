@@ -24,7 +24,7 @@ public class Buyer {
     private LocalDateTime createAt;
     private LocalDateTime modifiedAt;
     private OtpDetails otpDetails;
-    private String jwtKey;
+    private String keyVersion;
     private Boolean isActive;
     private String picture;
 }

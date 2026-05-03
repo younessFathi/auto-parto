@@ -29,6 +29,6 @@ public class Seller {
     private LocalDateTime modifiedAt;
     private Wallet wallet;
     private Boolean isActive;
-    private String jwtKey;
+    private String keyVersion;
     private OtpDetails otpDetails;
 }

@@ -4,7 +4,6 @@ import auto.parto.dto.BuyerDto;
 import auto.parto.dto.OtpRequestDto;
 import auto.parto.model.Buyer;
 import auto.parto.model.OtpDetails;
-import auto.parto.utils.JwtTokenGenerator;
 import org.mapstruct.InjectionStrategy;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -31,7 +30,7 @@ public interface BuyerDbMapper {
                 .email(otpRequestDto.getEmail())
                 .createAt(LocalDateTime.now())
                 .modifiedAt(null)
-                .jwtKey(JwtTokenGenerator.keyGenerator(otpRequestDto.getPhoneNumber()))
+                .keyVersion("1")
                 .isActive(Boolean.FALSE)
                 .otpDetails(
                         OtpDetails.builder()

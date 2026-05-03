@@ -22,7 +22,7 @@ public class BuyerDto implements OtpVerifiable , JwtKeyProvider {
     private String picture;
     private OtpDetailsDto otpDetailsDto;
     @JsonIgnore
-    private String jwtKey;
+    private String keyVersion;
     private Boolean isActive;
     private LocalDateTime createAt;
     private LocalDateTime updatedAt;

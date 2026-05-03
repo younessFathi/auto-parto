@@ -58,14 +58,13 @@ public class BuyerRepository implements ICustomerRepository {
     }
 
     @Override
-    public Mono<Buyer> updateGeneratedOtp(String phoneNumber, String sentOtp, String jwtKey, String field) {
+    public Mono<Buyer> updateGeneratedOtp(String phoneNumber, String sentOtp, String field) {
         Query query = new Query(Criteria.where(field).is(phoneNumber));
 
         Update update = new Update();
         if (sentOtp != null) {
             update.set("otpDetails.otp", sentOtp);
             update.set("otpDetails.timestamp", LocalDateTime.now());
-            update.set("jwtKey", jwtKey);
         }
         return reactiveMongoTemplate.findAndModify(
                     query,
