@@ -54,6 +54,11 @@ public class OtpExceptionHandler {
         return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), exchange, null);
     }
 
+    @ExceptionHandler(InsufficientBalanceException.class)
+    public ResponseEntity<ApiErrorResponse> handleInsufficientBalanceException(InsufficientBalanceException ex, ServerWebExchange exchange) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), exchange, null);
+    }
+
     @ExceptionHandler(WebExchangeBindException.class)
     public ResponseEntity<ApiErrorResponse> handleValidationException(WebExchangeBindException ex, ServerWebExchange exchange) {
         Map<String, String> errors = new HashMap<>();
