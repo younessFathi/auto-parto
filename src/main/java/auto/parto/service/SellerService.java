@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -20,6 +21,8 @@ import java.util.List;
 public class SellerService implements ISellerService {
     private ISellerRepository sellerRepository;
     private SellerDbMapper sellerDbMapper;
+    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final int LOCKOUT_MINUTES = 15;
 
     @Override
     public Mono<SellerDto> create(SellerDto sellerDto) {
@@ -90,5 +93,32 @@ public class SellerService implements ISellerService {
 
     public Mono<List<String>> findMatchingSellers() {
         return sellerRepository.findMatchingSellers();
+    }
+
+    @Override
+    public Mono<SellerDto> recordFailedOtpAttempt(String email) {
+        return findSellerByEmail(email)
+                .flatMap(seller -> {
+                    var otpDetails = seller.getOtpDetailsDto();
+                    int newFailedAttempts = (otpDetails != null ? otpDetails.getFailedAttempts() : 0) + 1;
+                    final LocalDateTime newLockedUntil = newFailedAttempts >= MAX_FAILED_ATTEMPTS
+                            ? LocalDateTime.now().plusMinutes(LOCKOUT_MINUTES) : null;
+                    if (newLockedUntil != null) {
+                        log.info("Seller {} locked due to {} failed OTP attempts", email, newFailedAttempts);
+                    }
+                    String existingOtp = otpDetails != null ? otpDetails.getOtp() : null;
+                    LocalDateTime existingTimestamp = otpDetails != null ? otpDetails.getTimestamp() : LocalDateTime.now();
+                    return updateGeneratedOtpByEmail(email, existingOtp)
+                            .flatMap(updated -> {
+                                updated.setOtpDetailsDto(auto.parto.dto.OtpDetailsDto.builder()
+                                        .otp(existingOtp)
+                                        .timestamp(existingTimestamp)
+                                        .failedAttempts(newFailedAttempts)
+                                        .lockedUntil(newLockedUntil)
+                                        .build());
+                                return sellerRepository.save(sellerDbMapper.toEntity(updated))
+                                        .map(sellerDbMapper::toDto);
+                            });
+                });
     }
 }

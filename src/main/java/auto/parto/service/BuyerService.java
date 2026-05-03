@@ -13,6 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
+import java.time.LocalDateTime;
+
 @Component
 @AllArgsConstructor
 @Slf4j
@@ -21,6 +23,8 @@ public class BuyerService implements IBuyerService {
     private final ISellerRepository sellerRepository;
     private final BuyerDbMapper buyerDbMapper;
     private final SellerDbMapper sellerDbMapper;
+    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final int LOCKOUT_MINUTES = 15;
 
     @Override
     public Mono<Boolean> checkIfBuyerExistUsingPhoneNumber(String phoneNumber) {
@@ -99,5 +103,32 @@ public class BuyerService implements IBuyerService {
     @Override
     public Mono<BuyerDto> findBuyerByEmail(String email) {
         return buyerRepository.findBy(email , "email").map(buyerDbMapper::toDto);
+    }
+
+    @Override
+    public Mono<BuyerDto> recordFailedOtpAttemptByEmail(String email) {
+        return findBuyerByEmail(email)
+                .flatMap(buyer -> {
+                    var otpDetails = buyer.getOtpDetailsDto();
+                    int newFailedAttempts = (otpDetails != null ? otpDetails.getFailedAttempts() : 0) + 1;
+                    final LocalDateTime newLockedUntil = newFailedAttempts >= MAX_FAILED_ATTEMPTS
+                            ? LocalDateTime.now().plusMinutes(LOCKOUT_MINUTES) : null;
+                    if (newLockedUntil != null) {
+                        log.info("Buyer {} locked due to {} failed OTP attempts", email, newFailedAttempts);
+                    }
+                    String existingOtp = otpDetails != null ? otpDetails.getOtp() : null;
+                    LocalDateTime existingTimestamp = otpDetails != null ? otpDetails.getTimestamp() : LocalDateTime.now();
+                    return updateGeneratedOtpByEmail(email, existingOtp)
+                            .flatMap(updated -> {
+                                updated.setOtpDetailsDto(auto.parto.dto.OtpDetailsDto.builder()
+                                        .otp(existingOtp)
+                                        .timestamp(existingTimestamp)
+                                        .failedAttempts(newFailedAttempts)
+                                        .lockedUntil(newLockedUntil)
+                                        .build());
+                                return buyerRepository.save(buyerDbMapper.toEntity(updated))
+                                        .map(buyerDbMapper::toDto);
+                            });
+                });
     }
 }

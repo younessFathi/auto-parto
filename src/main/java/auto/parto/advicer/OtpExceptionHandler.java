@@ -34,6 +34,11 @@ public class OtpExceptionHandler {
         return buildErrorResponse(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), exchange, null);
     }
 
+    @ExceptionHandler(OtpLockedException.class)
+    public ResponseEntity<ApiErrorResponse> handleOtpLockedException(OtpLockedException ex, ServerWebExchange exchange) {
+        return buildErrorResponse(HttpStatus.LOCKED, ex.getMessage(), exchange, null);
+    }
+
     @ExceptionHandler(FileUploadException.class)
     public ResponseEntity<ApiErrorResponse> handleFileException(FileUploadException ex, ServerWebExchange exchange) {
         return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), exchange, null);

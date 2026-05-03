@@ -20,4 +20,5 @@ public interface ISellerService {
     Mono<SellerDto> updateGeneratedOtpByEmail(@Email String email, String sentOtp);
     Mono<SellerDto> findSellerByEmail(String email);
     Mono<SellerDto> activateUser(SellerDto sellerDto);
+    Mono<SellerDto> recordFailedOtpAttempt(String email);
 }

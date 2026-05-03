@@ -1,9 +1,11 @@
 package auto.parto.service;
 
 import auto.parto.dto.BuyerDto;
+import auto.parto.dto.OtpDetailsDto;
 import auto.parto.dto.TokenDto;
 import auto.parto.enums.CustomerType;
 import auto.parto.exception.OtpInvalidException;
+import auto.parto.exception.OtpLockedException;
 import auto.parto.otp.OtpService;
 import auto.parto.service.iservice.IBuyerService;
 import auto.parto.service.iservice.OtpValidationStrategy;
@@ -23,10 +25,18 @@ public class BuyerOtpValidationStrategy implements OtpValidationStrategy<BuyerDt
     @Override
     public Mono<TokenDto<BuyerDto>> validate(String otp, String email) {
         return buyerService.findBuyerByEmail(email)
-                .flatMap(user -> otpService.validate(user , otp))
-                .onErrorResume(e -> Mono.error(new OtpInvalidException(Constants.Exception.INVALID_OTP)))
+                .flatMap(user -> {
+                    OtpDetailsDto otpDetails = user.getOtpDetailsDto();
+                    if (otpDetails != null && otpDetails.isLocked()) {
+                        return Mono.error(new OtpLockedException("Account is locked due to too many failed attempts"));
+                    }
+                    return otpService.validate(user, otp);
+                })
                 .flatMap(buyerService::activateUser)
-                .flatMap(user -> jwtTokenGenerator.encode(email , user , CustomerType.BUYER))
+                .flatMap(user -> jwtTokenGenerator.encode(email, user, CustomerType.BUYER))
+                .onErrorResume(OtpInvalidException.class, e ->
+                        buyerService.recordFailedOtpAttemptByEmail(email)
+                                .then(Mono.error(new OtpInvalidException(Constants.Exception.INVALID_OTP))))
                 .switchIfEmpty(Mono.error(new OtpInvalidException(Constants.Exception.INVALID_OTP)));
     }
 
