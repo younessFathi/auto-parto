@@ -18,6 +18,13 @@ public class OtpDetails {
     private UUID id;
     private String otp;
     private LocalDateTime timestamp;
+    private int failedAttempts;
+    private LocalDateTime lockedUntil;
+
+    public boolean isLocked() {
+        return lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now());
+    }
+
     public boolean isExpired(long otpExpirationMinutes) {
         return timestamp.plusMinutes(otpExpirationMinutes).isBefore(LocalDateTime.now());
     }

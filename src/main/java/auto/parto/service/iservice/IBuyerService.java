@@ -19,4 +19,5 @@ public interface IBuyerService {
     Mono<BuyerDto> createBuyerFromClerkAuth(BuyerDto customerDto);
     Mono<Boolean> checkIfBuyerExistClerkId(String userId);
     Mono<BuyerDto> activateUser(BuyerDto buyerDto);
+    Mono<BuyerDto> recordFailedOtpAttemptByEmail(String email);
 }

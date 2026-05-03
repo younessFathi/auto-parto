@@ -12,12 +12,26 @@ import java.time.LocalDateTime;
 @Builder
 @Slf4j
 public class OtpDetailsDto {
-    private final String otp;
-    private final LocalDateTime timestamp;
+    private String otp;
+    private LocalDateTime timestamp;
+    private int failedAttempts;
+    private LocalDateTime lockedUntil;
+
+    public OtpDetailsDto() {}
 
     public OtpDetailsDto(String otp, LocalDateTime timestamp) {
+        this(otp, timestamp, 0, null);
+    }
+
+    public OtpDetailsDto(String otp, LocalDateTime timestamp, int failedAttempts, LocalDateTime lockedUntil) {
         this.otp = otp;
         this.timestamp = timestamp;
+        this.failedAttempts = failedAttempts;
+        this.lockedUntil = lockedUntil;
+    }
+
+    public boolean isLocked() {
+        return lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now());
     }
 
     public boolean isExpired(long otpExpirationMinutes) {
