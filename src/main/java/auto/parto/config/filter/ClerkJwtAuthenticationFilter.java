@@ -1,9 +1,7 @@
 package auto.parto.config.filter;
 
-import com.auth0.jwt.JWT;
-import com.auth0.jwt.JWTVerifier;
-import com.auth0.jwt.algorithms.Algorithm;
-import com.auth0.jwt.interfaces.DecodedJWT;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ServerWebExchange;
@@ -13,7 +11,6 @@ import reactor.core.publisher.Mono;
 
 import java.security.KeyFactory;
 import java.security.PublicKey;
-import java.security.interfaces.RSAPublicKey;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
@@ -27,25 +24,25 @@ public class ClerkJwtAuthenticationFilter implements WebFilter {
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
 
         if (authHeader == null || !authHeader.startsWith(BEARER)) {
-            return chain.filter(exchange); // No auth → continue (maybe it's a public route)
+            return chain.filter(exchange);
         }
 
         String token = authHeader.substring(BEARER.length());
 
         try {
-            Algorithm algorithm = Algorithm.RSA256((RSAPublicKey) getPublicKey(), null);
-            JWTVerifier verifier = JWT.require(algorithm).withIssuer(CLERK_ISSUER).build();
-            DecodedJWT jwt = verifier.verify(token);
+            Claims claims = Jwts.parser()
+                    .verifyWith(getPublicKey())
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
 
-            String userId = jwt.getSubject();
-
-            // Add user ID to request attributes for downstream use
-            exchange.getAttributes().put("userId", userId);
-            String email = jwt.getClaim("email").asString();
-            String name = jwt.getClaim("name").asString();
-            String picture = jwt.getClaim("picture").asString();
+            String userId = claims.getSubject();
 
             exchange.getAttributes().put("userId", userId);
+            String email = claims.get("email", String.class);
+            String name = claims.get("name", String.class);
+            String picture = claims.get("picture", String.class);
+
             exchange.getAttributes().put("email", email);
             exchange.getAttributes().put("name", name);
             exchange.getAttributes().put("picture", picture);
