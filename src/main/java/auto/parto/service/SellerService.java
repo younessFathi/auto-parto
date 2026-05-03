@@ -82,7 +82,6 @@ public class SellerService implements ISellerService {
         return sellerRepository.updateGeneratedOtp(
                             email,
                             sentOtp,
-                            JwtTokenGenerator.keyGenerator(email),
                         "email"
                 ).map(sellerDbMapper::toDto);
     }

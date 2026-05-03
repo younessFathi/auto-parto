@@ -85,7 +85,6 @@ public class BuyerService implements IBuyerService {
         log.info("Updating generated OTP for phone number: {}", phoneNumber);
         return buyerRepository.updateGeneratedOtp(
                             phoneNumber, sentOtp ,
-                            JwtTokenGenerator.keyGenerator(phoneNumber),
                         "phoneNumber"
                         ).map(buyerDbMapper::toDto);
     }
@@ -95,7 +94,6 @@ public class BuyerService implements IBuyerService {
         log.info("Updating generated OTP for email: {}", email);
         return buyerRepository.updateGeneratedOtp(
                 email, sentOtp ,
-                JwtTokenGenerator.keyGenerator(email),
                 "email"
         ).map(buyerDbMapper::toDto);
     }

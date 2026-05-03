@@ -42,5 +42,5 @@ public class SellerDto implements OtpVerifiable , JwtKeyProvider {
     private Boolean isActive;
     private OtpDetailsDto otpDetailsDto;
     @JsonIgnore
-    private String jwtKey;
+    private String keyVersion;
 }
