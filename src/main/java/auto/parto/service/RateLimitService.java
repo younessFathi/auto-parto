@@ -1,7 +1,7 @@
 package auto.parto.service;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -9,17 +9,27 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class RateLimitService {
 
-    private final ReactiveRedisTemplate<String, String> redisTemplate;
+    private final ObjectProvider<ReactiveRedisTemplate<String, String>> redisTemplateProvider;
 
     private static final String RATE_LIMIT_PREFIX = "rate:ip:";
     private static final int DEFAULT_MAX_REQUESTS = 5;
     private static final Duration DEFAULT_WINDOW = Duration.ofMinutes(1);
 
+    public RateLimitService(ObjectProvider<ReactiveRedisTemplate<String, String>> redisTemplateProvider) {
+        this.redisTemplateProvider = redisTemplateProvider;
+    }
+
     public Mono<Boolean> isAllowed(String ip, int maxRequests, Duration window) {
+        ReactiveRedisTemplate<String, String> redisTemplate = redisTemplateProvider.getIfAvailable();
+        
+        if (redisTemplate == null) {
+            log.warn("Redis not available, allowing request");
+            return Mono.just(true);
+        }
+
         String key = RATE_LIMIT_PREFIX + ip;
 
         return redisTemplate.opsForValue()
@@ -42,6 +52,12 @@ public class RateLimitService {
     }
 
     public Mono<Long> getRemainingRequests(String ip, int maxRequests) {
+        ReactiveRedisTemplate<String, String> redisTemplate = redisTemplateProvider.getIfAvailable();
+        
+        if (redisTemplate == null) {
+            return Mono.just((long) maxRequests);
+        }
+
         String key = RATE_LIMIT_PREFIX + ip;
 
         return redisTemplate.opsForValue()
