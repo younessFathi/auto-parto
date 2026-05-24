@@ -8,11 +8,11 @@ services:
     ports:
       - "8080:8080"
     environment:
-      SPRING_DATA_MONGODB_URI: ${URI}
+      SPRING_DATA_MONGODB_URI: ${URI:-mongodb://root:root@mongo:27017/auto-parto?authSource=admin}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-password}
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-key-that-is-256-bits-long!}
     restart: unless-stopped
     networks:
       - app-network
@@ -45,13 +45,13 @@ services:
     container_name: redis
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-password}
     volumes:
       - redis_data:/data
     networks:
       - app-network
     healthcheck:
-      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      test: redis-cli -a '${REDIS_PASSWORD:-password}' ping
       interval: 10s
       timeout: 5s
       retries: 5
