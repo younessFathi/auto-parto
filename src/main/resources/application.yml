@@ -57,8 +57,9 @@ notification:
     max-pending-per-user: 100
 
 firebase:
+  enabled: ${FIREBASE_ENABLED:true}
   credentials:
-    path: classpath:auto-parto-pn-firebase.json
+    json: ${FIREBASE_CREDENTIALS_JSON:}
   messaging:
     retry:
       max-attempts: 3

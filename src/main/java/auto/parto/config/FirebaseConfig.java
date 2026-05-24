@@ -10,8 +10,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
+
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 
 @Configuration
@@ -19,7 +23,10 @@ import java.util.List;
 @Slf4j
 public class FirebaseConfig {
 
-    @Value("${firebase.credentials.path}")
+    @Value("${firebase.credentials.json:}")
+    private String firebaseCredentialsJson;
+
+    @Value("${firebase.credentials.path:}")
     private Resource firebaseCredentialsPath;
 
     @Bean
@@ -27,9 +34,16 @@ public class FirebaseConfig {
         FirebaseApp firebaseApp;
         List<FirebaseApp> apps = FirebaseApp.getApps();
 
-        // Avoid initializing the app multiple times (common issue during hot reloads)
         if (apps.isEmpty()) {
-            try (InputStream inputStream = firebaseCredentialsPath.getInputStream()) {
+            InputStream inputStream = resolveCredentialsStream();
+            if (inputStream == null) {
+                throw new IllegalStateException(
+                    "Firebase credentials not configured. Set FIREBASE_CREDENTIALS_JSON " +
+                    "environment variable to the Firebase service account JSON, or disable " +
+                    "Firebase by setting FIREBASE_ENABLED=false."
+                );
+            }
+            try (inputStream) {
                 FirebaseOptions options = FirebaseOptions.builder()
                         .setCredentials(GoogleCredentials.fromStream(inputStream))
                         .build();
@@ -40,5 +54,23 @@ public class FirebaseConfig {
         }
 
         return FirebaseMessaging.getInstance(firebaseApp);
+    }
+
+    private InputStream resolveCredentialsStream() throws IOException {
+        if (firebaseCredentialsJson != null && !firebaseCredentialsJson.isBlank()) {
+            String raw = firebaseCredentialsJson.trim();
+            if (raw.startsWith("{")) {
+                return new ByteArrayInputStream(raw.getBytes(StandardCharsets.UTF_8));
+            }
+            try {
+                return new ByteArrayInputStream(Base64.getDecoder().decode(raw));
+            } catch (IllegalArgumentException e) {
+                log.warn("FIREBASE_CREDENTIALS_JSON is not valid JSON or Base64, falling back to file path");
+            }
+        }
+        if (firebaseCredentialsPath != null && firebaseCredentialsPath.exists()) {
+            return firebaseCredentialsPath.getInputStream();
+        }
+        return null;
     }
 }
