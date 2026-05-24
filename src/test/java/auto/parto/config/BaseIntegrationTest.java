@@ -29,7 +29,8 @@ import org.testcontainers.utility.DockerImageName;
     "SID=dummy",
     "AUTH=dummy",
     "REDIS_PASSWORD=",
-    "URI=mongodb://localhost:27017/test" // overridden at runtime by @ServiceConnection
+    "URI=mongodb://localhost:27017/test", // overridden at runtime by @ServiceConnection
+    "firebase.enabled=false"
 })
 @ActiveProfiles("test")
 @Testcontainers
