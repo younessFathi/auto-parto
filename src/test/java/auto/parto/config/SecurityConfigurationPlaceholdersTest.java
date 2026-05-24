@@ -23,4 +23,12 @@ class SecurityConfigurationPlaceholdersTest {
         assertThat(applicationConfig).doesNotContain("AC[REDACTED]");
         assertThat(applicationConfig).doesNotContain("re_[REDACTED]");
     }
+
+    @Test
+    void devProfileAlsoUsesEnvironmentPlaceholdersForSecrets() throws IOException {
+        String devConfig = Files.readString(Path.of("src/main/resources/application-dev.yml"));
+
+        assertThat(devConfig).contains("secretKey: ${JWT_SECRET}");
+        assertThat(devConfig).doesNotContain("H1lq8Mx5WjD3+KPxBlj+F+Qo5rFkNc1uWy2FpiGpWXM=");
+    }
 }

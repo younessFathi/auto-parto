@@ -7,6 +7,7 @@ stages:
 
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository" # Use a local Maven repo for caching
+  JWT_SECRET: "bmgTK4gXGmWEbq3jc3zluPcMtomqqpMSO1VY7R0QqYQ="
 
 cache:
   key: "$CI_COMMIT_REF_SLUG"
