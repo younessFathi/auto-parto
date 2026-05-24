@@ -6,6 +6,7 @@ import auto.parto.dto.TokenDto;
 import auto.parto.enums.CustomerType;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -16,6 +17,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @ExtendWith(MockitoExtension.class)
 class JwtTokenGeneratorTest {
@@ -167,5 +169,64 @@ class JwtTokenGeneratorTest {
         String extractedRole = jwtTokenGenerator.extractClaim(result.getToken(),
                 claims -> claims.get("roles", String.class));
         assertThat(extractedRole).isEqualTo("ROLE_BUYER");
+    }
+
+    @Nested
+    class ConfigurationValidationTest {
+
+        @Test
+        void passesWithValidSecretKey() {
+            ReflectionTestUtils.setField(jwtTokenGenerator, "secretKey", SECRET_KEY);
+
+            jwtTokenGenerator.validateConfiguration();
+        }
+
+        @Test
+        void failsWhenSecretKeyIsNull() {
+            ReflectionTestUtils.setField(jwtTokenGenerator, "secretKey", null);
+
+            assertThatThrownBy(() -> jwtTokenGenerator.validateConfiguration())
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("JWT secret key is not configured");
+        }
+
+        @Test
+        void failsWhenSecretKeyIsBlank() {
+            ReflectionTestUtils.setField(jwtTokenGenerator, "secretKey", "   ");
+
+            assertThatThrownBy(() -> jwtTokenGenerator.validateConfiguration())
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("JWT secret key is not configured");
+        }
+
+        @Test
+        void failsWhenSecretKeyIsUnresolvedPlaceholder() {
+            ReflectionTestUtils.setField(jwtTokenGenerator, "secretKey", "${JWT_SECRET}");
+
+            assertThatThrownBy(() -> jwtTokenGenerator.validateConfiguration())
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("JWT secret key is not configured");
+        }
+
+        @Test
+        void failsWhenSecretKeyIsNotValidBase64() {
+            ReflectionTestUtils.setField(jwtTokenGenerator, "secretKey", "not-valid-base64-!!");
+
+            assertThatThrownBy(() -> jwtTokenGenerator.validateConfiguration())
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("not a valid Base64-encoded string");
+        }
+
+        @Test
+        void failsWhenSecretKeyIsTooShort() {
+            String base64short = Base64.getEncoder().encodeToString(new byte[16]);
+
+            ReflectionTestUtils.setField(jwtTokenGenerator, "secretKey", base64short);
+
+            assertThatThrownBy(() -> jwtTokenGenerator.validateConfiguration())
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("at least 256 bits")
+                    .hasMessageContaining("128 bits");
+        }
     }
 }

@@ -7,6 +7,7 @@ import auto.parto.enums.CustomerType;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -40,6 +41,35 @@ public class JwtTokenGenerator {
     @Value("${jwt.expiration}")
     private long expirationTime;
     private static final String AUTHORITIES_KEY = "roles";
+
+    @PostConstruct
+    public void validateConfiguration() {
+        if (secretKey == null || secretKey.isBlank()) {
+            throw new IllegalStateException(
+                "JWT secret key is not configured. Set JWT_SECRET environment variable to a Base64-encoded key of at least 256 bits."
+            );
+        }
+        if (secretKey.contains("${")) {
+            throw new IllegalStateException(
+                "JWT secret key is not configured. Set JWT_SECRET environment variable to a Base64-encoded key of at least 256 bits. " +
+                "Unresolved placeholder: " + secretKey
+            );
+        }
+        try {
+            byte[] decodedKey = Base64.getDecoder().decode(secretKey);
+            if (decodedKey.length < 32) {
+                throw new IllegalStateException(
+                    "JWT secret key must be at least 256 bits (32 bytes) after Base64 decoding. " +
+                    "Current key is only " + (decodedKey.length * 8) + " bits."
+                );
+            }
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException(
+                "JWT secret key is not a valid Base64-encoded string. " +
+                "Set JWT_SECRET environment variable to a Base64-encoded key of at least 256 bits."
+            );
+        }
+    }
 
     public <T extends JwtKeyProvider> Mono<TokenDto<T>> encode(String value , T user , CustomerType type) {
         Date now = new Date();

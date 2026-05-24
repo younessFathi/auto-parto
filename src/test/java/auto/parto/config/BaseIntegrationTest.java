@@ -25,7 +25,7 @@ import org.testcontainers.utility.DockerImageName;
     "RESEND_API_KEY=dummy",
     "CLIENT_ID=dummy",
     "CLIENT_SECRET=dummy",
-    "JWT_SECRET=dummy_secret_key_which_is_long_enough_for_hs256_algo_12345",
+    "JWT_SECRET=bmgTK4gXGmWEbq3jc3zluPcMtomqqpMSO1VY7R0QqYQ=",
     "SID=dummy",
     "AUTH=dummy",
     "REDIS_PASSWORD=",
