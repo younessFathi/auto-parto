@@ -5,11 +5,11 @@ spring:
     name: auto-parto
   data:
     mongodb:
-      uri: ${URI}
+      uri: ${URI:-mongodb://localhost:27017/auto-parto}
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD}
+      password: ${REDIS_PASSWORD:-}
       lettuce:
         pool:
           max-active: 8
