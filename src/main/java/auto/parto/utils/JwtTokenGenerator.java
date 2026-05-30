@@ -94,8 +94,8 @@ public class JwtTokenGenerator {
         return Keys.hmacShaKeyFor(decodedKey);
     }
 
-    public Mono<TokenDto> encode(String value) {
-        String token = generateToken(value);
+    public Mono<TokenDto> encode(String value, String role) {
+        String token = generateToken(value, role);
         return Mono.just(
                 TokenDto.builder()
                         .token(token)
@@ -103,17 +103,18 @@ public class JwtTokenGenerator {
         );
     }
 
-    public String generateToken(String value) {
+    public String generateToken(String value, String role) {
         byte[] decodedKey = Base64.getDecoder().decode(secretKey);
         Key key = Keys.hmacShaKeyFor(decodedKey);
         long nowMillis = System.currentTimeMillis();
         Date now = new Date(nowMillis);
         Date expiryDate = new Date(nowMillis + expirationTime);
+        String authorities = role.startsWith(ROLE_PREFIX) ? role : ROLE_PREFIX + role;
         String token = Jwts.builder()
                 .subject(value)
                 .issuedAt(now)
                 .expiration(expiryDate)
-                .claim("role", "ADMIN")
+                .claim(AUTHORITIES_KEY, authorities)
                 .signWith(key)
                 .compact();
         return token;

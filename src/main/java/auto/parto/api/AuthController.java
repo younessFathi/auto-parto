@@ -130,7 +130,7 @@ public class AuthController {
                 .flatMap((GoogleIdToken idToken) -> {
                     GoogleIdToken.Payload payload = idToken.getPayload();
                     String email = payload.getEmail();
-                    return jwtTokenGenerator.encode(email);
+                    return jwtTokenGenerator.encode(email, "ROLE_BUYER");
                 });
         // TODO : user verification on DB
         // TODO : token management / refresh
