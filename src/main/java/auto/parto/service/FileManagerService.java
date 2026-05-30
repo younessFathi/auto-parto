@@ -59,6 +59,7 @@ public class FileManagerService implements IFileManagerService {
                                 .id(UUID.randomUUID().toString())
                                 .originalFilename(image.filename())
                                 .folderName(pieceId)
+                                .pieceId(pieceId)
                                 .build();
                 }))
                 .flatMap(fileService::save)

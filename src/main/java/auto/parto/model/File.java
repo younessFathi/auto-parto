@@ -22,4 +22,5 @@ public class File {
     private String generatedFilename;
     private LocalDateTime createdAt;
     private String folderName;
+    private String pieceId;
 }
