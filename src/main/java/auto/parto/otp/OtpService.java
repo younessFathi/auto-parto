@@ -15,7 +15,7 @@ import java.security.SecureRandom;
 @Slf4j
 public class OtpService {
     private final SecureRandom secureRandom = new SecureRandom();
-    @Value("${opt.expiration.minutes}")
+    @Value("${otp.expiration.minutes:5}")
     private long otpExpirationMinutes;
 
     public String generate() {

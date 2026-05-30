@@ -38,9 +38,12 @@ spring:
       resourceserver:
         jwt:
           issuer-uri: https://accounts.google.com
-opt:
+otp:
   expiration:
     minutes: 5
+  template: classpath:templates/otp-template.html
+  subject: Verify your Auto Parto account
+  from: onboarding@resend.dev
 auto:
   parto:
     images:
@@ -71,9 +74,4 @@ firebase:
 resend: ${REDACTED_CREDENTIAL:}
   api-key: ${REDACTED_CREDENTIAL:}
   enable: false
-
-otp:
-  template: classpath:templates/otp-template.html
-  subject: Verify your Auto Parto account
-  from: onboarding@resend.dev
 
