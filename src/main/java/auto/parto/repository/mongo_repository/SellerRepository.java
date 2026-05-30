@@ -12,6 +12,7 @@ import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -53,6 +54,21 @@ public class SellerRepository implements ISellerRepository {
             update.set("otpDetails.otp", sentOtp);
             update.set("otpDetails.timestamp", LocalDateTime.now());
         }
+        return reactiveMongoTemplate.findAndModify(
+                query,
+                update,
+                FindAndModifyOptions.options().returnNew(true),
+                Seller.class
+        );
+    }
+
+    @Override
+    public Mono<Seller> addFunds(String id, BigDecimal amount) {
+        Query query = new Query(Criteria.where("_id").is(id).and("isActive").is(true));
+        if (amount.compareTo(BigDecimal.ZERO) < 0) {
+            query.addCriteria(Criteria.where("wallet.balance").gte(amount.abs()));
+        }
+        Update update = new Update().inc("wallet.balance", amount);
         return reactiveMongoTemplate.findAndModify(
                 query,
                 update,
