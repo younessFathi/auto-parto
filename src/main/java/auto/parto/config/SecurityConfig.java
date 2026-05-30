@@ -3,7 +3,6 @@ package auto.parto.config;
 import auto.parto.utils.JwtTokenGenerator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
@@ -25,8 +24,7 @@ public class SecurityConfig {
 
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http,
-                                                         JwtTokenGenerator jwtTokenGenerator,
-                                                         ReactiveAuthenticationManager reactiveAuthenticationManager) {
+                                                         JwtTokenGenerator jwtTokenGenerator) {
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
@@ -36,7 +34,6 @@ public class SecurityConfig {
                         .pathMatchers(SWAGGER_WHITELIST).permitAll()
                         .anyExchange().authenticated()
                 )
-                .authenticationManager(reactiveAuthenticationManager)
                 .addFilterAt(new JwtTokenAuthenticationFilter(jwtTokenGenerator), SecurityWebFiltersOrder.HTTP_BASIC)
                 .build();
     }
