@@ -20,6 +20,20 @@ class GitlabCiConfigTest {
     }
 
     @Test
+    void doesNotContainHardcodedSecrets() throws IOException {
+        String content = Files.readString(Path.of(".gitlab-ci.yml"));
+
+        assertThat(content).doesNotContain("bmgTK4gXGmWEbq3jc3zluPcMtomqqpMSO1VY7R0QqYQ=");
+    }
+
+    @Test
+    void jwtSecretIsNotDefinedInVariables() throws IOException {
+        String content = Files.readString(Path.of(".gitlab-ci.yml"));
+
+        assertThat(content).doesNotContain("JWT_SECRET:");
+    }
+
+    @Test
     void testAndVerifyJobsRunWithCleanAndExposeReports() throws IOException {
         String content = Files.readString(Path.of(".gitlab-ci.yml"));
 
