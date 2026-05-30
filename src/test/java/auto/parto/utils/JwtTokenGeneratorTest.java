@@ -51,7 +51,7 @@ class JwtTokenGeneratorTest {
 
     @Test
     void encode_simpleValue_returnsToken() {
-        TokenDto result = jwtTokenGenerator.encode("testuser@example.com")
+        TokenDto result = jwtTokenGenerator.encode("testuser@example.com", "ROLE_BUYER")
                 .block();
 
         assertThat(result).isNotNull();
@@ -60,7 +60,7 @@ class JwtTokenGeneratorTest {
 
     @Test
     void generateToken_createsValidToken() {
-        String token = jwtTokenGenerator.generateToken("testuser");
+        String token = jwtTokenGenerator.generateToken("testuser", "ROLE_BUYER");
 
         assertThat(token).isNotEmpty();
         assertThat(jwtTokenGenerator.validateToken(token)).isTrue();
@@ -86,7 +86,7 @@ class JwtTokenGeneratorTest {
 
     @Test
     void validateToken_returnsTrue_forValidToken() {
-        String token = jwtTokenGenerator.generateToken("validuser");
+        String token = jwtTokenGenerator.generateToken("validuser", "ROLE_BUYER");
 
         assertThat(jwtTokenGenerator.validateToken(token)).isTrue();
     }
@@ -103,7 +103,7 @@ class JwtTokenGeneratorTest {
 
     @Test
     void extractClaim_extractsSubject() {
-        String token = jwtTokenGenerator.generateToken("subjectuser");
+        String token = jwtTokenGenerator.generateToken("subjectuser", "ROLE_BUYER");
 
         String subject = jwtTokenGenerator.extractClaim(token, Claims::getSubject);
 
@@ -112,16 +112,16 @@ class JwtTokenGeneratorTest {
 
     @Test
     void extractClaim_extractsRole() {
-        String token = jwtTokenGenerator.generateToken("adminuser");
+        String token = jwtTokenGenerator.generateToken("buyeruser", "ROLE_BUYER");
 
-        String role = jwtTokenGenerator.extractClaim(token, claims -> claims.get("role", String.class));
+        String role = jwtTokenGenerator.extractClaim(token, claims -> claims.get("roles", String.class));
 
-        assertThat(role).isEqualTo("ADMIN");
+        assertThat(role).isEqualTo("ROLE_BUYER");
     }
 
     @Test
     void extractUsername_returnsSubject() {
-        String token = jwtTokenGenerator.generateToken("username");
+        String token = jwtTokenGenerator.generateToken("username", "ROLE_BUYER");
 
         String username = jwtTokenGenerator.extractUsername(token);
 
@@ -130,13 +130,16 @@ class JwtTokenGeneratorTest {
 
     @Test
     void getAuthentication_createsAuthenticationWithAuthorities() {
-        String token = jwtTokenGenerator.generateToken("authuser");
+        String token = jwtTokenGenerator.generateToken("authuser", "ROLE_BUYER");
 
         Authentication auth = jwtTokenGenerator.getAuthentication(token);
 
         assertThat(auth).isNotNull();
         assertThat(auth.getPrincipal()).isInstanceOf(org.springframework.security.core.userdetails.User.class);
         assertThat(auth.getCredentials()).isEqualTo(token);
+        assertThat(auth.getAuthorities()).hasSize(1);
+        assertThat(auth.getAuthorities())
+                .anyMatch(a -> a.getAuthority().equals("ROLE_BUYER"));
     }
 
     @Test
@@ -169,6 +172,43 @@ class JwtTokenGeneratorTest {
         String extractedRole = jwtTokenGenerator.extractClaim(result.getToken(),
                 claims -> claims.get("roles", String.class));
         assertThat(extractedRole).isEqualTo("ROLE_BUYER");
+    }
+
+    @Test
+    void generateToken_withRole_usesCorrectClaimKeyAndPrefix() {
+        String token = jwtTokenGenerator.generateToken("user@test.com", "ROLE_SELLER");
+
+        String extracted = jwtTokenGenerator.extractClaim(token,
+                claims -> claims.get("roles", String.class));
+        assertThat(extracted).isEqualTo("ROLE_SELLER");
+    }
+
+    @Test
+    void generateToken_withoutRolePrefix_addsPrefix() {
+        String token = jwtTokenGenerator.generateToken("user@test.com", "BUYER");
+
+        String extracted = jwtTokenGenerator.extractClaim(token,
+                claims -> claims.get("roles", String.class));
+        assertThat(extracted).isEqualTo("ROLE_BUYER");
+    }
+
+    @Test
+    void encode_withRole_returnsTokenWithCorrectRole() {
+        TokenDto result = jwtTokenGenerator.encode("seller@test.com", "ROLE_SELLER").block();
+
+        assertThat(result).isNotNull();
+        String extractedRole = jwtTokenGenerator.extractClaim(result.getToken(),
+                claims -> claims.get("roles", String.class));
+        assertThat(extractedRole).isEqualTo("ROLE_SELLER");
+    }
+
+    @Test
+    void generateToken_doesNotUseRoleClaimKey() {
+        String token = jwtTokenGenerator.generateToken("user@test.com", "ROLE_BUYER");
+
+        String roleClaim = jwtTokenGenerator.extractClaim(token,
+                claims -> claims.get("role", String.class));
+        assertThat(roleClaim).isNull();
     }
 
     @Nested
