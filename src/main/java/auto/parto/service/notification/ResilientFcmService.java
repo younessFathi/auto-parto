@@ -119,7 +119,7 @@ public class ResilientFcmService {
     /**
      * Send to single token with circuit breaker and retry
      */
-    private Mono<FcmDeliveryResult> sendToToken(String token, FcmNotification notification) {
+    Mono<FcmDeliveryResult> sendToToken(String token, FcmNotification notification) {
         // 1. Define the task with internal Retry logic
         Mono<FcmDeliveryResult> sendTask = Mono.fromCallable(() -> {
                     Message message = Message.builder()
@@ -174,9 +174,11 @@ public class ResilientFcmService {
     }
 
     private boolean isInvalidTokenError(Throwable throwable) {
-        return throwable instanceof FirebaseMessagingException &&
-                ((FirebaseMessagingException) throwable).getMessagingErrorCode() ==
-                        MessagingErrorCode.INVALID_ARGUMENT;
+        if (!(throwable instanceof FirebaseMessagingException fcmException)) {
+            return false;
+        }
+        MessagingErrorCode code = fcmException.getMessagingErrorCode();
+        return code == MessagingErrorCode.INVALID_ARGUMENT || code == MessagingErrorCode.UNREGISTERED;
     }
 
     private AndroidConfig getAndroidConfig(FcmNotification notification) {
