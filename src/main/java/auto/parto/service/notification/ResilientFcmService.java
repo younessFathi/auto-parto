@@ -4,16 +4,19 @@ import auto.parto.exception.NoActiveTokensException;
 import com.google.firebase.messaging.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import reactor.util.retry.Retry;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.reactor.circuitbreaker.operator.CircuitBreakerOperator;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 
 @Service
 @Slf4j
@@ -25,6 +28,9 @@ public class ResilientFcmService {
     private final CircuitBreaker circuitBreaker;
     private final RetryTemplate retryTemplate;
     private final PushNotificationQueue pushQueue;
+
+    @Value("${firebase.messaging.timeout:10s}")
+    private Duration fcmTimeout;
 
     /**
      * Send notification to a single user
@@ -140,6 +146,8 @@ public class ResilientFcmService {
 
                     return FcmDeliveryResult.success(token, messageId);
                 })
+                .subscribeOn(Schedulers.boundedElastic())
+                .timeout(fcmTimeout)
                 .retryWhen(Retry.backoff(3, Duration.ofSeconds(1))
                         .filter(this::isRetryableError)
                         .doBeforeRetry(retry ->
@@ -168,6 +176,9 @@ public class ResilientFcmService {
 
     private boolean isRetryableError(Throwable throwable) {
         // Retry on network errors, timeouts, server errors
+        if (throwable instanceof TimeoutException) {
+            return true;
+        }
         return throwable instanceof FirebaseMessagingException &&
                 ((FirebaseMessagingException) throwable).getMessagingErrorCode() ==
                         MessagingErrorCode.INTERNAL;
