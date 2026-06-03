@@ -13,6 +13,8 @@ import reactor.test.StepVerifier;
 
 import java.util.concurrent.ScheduledExecutorService;
 
+import org.springframework.test.util.ReflectionTestUtils;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -38,7 +40,8 @@ class PushNotificationQueueTest {
 
     @BeforeEach
     void setUp() {
-        queue = new PushNotificationQueue(redisTemplate, objectMapper, retryExecutor, resilientFcmService);
+        queue = new PushNotificationQueue(redisTemplate, objectMapper, retryExecutor);
+        ReflectionTestUtils.setField(queue, "resilientFcmService", resilientFcmService);
     }
 
     @Test
