@@ -55,6 +55,9 @@ jwt:
 
 notification:
   timeout: 100
+  sse:
+    max-connections: 1000
+    buffer-size: 1000
   redis:
     pending-prefix: "notification:pending:"
     ttl-hours: 24

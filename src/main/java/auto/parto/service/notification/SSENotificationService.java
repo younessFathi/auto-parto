@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -19,6 +20,12 @@ public class SSENotificationService {
 
     @Value("${notification.timeout}")
     private Integer timeout;
+
+    @Value("${notification.sse.max-connections:1000}")
+    private int maxConnections;
+
+    @Value("${notification.sse.buffer-size:1000}")
+    private int bufferSize;
 
     // Store active connections per user
     private final Map<String, Sinks.Many<NotificationRequest>> userConnections = new ConcurrentHashMap<>();
@@ -96,10 +103,20 @@ public class SSENotificationService {
      * Register a user's SSE connection
      */
     public Sinks.Many<NotificationRequest> registerConnection(String userId) {
-        // Create a new sink for this user
-        Sinks.Many<NotificationRequest> sink = Sinks.many().unicast().onBackpressureBuffer();
+        if (userConnections.size() >= maxConnections) {
+            log.warn("Max SSE connections reached ({}), rejecting connection for user: {}",
+                    maxConnections, userId);
+            return null;
+        }
 
-        userConnections.put(userId, sink);
+        Sinks.Many<NotificationRequest> sink = Sinks.many().unicast().onBackpressureBuffer(new ArrayBlockingQueue<>(bufferSize));
+
+        userConnections.compute(userId, (k, existing) -> {
+            if (existing != null) {
+                existing.tryEmitComplete();
+            }
+            return sink;
+        });
 
         log.info("SSE connection registered for user: {} (total connections: {})",
                 userId, userConnections.size());
@@ -111,11 +128,11 @@ public class SSENotificationService {
      * Remove user's SSE connection
      */
     public void unregisterConnection(String userId) {
-        Sinks.Many<NotificationRequest> sink = userConnections.remove(userId);
-        if (sink != null) {
-            sink.emitComplete(Sinks.EmitFailureHandler.FAIL_FAST);
+        userConnections.computeIfPresent(userId, (k, current) -> {
+            current.emitComplete(Sinks.EmitFailureHandler.FAIL_FAST);
             log.info("SSE connection removed for user: {}", userId);
-        }
+            return null;
+        });
     }
 
     /**
@@ -146,18 +163,12 @@ public class SSENotificationService {
 
     private boolean tryEmitWithBackpressure(Sinks.Many<NotificationRequest> sink, NotificationRequest notification) {
         try {
-            // Try with a timeout
-            // Just to subscribe
-            return Boolean.TRUE.equals(sink.asFlux()
-                    .doOnNext(n -> {
-                    }) // Just to subscribe
-                    .timeout(Duration.ofMillis(timeout))
-                    .then(Mono.fromRunnable(() -> {
-                        sink.emitNext(notification, Sinks.EmitFailureHandler.FAIL_FAST);
-                    }))
-                    .thenReturn(true)
-                    .onErrorReturn(false)
-                    .block());
+            Sinks.EmitResult result = sink.tryEmitNext(notification);
+            if (result.isSuccess()) {
+                return true;
+            }
+            log.warn("SSE backpressure emit failed: {}", result);
+            return false;
         } catch (Exception e) {
             return false;
         }
