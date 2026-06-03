@@ -10,7 +10,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.retry.support.RetryTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 import reactor.test.StepVerifier;
+
+import java.time.Duration;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -35,6 +38,7 @@ class ResilientFcmServiceTest {
     void setUp() {
         circuitBreaker = CircuitBreaker.ofDefaults("fcm-test");
         service = new ResilientFcmService(firebaseMessaging, deviceTokenService, circuitBreaker, retryTemplate, pushQueue);
+        ReflectionTestUtils.setField(service, "fcmTimeout", Duration.ofSeconds(10));
     }
 
     @Test
