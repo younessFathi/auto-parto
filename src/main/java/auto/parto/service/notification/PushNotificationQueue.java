@@ -23,6 +23,7 @@ public class PushNotificationQueue {
     private final ReactiveRedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
     private final ScheduledExecutorService retryExecutor;
+    private final ResilientFcmService resilientFcmService;
 
     private static final String RETRY_QUEUE_PREFIX = "push:retry:";
     private static final String DEAD_LETTER_PREFIX = "push:dead:";
@@ -114,18 +115,17 @@ public class PushNotificationQueue {
     /**
      * Attempt to redeliver the notification
      */
-    private Mono<Boolean> attemptRedelivery(QueuedNotification queued) {
-        // Your FCM delivery logic here
+    Mono<Boolean> attemptRedelivery(QueuedNotification queued) {
         log.info("Attempting retry #{}/3 for notification {}",
                 queued.getRetryCount() + 1, queued.getId());
 
-        return Mono.just(true) // Replace with actual FCM call
+        return resilientFcmService.sendToUser(queued.getUserId(), queued.getNotification())
+                .map(FcmDeliveryResult::isSuccess)
                 .flatMap(success -> {
                     if (success) {
                         log.info("Retry successful for notification {}", queued.getId());
                         return Mono.just(true);
                     } else {
-                        // Schedule next retry
                         return scheduleNextRetry(queued);
                     }
                 });
