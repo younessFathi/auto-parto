@@ -74,10 +74,10 @@ public class ResilientPendingNotificationService {
      * Emergency recovery: Load all pending notifications on server restart
      */
     @EventListener(ApplicationReadyEvent.class)
-    public Mono<Object> recoverOnStartup() {
+    public void recoverOnStartup() {
         log.info("Starting notification recovery on server startup...");
 
-        return notificationStore.getPendingStats()
+        notificationStore.getPendingStats()
                 .flatMap(stats -> {
                     Long totalNotifications = (Long) stats.get("totalNotifications");
                     Long totalUsers = (Long) stats.get("totalUsers");
@@ -86,20 +86,19 @@ public class ResilientPendingNotificationService {
                             totalNotifications, totalUsers);
 
                     if (totalNotifications == null || totalNotifications == 0) {
-                        return Mono.empty();
+                        return Mono.<Void>empty();
                     }
 
-                    // Log users with pending notifications
                     @SuppressWarnings("unchecked")
                     List<String> users = (List<String>) stats.get("usersWithPending");
-                    users.forEach(user ->
-                            log.info("User {} has pending notifications", user)
-                    );
 
-                    return Mono.empty();
+                    return Flux.fromIterable(users)
+                            .flatMapSequential(this::deliverPendingOnConnect)
+                            .then();
                 })
                 .doOnSuccess(v -> log.info("Notification recovery completed"))
-                .doOnError(e -> log.error("Recovery failed: {}", e.getMessage()));
+                .doOnError(e -> log.error("Recovery failed: {}", e.getMessage()))
+                .subscribe();
     }
 
     // Private helper methods
