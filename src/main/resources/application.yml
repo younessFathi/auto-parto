@@ -68,6 +68,7 @@ firebase:
   credentials:
     json: ${FIREBASE_CREDENTIALS_JSON:}
   messaging:
+    timeout: 10s
     retry:
       max-attempts: 3
       backoff-delay: 1000
