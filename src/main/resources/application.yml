@@ -52,6 +52,11 @@ auto:
   parto:
     images:
       uploads: ../uploads
+    executor:
+      retry:
+        pool-size: 3
+      notification-retry:
+        pool-size: 2
 
 jwt:
   secretKey: ${JWT_SECRET}
