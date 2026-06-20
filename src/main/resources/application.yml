@@ -75,6 +75,21 @@ firebase:
     circuit-breaker:
       failure-threshold: 5
       reset-timeout: 30000
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  info:
+    build:
+      enabled: true
+    git:
+      enabled: true
+      mode: full
+
 resend: ${REDACTED_CREDENTIAL:}
   api-key: ${REDACTED_CREDENTIAL:}
   enable: false
