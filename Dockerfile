@@ -22,6 +22,9 @@ RUN mvn clean package -DskipTests
 # 5. Runtime stage - lightweight JRE
 FROM eclipse-temurin:21-jre-alpine AS runtime
 
+# Install wget for health checks
+RUN apk add --no-cache wget
+
 # Create non-root user for security
 RUN addgroup -S spring && adduser -S spring -G spring
 USER spring:spring
@@ -35,5 +38,8 @@ COPY --from=build --chown=spring:spring /app/target/auto-parto-*.jar app.jar
 # Expose port
 EXPOSE 8080
 
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 CMD wget -qO- http://localhost:8080/actuator/health || exit 1
+
 # Use ENTRYPOINT for exec form, CMD for arguments
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]
