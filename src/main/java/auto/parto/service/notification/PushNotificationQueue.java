@@ -6,6 +6,7 @@ import jakarta.annotation.PreDestroy;
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Range;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
@@ -19,7 +20,6 @@ import java.util.concurrent.TimeUnit;
 
 @Component
 @Slf4j
-@RequiredArgsConstructor
 public class PushNotificationQueue {
 
     private final ReactiveRedisTemplate<String, String> redisTemplate;
@@ -28,6 +28,14 @@ public class PushNotificationQueue {
     @Autowired
     @Lazy
     private ResilientFcmService resilientFcmService;
+
+    public PushNotificationQueue(ReactiveRedisTemplate<String, String> redisTemplate,
+                                  ObjectMapper objectMapper,
+                                  @Qualifier("retryExecutor") ScheduledExecutorService retryExecutor) {
+        this.redisTemplate = redisTemplate;
+        this.objectMapper = objectMapper;
+        this.retryExecutor = retryExecutor;
+    }
 
     private static final String RETRY_QUEUE_PREFIX = "push:retry:";
     private static final String DEAD_LETTER_PREFIX = "push:dead:";
