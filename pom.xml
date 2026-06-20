@@ -332,11 +332,47 @@
 								<exclude>auto.parto.mapper/**</exclude>
 								<exclude>auto.parto.model/**</exclude>
 								<exclude>auto.parto.dto/**</exclude>
-								<exclude>auto.parto.advicer/**</exclude>
-								<exclude>auto.parto.config/**</exclude>
 								<exclude>auto.parto.exception/**</exclude>
 								<exclude>**/Constants.java</exclude>
 							</excludes>
+						</configuration>
+					</execution>
+					<execution>
+						<id>check</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+						<configuration>
+							<excludes>
+								<exclude>auto.parto.mapper/**</exclude>
+								<exclude>auto.parto.model/**</exclude>
+								<exclude>auto.parto.dto/**</exclude>
+								<exclude>auto.parto.exception/**</exclude>
+								<exclude>**/Constants.java</exclude>
+							</excludes>
+							<rules>
+								<rule>
+									<element>BUNDLE</element>
+									<limits>
+										<limit>
+											<counter>INSTRUCTION</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.70</minimum>
+										</limit>
+										<limit>
+											<counter>BRANCH</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.60</minimum>
+										</limit>
+										<limit>
+											<counter>CLASS</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.80</minimum>
+										</limit>
+									</limits>
+								</rule>
+							</rules>
 						</configuration>
 					</execution>
 				</executions>
