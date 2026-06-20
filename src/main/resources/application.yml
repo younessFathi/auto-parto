@@ -1,3 +1,7 @@
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{requestId}] - %msg%n"
+
 spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
