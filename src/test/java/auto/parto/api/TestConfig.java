@@ -1,18 +1,18 @@
 package auto.parto.api;
 
 import auto.parto.service.RateLimitService;
-import auto.parto.service.notification.PushNotificationQueue;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
+import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.web.server.SecurityWebFilterChain;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 
-import static org.mockito.Mockito.mock;
-
 @TestConfiguration
+@EnableWebFluxSecurity
 class TestConfig {
 
     @Bean
@@ -24,5 +24,17 @@ class TestConfig {
                 return Mono.just(true);
             }
         };
+    }
+
+    @Bean
+    public SecurityWebFilterChain testSecurityFilterChain(ServerHttpSecurity http) {
+        return http
+                .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
+                .authorizeExchange(exchange -> exchange
+                        .pathMatchers("/auth/**").permitAll()
+                        .anyExchange().authenticated()
+                )
+                .build();
     }
 }
