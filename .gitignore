@@ -34,6 +34,8 @@ build/
 /null
 .env
 src/main/resources/auto-parto-pn-firebase.json
+.agent-trace/
+.architecture-backlog/
 # Local FCM Test files
 test-fcm.html
 firebase-messaging-sw.js

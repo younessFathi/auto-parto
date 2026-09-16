@@ -25,4 +25,18 @@ class DockerComposeConfigurationTest {
         assertThat(compose).contains("mongo:");
         assertThat(compose).contains("redis:");
     }
+
+    @Test
+    void postgresProfileDefinesIndependentApplicationAndAuditResources() throws IOException {
+        String compose = Files.readString(Path.of("docker-compose.yml"));
+
+        assertThat(compose).contains("app-postgresql:");
+        assertThat(compose).contains("audit-postgresql:");
+        assertThat(compose).contains("APP_POSTGRES_PASSWORD");
+        assertThat(compose).contains("AUDIT_POSTGRES_PASSWORD");
+        assertThat(compose).contains("app-postgres-data:");
+        assertThat(compose).contains("audit-postgres-data:");
+        assertThat(compose).contains("profiles: [\"postgres\"]");
+        assertThat(compose).contains("profiles: [\"postgres\", \"audit\"]");
+    }
 }
