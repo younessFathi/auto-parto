@@ -21,6 +21,15 @@ spring:
           max-idle: 8
           min-idle: 0
       database: 0
+  r2dbc:
+    url: ${APP_POSTGRES_R2DBC_URL:r2dbc:postgresql://localhost:5432/auto_parto}
+    username: ${APP_POSTGRES_USER:auto_parto}
+    password: ${APP_POSTGRES_PASSWORD:}
+    pool:
+      enabled: true
+      initial-size: 0
+      max-size: ${APP_POSTGRES_R2DBC_POOL_MAX_SIZE:10}
+      max-idle-time: 30m
   cache:
     type: redis
     redis:
@@ -50,6 +59,9 @@ otp:
   from: onboarding@resend.dev
 auto:
   parto:
+    persistence:
+      postgresql:
+        enabled: ${APP_POSTGRES_R2DBC_ENABLED:false}
     images:
       uploads: ../uploads
     executor:
@@ -102,4 +114,3 @@ management:
 resend:
   api-key: ${REDACTED_CREDENTIAL:}
   enable: false
-

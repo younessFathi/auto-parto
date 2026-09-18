@@ -120,6 +120,15 @@ class AuditPublisherTest {
         assertThat(outbox.replay).containsExactly(missing.eventId());
     }
 
+    @Test
+    void rejectsUnboundedBatchRequests() {
+        StepVerifier.create(publisher(new FakeOutbox(), new FakeAuditStore())
+                        .publishBatch("worker-1", AuditPersistenceLimits.MAX_BATCH_SIZE + 1,
+                                Duration.ofSeconds(30)))
+                .expectError(IllegalArgumentException.class)
+                .verify();
+    }
+
     private static AuditPublisher publisher(FakeOutbox outbox, FakeAuditStore store) {
         return new AuditPublisher(
                 outbox,
@@ -138,7 +147,7 @@ class AuditPublisherTest {
     }
 
     private static AuditOutboxRecord record(AuditEvent event, int attempts) {
-        return new AuditOutboxRecord(UUID.randomUUID(), "AUDIT", event, attempts);
+        return new AuditOutboxRecord(UUID.randomUUID(), "AUDIT", null, event, attempts);
     }
 
     private static final class FakeOutbox implements AuditOutboxRepository {
@@ -157,6 +166,15 @@ class AuditPublisherTest {
         }
 
         @Override
+        public Mono<AuditOutboxRecord> claimForReplay(
+                UUID deliveryId, String workerId, Instant now, Duration leaseDuration) {
+            return Mono.just(eventFor(deliveryId))
+                    .map(record -> new AuditOutboxRecord(
+                            record.deliveryId(), record.destination(), workerId + ":claim",
+                            record.event(), record.attemptCount() + 1));
+        }
+
+        @Override
         public Mono<AuditOutboxRecord> findByEventId(UUID eventId) {
             return Flux.fromIterable(records)
                     .filter(record -> record.event().eventId().equals(eventId))
@@ -169,20 +187,20 @@ class AuditPublisherTest {
         }
 
         @Override
-        public Mono<Void> markDelivered(UUID deliveryId, Instant deliveredAt) {
+        public Mono<Void> markDelivered(UUID deliveryId, String claimOwner, Instant deliveredAt) {
             delivered.add(eventFor(deliveryId).event().eventId());
             return Mono.empty();
         }
 
         @Override
-        public Mono<Void> scheduleRetry(UUID deliveryId, Instant availableAt, String failureCode) {
+        public Mono<Void> scheduleRetry(UUID deliveryId, String claimOwner, Instant availableAt, String failureCode) {
             retries.add(eventFor(deliveryId).event().eventId());
             nextRetry = availableAt;
             return Mono.empty();
         }
 
         @Override
-        public Mono<Void> markExhausted(UUID deliveryId, String failureCode) {
+        public Mono<Void> markExhausted(UUID deliveryId, String claimOwner, String failureCode) {
             exhausted.add(eventFor(deliveryId).event().eventId());
             return Mono.empty();
         }
@@ -190,6 +208,7 @@ class AuditPublisherTest {
         @Override
         public Mono<Void> markForReplay(UUID deliveryId, Instant availableAt) {
             replay.add(eventFor(deliveryId).event().eventId());
+            due.add(eventFor(deliveryId));
             return Mono.empty();
         }
 

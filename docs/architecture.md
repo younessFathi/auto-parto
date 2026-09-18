@@ -275,7 +275,7 @@ Production must not depend on local relative filesystem paths, development passw
 
 ## Migration From Current MongoDB Implementation
 
-The current codebase uses reactive MongoDB. PostgreSQL is the future architecture, so migration should be planned rather than mixed casually into feature work.
+The current codebase uses reactive MongoDB. AP-0002 starts the PostgreSQL migration with R2DBC infrastructure and repository adapters while MongoDB remains active for unmigrated features. Migration must be planned rather than mixed casually into feature work.
 
 1. Define the relational schema and ownership rules.
 2. Add versioned PostgreSQL migrations and repository tests.

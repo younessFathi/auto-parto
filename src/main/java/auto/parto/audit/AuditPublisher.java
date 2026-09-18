@@ -42,6 +42,11 @@ public final class AuditPublisher {
         if (workerId == null || workerId.isBlank() || limit < 1) {
             return Mono.error(new IllegalArgumentException("workerId and limit are required"));
         }
+        try {
+            AuditPersistenceLimits.requireBatchSize(limit);
+        } catch (IllegalArgumentException exception) {
+            return Mono.error(exception);
+        }
         Instant now = clock.instant();
         return outbox.claimDue(workerId, limit, now, leaseDuration)
                 .flatMap(this::publishOne, maxConcurrency)
@@ -56,14 +61,23 @@ public final class AuditPublisher {
         Objects.requireNonNull(eventId, "eventId");
         return outbox.findByEventId(eventId)
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("audit event was not found")))
-                .flatMap(record -> auditStore.append(record.event())
-                        .then(outbox.markDelivered(record.deliveryId(), clock.instant())));
+                .flatMap(record -> outbox.claimForReplay(
+                                record.deliveryId(), "replay-" + eventId, clock.instant(), Duration.ofMinutes(1))
+                        .switchIfEmpty(Mono.error(new IllegalStateException("audit delivery is already claimed")))
+                        .flatMap(claimed -> auditStore.append(claimed.event())
+                                .then(outbox.markDelivered(
+                                        claimed.deliveryId(), claimed.claimOwner(), clock.instant()))));
     }
 
     public Mono<Long> reconcile(Instant since, int limit) {
         Objects.requireNonNull(since, "since");
         if (limit < 1) {
             return Mono.error(new IllegalArgumentException("limit must be positive"));
+        }
+        try {
+            AuditPersistenceLimits.requireBatchSize(limit);
+        } catch (IllegalArgumentException exception) {
+            return Mono.error(exception);
         }
         return outbox.findDispatchedSince(since, limit)
                 .flatMap(record -> auditStore.contains(record.event().eventId())
@@ -76,7 +90,7 @@ public final class AuditPublisher {
 
     private Mono<Outcome> publishOne(AuditOutboxRecord record) {
         return auditStore.append(record.event())
-                .then(outbox.markDelivered(record.deliveryId(), clock.instant()))
+                .then(outbox.markDelivered(record.deliveryId(), record.claimOwner(), clock.instant()))
                 .thenReturn(Outcome.PUBLISHED)
                 .onErrorResume(error -> handleFailure(record, error));
     }
@@ -87,11 +101,11 @@ public final class AuditPublisher {
                 || deliveryException.retryable();
         String failureCode = classify(error);
         if (!retryable || nextAttempt >= maxAttempts) {
-            return outbox.markExhausted(record.deliveryId(), failureCode)
+            return outbox.markExhausted(record.deliveryId(), record.claimOwner(), failureCode)
                     .thenReturn(Outcome.EXHAUSTED);
         }
         return outbox.scheduleRetry(
-                        record.deliveryId(),
+                        record.deliveryId(), record.claimOwner(),
                         clock.instant().plus(retryDelay(nextAttempt)),
                         failureCode)
                 .thenReturn(Outcome.RETRIED);
