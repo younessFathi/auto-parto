@@ -11,15 +11,18 @@ public interface AuditOutboxRepository {
 
     Flux<AuditOutboxRecord> claimDue(String workerId, int limit, Instant now, Duration leaseDuration);
 
+    Mono<AuditOutboxRecord> claimForReplay(
+            UUID deliveryId, String workerId, Instant now, Duration leaseDuration);
+
     Mono<AuditOutboxRecord> findByEventId(UUID eventId);
 
     Flux<AuditOutboxRecord> findDispatchedSince(Instant since, int limit);
 
-    Mono<Void> markDelivered(UUID deliveryId, Instant deliveredAt);
+    Mono<Void> markDelivered(UUID deliveryId, String claimOwner, Instant deliveredAt);
 
-    Mono<Void> scheduleRetry(UUID deliveryId, Instant availableAt, String failureCode);
+    Mono<Void> scheduleRetry(UUID deliveryId, String claimOwner, Instant availableAt, String failureCode);
 
-    Mono<Void> markExhausted(UUID deliveryId, String failureCode);
+    Mono<Void> markExhausted(UUID deliveryId, String claimOwner, String failureCode);
 
     Mono<Void> markForReplay(UUID deliveryId, Instant availableAt);
 }

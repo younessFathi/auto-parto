@@ -36,6 +36,9 @@ ALTER TABLE outbox_events
 CREATE INDEX outbox_events_aggregate_public_idx
     ON outbox_events (aggregate_type, aggregate_public_id, created_at);
 
+COMMENT ON COLUMN outbox_events.created_at IS
+    'Authoritative occurrence timestamp for the durable event contract; immutable after insertion.';
+
 CREATE TABLE outbox_deliveries (
     id BIGSERIAL PRIMARY KEY,
     public_id UUID NOT NULL UNIQUE,
@@ -83,8 +86,8 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    INSERT INTO outbox_deliveries (public_id, outbox_event_id, destination)
-    VALUES (gen_random_uuid(), NEW.id, 'AUDIT')
+    INSERT INTO outbox_deliveries (public_id, outbox_event_id, destination, available_at)
+    VALUES (gen_random_uuid(), NEW.id, 'AUDIT', NEW.available_at)
     ON CONFLICT (outbox_event_id, destination) DO NOTHING;
     RETURN NEW;
 END;
