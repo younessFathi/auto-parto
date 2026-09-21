@@ -1,0 +1,27 @@
+services:
+  audit-postgresql:
+    image: postgres:16-alpine
+    profiles: ["audit"]
+    environment:
+      POSTGRES_DB: ${AUDIT_POSTGRES_DB:-auto_parto_audit}
+      POSTGRES_USER: ${AUDIT_POSTGRES_USER:-auto_parto_audit}
+      POSTGRES_PASSWORD: ${AUDIT_POSTGRES_PASSWORD:?set AUDIT_POSTGRES_PASSWORD for the audit profile}
+    volumes:
+      - audit-postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: "1.0"
+    networks:
+      - app-network
+    healthcheck:
+      test: pg_isready -U ${AUDIT_POSTGRES_USER:-auto_parto_audit} -d ${AUDIT_POSTGRES_DB:-auto_parto_audit}
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  audit-postgres-data:
+
+networks:
+  app-network:
+    driver: bridge
