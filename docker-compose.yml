@@ -90,46 +90,49 @@ services:
     profiles: ["postgres"]
     environment:
       POSTGRES_DB: ${APP_POSTGRES_DB:-auto_parto}
-      POSTGRES_USER: ${APP_POSTGRES_USER:-auto_parto}
-      POSTGRES_PASSWORD: ${APP_POSTGRES_PASSWORD:?set APP_POSTGRES_PASSWORD for the postgres profile}
+      POSTGRES_USER: ${APP_POSTGRES_BOOTSTRAP_USER:-postgres}
+      POSTGRES_PASSWORD: ${APP_POSTGRES_BOOTSTRAP_PASSWORD:?set APP_POSTGRES_BOOTSTRAP_PASSWORD for the postgres profile}
+      APP_POSTGRES_RUNTIME_USER: ${APP_POSTGRES_RUNTIME_USER:-auto_parto_runtime}
+      APP_POSTGRES_RUNTIME_PASSWORD: ${APP_POSTGRES_RUNTIME_PASSWORD:?set APP_POSTGRES_RUNTIME_PASSWORD for the postgres profile}
+      APP_POSTGRES_MIGRATION_USER: ${APP_POSTGRES_MIGRATION_USER:?set APP_POSTGRES_MIGRATION_USER for the postgres profile}
+      APP_POSTGRES_MIGRATION_PASSWORD: ${APP_POSTGRES_MIGRATION_PASSWORD:?set APP_POSTGRES_MIGRATION_PASSWORD for the postgres profile}
     volumes:
       - app-postgres-data:/var/lib/postgresql/data
+      - ./deploy/postgres/init:/docker-entrypoint-initdb.d:ro
     restart: unless-stopped
     mem_limit: 1g
     cpus: "1.0"
     networks:
       - app-network
     healthcheck:
-      test: pg_isready -U ${APP_POSTGRES_USER:-auto_parto} -d ${APP_POSTGRES_DB:-auto_parto}
+      test: pg_isready -U ${APP_POSTGRES_BOOTSTRAP_USER:-postgres} -d ${APP_POSTGRES_DB:-auto_parto}
       interval: 10s
       timeout: 5s
       retries: 5
 
-  audit-postgresql:
-    image: postgres:16-alpine
-    profiles: ["postgres", "audit"]
+  app-postgresql-migrate:
+    image: flyway/flyway:10.20.1
+    profiles: ["postgres"]
+    command: ["migrate"]
     environment:
-      POSTGRES_DB: ${AUDIT_POSTGRES_DB:-auto_parto_audit}
-      POSTGRES_USER: ${AUDIT_POSTGRES_USER:-auto_parto_audit}
-      POSTGRES_PASSWORD: ${AUDIT_POSTGRES_PASSWORD:?set AUDIT_POSTGRES_PASSWORD for the audit profile}
+      FLYWAY_URL: ${APP_POSTGRES_JDBC_URL:-jdbc:postgresql://app-postgresql:5432/auto_parto}
+      FLYWAY_USER: ${APP_POSTGRES_MIGRATION_USER:?set APP_POSTGRES_MIGRATION_USER for the postgres profile}
+      FLYWAY_PASSWORD: ${APP_POSTGRES_MIGRATION_PASSWORD:?set APP_POSTGRES_MIGRATION_PASSWORD for the postgres profile}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_CONNECT_RETRIES: 30
     volumes:
-      - audit-postgres-data:/var/lib/postgresql/data
-    restart: unless-stopped
-    mem_limit: 1g
-    cpus: "1.0"
+      - ./src/main/resources/db/migration:/flyway/sql:ro
+    depends_on:
+      app-postgresql:
+        condition: service_healthy
+    restart: "no"
     networks:
       - app-network
-    healthcheck:
-      test: pg_isready -U ${AUDIT_POSTGRES_USER:-auto_parto_audit} -d ${AUDIT_POSTGRES_DB:-auto_parto_audit}
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
 volumes:
   mongo-data:
   redis_data:
   app-postgres-data:
-  audit-postgres-data:
 
 networks:
   app-network:
