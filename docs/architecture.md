@@ -54,10 +54,10 @@ Client-supplied buyer, seller, or user IDs are references only. Sensitive operat
 
 ## Authentication and Authorization
 
-Use one documented authentication model for each deployment profile. The preferred flow is:
+Use one documented authentication model for each deployment profile. The current profile uses OTP followed by a signed application JWT; Google and Clerk integrations remain disabled until their issuer, keys, claims, and tests are configured. The flow is:
 
 ```text
-External identity provider or OTP
+OTP or a fully configured external identity provider
         -> token validation
         -> canonical authenticated principal
         -> role check

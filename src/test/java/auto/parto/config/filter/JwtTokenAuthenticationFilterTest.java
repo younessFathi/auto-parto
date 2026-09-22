@@ -2,6 +2,8 @@ package auto.parto.config.filter;
 
 import auto.parto.config.JwtTokenAuthenticationFilter;
 import auto.parto.utils.JwtTokenGenerator;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -14,7 +16,11 @@ import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.server.WebFilterChain;
+import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Mono;
+
+import java.util.Base64;
+import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -107,6 +113,48 @@ class JwtTokenAuthenticationFilterTest {
         when(jwtTokenGenerator.validateToken("invalid-token")).thenReturn(false);
 
         filter.filter(exchange, chain).block();
+
+        verify(chain, never()).filter(any());
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void returns401WhenTokenIsExpired() {
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/pieces")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer expired-token")
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        when(jwtTokenGenerator.validateToken("expired-token")).thenReturn(false);
+
+        filter.filter(exchange, chain).block();
+
+        verify(chain, never()).filter(any());
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void returns401WhenSignedTokenHasNoCanonicalRole() {
+        JwtTokenGenerator realGenerator = new JwtTokenGenerator();
+        String secret = "H1lq8Mx5WjD3+KPxBlj+F+Qo5rFkNc1uWy2FpiGpWXM=";
+        ReflectionTestUtils.setField(realGenerator, "secretKey", secret);
+        ReflectionTestUtils.setField(realGenerator, "expirationTime", 3600000L);
+        Date now = new Date();
+        String token = Jwts.builder()
+                .subject("buyer-123")
+                .claim("principal_id", "buyer-123")
+                .claim("email", "buyer@test.com")
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + 3600000L))
+                .signWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(secret)))
+                .compact();
+        JwtTokenAuthenticationFilter realFilter = new JwtTokenAuthenticationFilter(realGenerator);
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/pieces")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        realFilter.filter(exchange, chain).block();
 
         verify(chain, never()).filter(any());
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);

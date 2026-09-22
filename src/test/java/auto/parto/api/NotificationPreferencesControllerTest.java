@@ -1,6 +1,7 @@
 package auto.parto.api;
 
 import auto.parto.dto.NotificationPreferencesDto;
+import auto.parto.security.CanonicalPrincipal;
 import auto.parto.service.NotificationPreferencesService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +19,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,7 +36,7 @@ class NotificationPreferencesControllerTest {
                 .pushEnabled(false)
                 .build();
 
-        when(preferencesService.getPreferences("user-123")).thenReturn(Mono.just(dto));
+        when(preferencesService.getPreferences("user-123", "user-123")).thenReturn(Mono.just(dto));
 
         NotificationPreferencesController controller = new NotificationPreferencesController(preferencesService);
 
@@ -54,7 +56,7 @@ class NotificationPreferencesControllerTest {
                 .pushEnabled(true)
                 .build();
 
-        when(preferencesService.updatePreferences(anyString(), any(NotificationPreferencesDto.class)))
+        when(preferencesService.updatePreferences(anyString(), anyString(), any(NotificationPreferencesDto.class)))
                 .thenReturn(Mono.just(input));
 
         NotificationPreferencesController controller = new NotificationPreferencesController(preferencesService);
@@ -66,7 +68,7 @@ class NotificationPreferencesControllerTest {
 
     @Test
     void isChannelEnabled_returnsTrue_whenEnabled() {
-        when(preferencesService.isChannelEnabled("user-123", "email")).thenReturn(Mono.just(true));
+        when(preferencesService.isChannelEnabled("user-123", "user-123", "email")).thenReturn(Mono.just(true));
 
         NotificationPreferencesController controller = new NotificationPreferencesController(preferencesService);
 
@@ -77,7 +79,7 @@ class NotificationPreferencesControllerTest {
 
     @Test
     void isChannelEnabled_returnsFalse_whenDisabled() {
-        when(preferencesService.isChannelEnabled("user-123", "push")).thenReturn(Mono.just(false));
+        when(preferencesService.isChannelEnabled("user-123", "user-123", "push")).thenReturn(Mono.just(false));
 
         NotificationPreferencesController controller = new NotificationPreferencesController(preferencesService);
 
@@ -88,7 +90,8 @@ class NotificationPreferencesControllerTest {
 
     @Test
     void isNotificationTypeEnabled_returnsTrue_whenEnabled() {
-        when(preferencesService.isNotificationTypeEnabled("user-123", "pricealert")).thenReturn(Mono.just(true));
+        when(preferencesService.isNotificationTypeEnabled("user-123", "user-123", "pricealert"))
+                .thenReturn(Mono.just(true));
 
         NotificationPreferencesController controller = new NotificationPreferencesController(preferencesService);
 
@@ -97,14 +100,30 @@ class NotificationPreferencesControllerTest {
                 .verifyComplete();
     }
 
+    @Test
+    void usesCanonicalPrincipalIdWhenItDiffersFromEmail() {
+        CanonicalPrincipal principal = new CanonicalPrincipal("buyer-123", "buyer@test.com", "ROLE_BUYER");
+        when(preferencesService.getPreferences("buyer-123", "buyer@test.com"))
+                .thenReturn(Mono.just(NotificationPreferencesDto.builder().userId("buyer-123").build()));
+
+        NotificationPreferencesController controller = new NotificationPreferencesController(preferencesService);
+
+        StepVerifier.create(controller.getPreferences(new MockAuth(principal)))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        verify(preferencesService).getPreferences("buyer-123", "buyer@test.com");
+    }
+
     static class MockAuth implements Authentication {
-        private final String name;
-        MockAuth(String name) { this.name = name; }
-        @Override public String getName() { return name; }
+        private final Object principal;
+        MockAuth(String name) { this(new CanonicalPrincipal(name, name, "ROLE_BUYER")); }
+        MockAuth(Object principal) { this.principal = principal; }
+        @Override public String getName() { return principal instanceof CanonicalPrincipal canonical ? canonical.getUsername() : principal.toString(); }
         @Override public Collection<? extends org.springframework.security.core.GrantedAuthority> getAuthorities() { return List.of(); }
         @Override public Object getCredentials() { return null; }
         @Override public Object getDetails() { return null; }
-        @Override public Object getPrincipal() { return null; }
+        @Override public Object getPrincipal() { return principal; }
         @Override public boolean isAuthenticated() { return true; }
         @Override public void setAuthenticated(boolean b) {}
     }

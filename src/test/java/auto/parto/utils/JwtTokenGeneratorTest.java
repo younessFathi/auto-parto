@@ -4,6 +4,7 @@ import auto.parto.dto.BuyerDto;
 import auto.parto.dto.SellerDto;
 import auto.parto.dto.TokenDto;
 import auto.parto.enums.CustomerType;
+import auto.parto.security.CanonicalPrincipal;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -47,6 +48,12 @@ class JwtTokenGeneratorTest {
         assertThat(result).isNotNull();
         assertThat(result.getToken()).isNotEmpty();
         assertThat(result.getUser()).isEqualTo(user);
+
+        Authentication authentication = jwtTokenGenerator.getAuthentication(result.getToken());
+        CanonicalPrincipal principal = (CanonicalPrincipal) authentication.getPrincipal();
+        assertThat(principal.getId()).isEqualTo("buyer-123");
+        assertThat(principal.getEmail()).isEqualTo("buyer@test.com");
+        assertThat(principal.getRole()).isEqualTo("ROLE_BUYER");
     }
 
     @Test
@@ -135,7 +142,11 @@ class JwtTokenGeneratorTest {
         Authentication auth = jwtTokenGenerator.getAuthentication(token);
 
         assertThat(auth).isNotNull();
-        assertThat(auth.getPrincipal()).isInstanceOf(org.springframework.security.core.userdetails.User.class);
+        assertThat(auth.getPrincipal()).isInstanceOf(CanonicalPrincipal.class);
+        CanonicalPrincipal principal = (CanonicalPrincipal) auth.getPrincipal();
+        assertThat(principal.getId()).isEqualTo("authuser");
+        assertThat(principal.getEmail()).isEqualTo("authuser");
+        assertThat(principal.getRole()).isEqualTo("ROLE_BUYER");
         assertThat(auth.getCredentials()).isEqualTo(token);
         assertThat(auth.getAuthorities()).hasSize(1);
         assertThat(auth.getAuthorities())

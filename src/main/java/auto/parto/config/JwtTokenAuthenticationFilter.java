@@ -39,12 +39,16 @@ public class JwtTokenAuthenticationFilter implements WebFilter {
             return exchange.getResponse().setComplete();
         }
 
-        if (this.jwtTokenGenerator.validateToken(token)) {
-            Authentication authentication = this.jwtTokenGenerator.getAuthentication(token);
-            log.info("Authentication successful for user: {}, Roles: {}",
-                    authentication.getName(), authentication.getAuthorities());
-            return chain.filter(exchange)
-                    .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication));
+        try {
+            if (this.jwtTokenGenerator.validateToken(token)) {
+                Authentication authentication = this.jwtTokenGenerator.getAuthentication(token);
+                log.info("Authentication successful for user: {}, Roles: {}",
+                        authentication.getName(), authentication.getAuthorities());
+                return chain.filter(exchange)
+                        .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication));
+            }
+        } catch (RuntimeException exception) {
+            log.warn("Rejected token with invalid canonical claims for path: {}", path);
         }
 
         log.warn("Invalid or expired token for path: {}", path);

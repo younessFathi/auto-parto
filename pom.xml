@@ -40,10 +40,6 @@
 		<jwks-rsa.version>0.22.1</jwks-rsa.version>
 		<mapstruct.version>1.6.3</mapstruct.version>
 		<lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
-		<oauth2.client.version>4.0.0-M2</oauth2.client.version>
-		<google-http-client.version>2.0.0</google-http-client.version>
-		<google-api-client.version>2.8.1</google-api-client.version>
-		<google-oauth-client.version>1.39.0</google-oauth-client.version>
 		<caffeine.version>3.2.3</caffeine.version>
 		<firebase.verison>9.7.0</firebase.verison>
 		<spring-retry.version>2.0.12</spring-retry.version>
@@ -127,34 +123,6 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-cache</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-oauth2-client</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.google.api-client</groupId>
-			<artifactId>google-api-client</artifactId>
-			<version>${google-api-client.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>com.google.http-client</groupId>
-			<artifactId>google-http-client-jackson2</artifactId>
-			<version>${google-http-client.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>com.google.http-client</groupId>
-			<artifactId>google-http-client</artifactId>
-			<version>${google-http-client.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>com.google.oauth-client</groupId>
-			<artifactId>google-oauth-client</artifactId>
-			<version>${google-oauth-client.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>com.github.ben-manes.caffeine</groupId>

@@ -25,7 +25,6 @@ class ProductionConfigValidationTest {
 
         assertThatThrownBy(validation::afterPropertiesSet)
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("spring.security.oauth2.client.registration.google.client-id")
                 .hasMessageContaining("jwt.secretKey")
                 .hasMessageContaining("resend.api-key")
                 .hasMessageContaining("spring.data.mongodb.uri")
@@ -36,8 +35,6 @@ class ProductionConfigValidationTest {
     void passesWhenAllRequiredProdPropertiesAreProvided() {
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles("prod");
-        environment.setProperty("spring.security.oauth2.client.registration.google.client-id", "client-id");
-        environment.setProperty("spring.security.oauth2.client.registration.google.client-secret", "client-secret");
         environment.setProperty("jwt.secretKey", "jwt-secret");
         environment.setProperty("resend.api-key", "resend");
         environment.setProperty("spring.data.mongodb.uri", "mongodb://mongo:27017/auto-parto");
