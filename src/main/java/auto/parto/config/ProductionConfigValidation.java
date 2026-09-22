@@ -25,8 +25,6 @@ public class ProductionConfigValidation implements InitializingBean {
         }
 
         List<String> missingProperties = new ArrayList<>();
-        validateRequiredProperty("spring.security.oauth2.client.registration.google.client-id", missingProperties);
-        validateRequiredProperty("spring.security.oauth2.client.registration.google.client-secret", missingProperties);
         validateRequiredProperty("jwt.secretKey", missingProperties);
         validateRequiredProperty("resend.api-key", missingProperties);
         validateRequiredProperty("spring.data.mongodb.uri", missingProperties);

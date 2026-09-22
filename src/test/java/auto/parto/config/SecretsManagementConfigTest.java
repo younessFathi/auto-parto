@@ -33,8 +33,6 @@ class SecretsManagementConfigTest {
                 .contains("REDIS_PORT")
                 .contains("REDIS_PASSWORD")
                 .contains("JWT_SECRET")
-                .contains("CLIENT_ID")
-                .contains("CLIENT_SECRET")
                 .contains("FIREBASE_ENABLED")
                 .contains("FIREBASE_CREDENTIALS_JSON")
                 .contains("RESEND_API_KEY");
@@ -45,7 +43,6 @@ class SecretsManagementConfigTest {
         String content = Files.readString(Path.of(".env.example"));
 
         List.of(
-                "your-google-oauth-client-secret",
                 "your-resend-api-key",
                 "your-256-bit-base64-encoded-secret"
         ).forEach(placeholder ->

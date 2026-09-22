@@ -34,23 +34,12 @@ spring:
     type: redis
     redis:
       time-to-live: 600000 # 10 minutes
-  security:
-    oauth2:
-      client:
-        registration:
-          google: ${REDACTED_CREDENTIAL:}
-            client-id: ${REDACTED_CREDENTIAL:}
-            client-secret: ${REDACTED_CREDENTIAL:}
-            scope:
-              - openid
-              - profile
-              - email
-        provider:
-          google: ${REDACTED_CREDENTIAL:}
-            issuer-uri: https://accounts.google.com
-      resourceserver:
-        jwt:
-          issuer-uri: https://accounts.google.com
+auth:
+  provider: otp
+  google: ${REDACTED_CREDENTIAL:}
+    enabled: false
+  clerk:
+    enabled: false
 otp:
   expiration:
     minutes: 5

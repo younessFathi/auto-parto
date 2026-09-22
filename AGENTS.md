@@ -19,7 +19,7 @@ It uses:
 1. Read this file completely.
 2. Inspect the relevant controller, service, repository, DTO/model, mapper, and test files before editing.
 3. Check the current working tree. Do not overwrite or revert unrelated user changes.
-4. Confirm whether a related item exists in `production-readiness/`.
+4. Check `.architecture-backlog/` for related tickets and follow-up work.
 5. Keep changes focused. Do not perform broad refactors unless explicitly requested.
 
 ## Project Layout
@@ -33,8 +33,12 @@ It uses:
 - `src/main/java/auto/parto/config/`: security, Redis, Firebase, executor, and application configuration.
 - `src/main/java/auto/parto/service/notification/`: FCM, SSE, Redis notification storage, and retry logic.
 - `src/test/`: unit, controller, security, repository, and integration tests.
-- `production-readiness/`: risk backlog and user stories. Verify stories against current code because some are stale.
+- `production-readiness/`: legacy reference material only; do not use it for active planning, ticket tracking, or updates.
 - `.agent-trace/`: local, ignored prompt summaries and change records for human/AI traceability.
+
+## Legacy Reference Material
+
+Treat `production-readiness/` as archived reference material. Do not create, update, close, or derive active work from its stories. Use `.architecture-backlog/` for all active tickets, follow-ups, and implementation tracking. Consult `production-readiness/` only when historical context is specifically useful.
 
 ## Java and Spring Style
 
@@ -139,8 +143,7 @@ If Docker is unavailable, report that integration tests could not run. Do not cl
 ## Documentation Rules
 
 - Update `README.md` when setup, architecture, or runtime behavior changes.
-- Update or close the relevant `production-readiness` story when a documented issue is fixed.
-- Mark stale stories clearly instead of treating them as current facts.
+- Update the relevant `.architecture-backlog` ticket when a documented issue is fixed or follow-up work is identified.
 - Do not put real credentials in issue descriptions, stories, fixtures, or examples.
 - Keep documentation readable by both humans and coding agents.
 
@@ -174,7 +177,7 @@ Before editing:
 
 - Read this file and `.agent-trace/README.md`.
 - Check `git status` and preserve unrelated user changes.
-- Inspect the relevant implementation, tests, configuration, and production-readiness story.
+- Inspect the relevant implementation, tests, configuration, and architecture-backlog ticket.
 - Identify authorization, ownership, money, persistence, retry, and resource-lifecycle effects.
 - Check whether PostgreSQL indexes, constraints, migrations, or Redis bounds are required.
 - Check retry, duplicate-request, and restart behavior for asynchronous work.
@@ -186,7 +189,7 @@ Before reporting completion:
 - Run `./mvnw -B test`.
 - Run `./mvnw -B verify` when Docker is available.
 - Confirm no secrets or sensitive data were added.
-- Update relevant documentation and production-readiness tracking.
+- Update relevant documentation and architecture-backlog tracking.
 - Create a sanitized trace in `.agent-trace/`.
 - Report changed files, verification results, limitations, and unresolved risks.
 
@@ -209,5 +212,5 @@ A change is complete when:
 - No secrets or sensitive data were added.
 - Authorization and ownership were considered.
 - Reactive and resource-lifecycle behavior is safe.
-- Documentation or production-readiness tracking is updated when needed.
+- Documentation or architecture-backlog tracking is updated when needed.
 - The final report clearly states what changed and what could not be verified.

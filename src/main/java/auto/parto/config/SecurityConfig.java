@@ -13,6 +13,7 @@ import org.springframework.security.web.server.context.NoOpServerSecurityContext
 
 @Configuration
 @EnableWebFluxSecurity
+@org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity
 public class SecurityConfig {
 
     private static final String[] SWAGGER_WHITELIST = {

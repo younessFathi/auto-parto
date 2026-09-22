@@ -7,7 +7,6 @@ import auto.parto.otp.OtpService;
 import auto.parto.service.iservice.AuthStrategy;
 import auto.parto.service.iservice.IBuyerService;
 import auto.parto.service.iservice.OtpValidationStrategy;
-import auto.parto.utils.JwtTokenGenerator;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
@@ -26,8 +25,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @WebFluxTest(controllers = AuthController.class, properties = {
-    "spring.security.oauth2.client.registration.google.client-id=test-client-id",
-    "spring.security.oauth2.client.provider.google.issuer-uri=https://accounts.google.com"
+    "auth.provider=otp"
 })
 @Import({TestConfig.class, AuthControllerTest.AuthMockConfig.class})
 class AuthControllerTest {
@@ -43,12 +41,6 @@ class AuthControllerTest {
 
     @MockitoBean
     private EmailService emailService;
-
-    @MockitoBean
-    private JwtTokenGenerator jwtTokenGenerator;
-
-    @MockitoBean
-    private IBuyerService buyerService;
 
     @MockitoBean
     private OtpService otpService;
@@ -138,28 +130,4 @@ class AuthControllerTest {
                 .expectStatus().isBadRequest();
     }
 
-    @Test
-    @WithMockUser
-    void checkCustomerExisting_returnsBuyerInfo() {
-        BuyerDto buyerDto = BuyerDto.builder().id("buyer-1").email("test@test.com").build();
-        when(buyerService.checkIfBuyerExistClerkId(any())).thenReturn(Mono.just(false));
-        when(buyerService.createBuyerFromClerkAuth(any(BuyerDto.class))).thenReturn(Mono.just(buyerDto));
-
-        webTestClient.get()
-                .uri("/auth/checkCustomerExisting")
-                .exchange()
-                .expectStatus().isOk();
-    }
-
-    @Test
-    void verifyGcpToken_returns400_whenTokenMissing() {
-        TokenDto request = new TokenDto();
-
-        webTestClient.post()
-                .uri("/auth/verify-gcp-token")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(request)
-                .exchange()
-                .expectStatus().is5xxServerError();
-    }
 }

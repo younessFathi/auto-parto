@@ -14,8 +14,9 @@ class SecurityConfigurationPlaceholdersTest {
     void applicationConfigUsesEnvironmentPlaceholdersForSecrets() throws IOException {
         String applicationConfig = Files.readString(Path.of("src/main/resources/application.yml"));
 
-        assertThat(applicationConfig).contains("client-id: ${CLIENT_ID}");
-        assertThat(applicationConfig).contains("client-secret: ${CLIENT_SECRET}");
+        assertThat(applicationConfig).contains("provider: otp");
+        assertThat(applicationConfig).contains("enabled: false");
+        assertThat(applicationConfig).doesNotContain("oauth2");
         assertThat(applicationConfig).contains("secretKey: ${JWT_SECRET}");
         assertThat(applicationConfig).contains("api-key: ${RESEND_API_KEY}");
 
@@ -28,7 +29,11 @@ class SecurityConfigurationPlaceholdersTest {
     void devProfileAlsoUsesEnvironmentPlaceholdersForSecrets() throws IOException {
         String devConfig = Files.readString(Path.of("src/main/resources/application-dev.yml"));
 
+        assertThat(devConfig).contains("provider: otp");
         assertThat(devConfig).contains("secretKey: ${JWT_SECRET}");
+        assertThat(devConfig).doesNotContain("oauth2");
+        assertThat(Path.of("src/main/java/auto/parto/api/ClerkReactiveController.java")).doesNotExist();
+        assertThat(Path.of("src/main/java/auto/parto/config/filter/ClerkJwtAuthenticationFilter.java")).doesNotExist();
         assertThat(devConfig).doesNotContain("H1lq8Mx5WjD3+KPxBlj+F+Qo5rFkNc1uWy2FpiGpWXM=");
     }
 }

@@ -14,6 +14,7 @@ import reactor.test.StepVerifier;
 import java.time.LocalDateTime;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -128,5 +129,22 @@ class NotificationPreferencesServiceTest {
         StepVerifier.create(service.isNotificationTypeEnabled("user-123", "pricealert"))
                 .expectNext(true)
                 .verifyComplete();
+    }
+
+    @Test
+    void migratesLegacyEmailKeyToCanonicalId() {
+        NotificationPreferences legacy = NotificationPreferences.builder()
+                .userId("buyer@test.com")
+                .pushEnabled(false)
+                .build();
+        when(repository.findByUserId("buyer-123")).thenReturn(Mono.empty());
+        when(repository.findByUserId("buyer@test.com")).thenReturn(Mono.just(legacy));
+        when(repository.save(legacy)).thenReturn(Mono.just(legacy));
+
+        StepVerifier.create(service.getPreferences("buyer-123", "buyer@test.com"))
+                .expectNextMatches(dto -> dto.getUserId().equals("buyer-123") && !dto.isPushEnabled())
+                .verifyComplete();
+
+        verify(repository).save(legacy);
     }
 }

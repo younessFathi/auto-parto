@@ -1,9 +1,9 @@
 package auto.parto.utils;
 
-import auto.parto.dto.BuyerDto;
 import auto.parto.dto.JwtKeyProvider;
 import auto.parto.dto.TokenDto;
 import auto.parto.enums.CustomerType;
+import auto.parto.security.CanonicalPrincipal;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -14,13 +14,11 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.AuthorityUtils;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.security.MessageDigest;
@@ -30,7 +28,6 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.function.Function;
 
-import static io.jsonwebtoken.Jwts.*;
 
 @Component
 @Slf4j
@@ -75,7 +72,9 @@ public class JwtTokenGenerator {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expirationTime);
         String token = Jwts.builder()
-                            .subject(value)
+                            .subject(user.getId())
+                            .claim("email", user.getEmail())
+                            .claim("principal_id", user.getId())
                             .claim(AUTHORITIES_KEY , ROLE_PREFIX + type.name())
                             .signWith(getSigningKey())
                             .issuedAt(now)
@@ -112,6 +111,8 @@ public class JwtTokenGenerator {
         String authorities = role.startsWith(ROLE_PREFIX) ? role : ROLE_PREFIX + role;
         String token = Jwts.builder()
                 .subject(value)
+                .claim("principal_id", value)
+                .claim("email", value)
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .claim(AUTHORITIES_KEY, authorities)
@@ -170,12 +171,27 @@ public class JwtTokenGenerator {
         Claims claims = extractAllClaims(token);
 
         Object authoritiesClaim = claims.get(AUTHORITIES_KEY);
-
-        Collection<? extends GrantedAuthority> authorities = authoritiesClaim == null
-                ? AuthorityUtils.NO_AUTHORITIES
-                : AuthorityUtils.commaSeparatedStringToAuthorityList(authoritiesClaim.toString());
-
-        User principal = new User(claims.getSubject(), "", authorities);
+        if (!(authoritiesClaim instanceof String authoritiesValue) || authoritiesValue.isBlank()) {
+            throw new IllegalArgumentException("JWT does not contain exactly one canonical role");
+        }
+        if (!isAllowedRole(authoritiesValue)) {
+            throw new IllegalArgumentException("JWT does not contain exactly one allowed canonical role");
+        }
+        Collection<? extends GrantedAuthority> authorities = AuthorityUtils
+                .commaSeparatedStringToAuthorityList(authoritiesValue);
+        String principalId = claims.get("principal_id", String.class);
+        String email = claims.get("email", String.class);
+        if (principalId == null || principalId.isBlank() || email == null || email.isBlank()) {
+            throw new IllegalArgumentException("JWT does not contain canonical identity claims");
+        }
+        String role = authorities.iterator().next().getAuthority();
+        CanonicalPrincipal principal = new CanonicalPrincipal(principalId, email, role);
         return new UsernamePasswordAuthenticationToken(principal, token, authorities);
+    }
+
+    private boolean isAllowedRole(String role) {
+        return "ROLE_BUYER".equals(role)
+                || "ROLE_SELLER".equals(role)
+                || "ROLE_ADMIN".equals(role);
     }
 }
