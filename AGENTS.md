@@ -22,6 +22,15 @@ It uses:
 4. Check `.architecture-backlog/` for related tickets and follow-up work.
 5. Keep changes focused. Do not perform broad refactors unless explicitly requested.
 
+## Feature and Ticket Delivery
+
+Use a feature-first, ticket-by-ticket workflow:
+
+1. Plan the feature first: define its goal, architecture, acceptance criteria, dependencies, and ticket order.
+2. Implement one ticket at a time as a small, reviewable, testable increment.
+3. After each ticket, run the applicable tests, update documentation and `.architecture-backlog` tracking, and reconcile the review findings.
+4. Consider the feature complete only when all of its tickets and acceptance criteria are satisfied and the relevant verification suites pass.
+
 ## Project Layout
 
 - `src/main/java/auto/parto/api/`: HTTP and SSE controllers.
