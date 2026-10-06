@@ -14,6 +14,10 @@ It uses:
 - Firebase Cloud Messaging and Server-Sent Events for notifications.
 - Maven, Docker, Docker Compose, and GitLab CI.
 
+## Project Lifecycle Status
+
+The project is in active development. There are no production users and no production data, including no MongoDB user records, to migrate or preserve. Assess migration and rollout findings proportionately: retain data-integrity and production-readiness safeguards in the design, but do not treat hypothetical migration impact as a current production incident.
+
 ## Before Making Changes
 
 1. Read this file completely.
