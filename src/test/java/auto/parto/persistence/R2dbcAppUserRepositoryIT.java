@@ -11,6 +11,7 @@ import org.springframework.transaction.reactive.TransactionalOperator;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.util.UUID;
@@ -93,11 +94,29 @@ class R2dbcAppUserRepositoryIT {
                 publicId, null, null, "invalid-" + publicId + "@example.test",
                 "NOT_A_ROLE", "ACTIVE", "v1", null, null);
 
-        StepVerifier.create(repository.create(invalid))
-                .expectError()
-                .verify();
-
-        StepVerifier.create(repository.findByPublicId(publicId))
+        StepVerifier.create(countAuditRecords()
+                        .flatMap(before -> repository.create(invalid)
+                                .then(Mono.<RollbackEvidence>error(
+                                        new AssertionError("invalid role was accepted")))
+                                .onErrorResume(error -> countAuditRecords()
+                                        .zipWith(repository.findByPublicId(publicId).hasElement())
+                                        .map(after -> new RollbackEvidence(
+                                                before,
+                                                after.getT1(),
+                                                after.getT2())))))
+                .assertNext(evidence -> {
+                    assertThat(evidence.auditCountAfter()).isEqualTo(evidence.auditCountBefore());
+                    assertThat(evidence.userPresent()).isFalse();
+                })
                 .verifyComplete();
+    }
+
+    private reactor.core.publisher.Mono<Long> countAuditRecords() {
+        return databaseClient.sql("SELECT count(*) AS count FROM audit_records")
+                .map((row, metadata) -> row.get("count", Long.class))
+                .one();
+    }
+
+    private record RollbackEvidence(long auditCountBefore, long auditCountAfter, boolean userPresent) {
     }
 }
