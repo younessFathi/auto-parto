@@ -5,10 +5,13 @@ import auto.parto.enums.CustomerType;
 import auto.parto.service.iservice.AuthStrategy;
 import auto.parto.service.iservice.IBuyerService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 @Service
+@ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.buyer-identity", name = "enabled",
+        havingValue = "false", matchIfMissing = true)
 @RequiredArgsConstructor
 public class BuyerAuthStrategy implements AuthStrategy {
     private final IBuyerService buyerService;

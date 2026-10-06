@@ -54,6 +54,20 @@ class PostgresqlMigrationResourceTest {
     }
 
     @Test
+    void otpInvariantMigrationAllowsOnlyOneActiveLoginChallengePerUser() throws IOException {
+        String sql = readResource("/db/migration/V3__enforce_single_active_login_otp.sql");
+
+        assertThat(sql).contains("ROW_NUMBER() OVER");
+        assertThat(sql).contains("duplicate_audits");
+        assertThat(sql).contains("SET consumed_at = CURRENT_TIMESTAMP");
+        assertThat(sql).contains("cannot enforce one active LOGIN OTP challenge per user");
+        assertThat(sql).contains("CREATE UNIQUE INDEX otp_challenges_active_login_user_uidx");
+        assertThat(sql).contains("ON otp_challenges (user_id)");
+        assertThat(sql).contains("purpose = 'LOGIN'");
+        assertThat(sql).contains("consumed_at IS NULL");
+    }
+
+    @Test
     void auditDatabaseMigrationIsAppendOnlyAndIdempotentByEventId() throws IOException {
         String sql = readResource("/db/audit-migration/V1__create_audit_event_schema.sql");
 

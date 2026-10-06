@@ -30,13 +30,21 @@ auth:
 otp:
   expiration:
     minutes: 5
+security:
+  otp:
+    pepper: ${OTP_PEPPER:}
 auto:
   parto:
+    persistence:
+      postgresql:
+        enabled: ${APP_POSTGRES_R2DBC_ENABLED:${APP_POSTGRES_IDENTITY_ENABLED:${APP_POSTGRES_BUYER_IDENTITY_ENABLED:false}}}
+        identity:
+          enabled: ${APP_POSTGRES_IDENTITY_ENABLED:false}
+        buyer-identity:
+          enabled: ${APP_POSTGRES_BUYER_IDENTITY_ENABLED:false}
     images:
       uploads: ../uploads
 
 jwt:
   secretKey: ${JWT_SECRET}
   expiration: 60000
-
-

@@ -6,10 +6,13 @@ import auto.parto.service.iservice.AuthStrategy;
 import auto.parto.service.iservice.ISellerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import reactor.core.publisher.Mono;
 
 @Service
 @RequiredArgsConstructor
+@ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.identity", name = "enabled",
+        havingValue = "false", matchIfMissing = true)
 public class SellerAuthStrategy implements AuthStrategy {
     private final ISellerService sellerService; // Assuming you have this
     @Override

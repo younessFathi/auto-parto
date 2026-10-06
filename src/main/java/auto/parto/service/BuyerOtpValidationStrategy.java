@@ -12,10 +12,13 @@ import auto.parto.service.iservice.OtpValidationStrategy;
 import auto.parto.utils.Constants;
 import auto.parto.utils.JwtTokenGenerator;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 @Service
+@ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.buyer-identity", name = "enabled",
+        havingValue = "false", matchIfMissing = true)
 @RequiredArgsConstructor
 public class BuyerOtpValidationStrategy implements OtpValidationStrategy<BuyerDto> {
     private final IBuyerService buyerService;
