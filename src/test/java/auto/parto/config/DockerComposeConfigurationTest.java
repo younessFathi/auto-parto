@@ -38,6 +38,7 @@ class DockerComposeConfigurationTest {
         assertThat(auditCompose).contains("audit-postgresql:");
         assertThat(compose).contains("APP_POSTGRES_MIGRATION_PASSWORD");
         assertThat(compose).contains("app-postgresql-migrate:");
+        assertThat(compose).contains("app-postgresql-fixtures:");
         assertThat(compose).contains("flyway/flyway:10.20.1");
         assertThat(compose).contains("FLYWAY_LOCATIONS: filesystem:/flyway/sql");
         assertThat(compose).contains("FLYWAY_USER: ${APP_POSTGRES_MIGRATION_USER");
@@ -45,6 +46,9 @@ class DockerComposeConfigurationTest {
         assertThat(compose).contains("APP_POSTGRES_BOOTSTRAP_PASSWORD");
         assertThat(compose).contains("./deploy/postgres/init:/docker-entrypoint-initdb.d:ro");
         assertThat(compose).contains("./src/main/resources/db/migration:/flyway/sql:ro");
+        assertThat(compose).contains("./deploy/postgres/fixtures:/fixtures:ro");
+        assertThat(compose).contains("PGUSER: ${APP_POSTGRES_RUNTIME_USER:-auto_parto_runtime}");
+        assertThat(compose).contains("condition: service_completed_successfully");
         assertThat(compose).contains("restart: \"no\"");
         assertThat(compose).contains("app-postgres-data:");
         assertThat(compose).contains("profiles: [\"postgres\"]");

@@ -2,7 +2,7 @@
 
 ## Current boundary
 
-This is an incremental development migration, not yet an application cutover. The current business repositories and their fixtures still use reactive MongoDB. PostgreSQL currently hosts the versioned target schema and the AP-0002 audit-outbox adapter. Do not remove MongoDB dependencies, import local MongoDB data, or direct business traffic to PostgreSQL until repository fixtures and reconciliation gates pass.
+This is an incremental development migration, not yet an application cutover. PostgreSQL currently hosts the versioned target schema, the AP-0002 identity/profile and audit-outbox adapters, and deterministic development fixtures for the migrated identity/profile boundary. The remaining business repositories still use reactive MongoDB. Do not remove MongoDB dependencies, import local MongoDB data, or direct all business traffic to PostgreSQL until the remaining repository, fixture, and reconciliation gates pass.
 
 No local-data importer is selected for this development cutover. Local development data should be recreated using PostgreSQL-backed fixtures after the corresponding repositories are migrated. Transient OTP, device-token, notification, and outbox state is not imported by default.
 
@@ -35,6 +35,14 @@ docker compose --profile postgres run --rm app-postgresql-migrate
 
 Flyway records applied versions in `flyway_schema_history`, so rerunning this command is safe and applies only pending migrations. Migrations are mounted read-only from `src/main/resources/db/migration`. The service has no restart policy; a nonzero result is a hard stop, not permission to continue with an application rollout.
 
+After migration succeeds, run the development identity/profile fixtures:
+
+```bash
+docker compose --profile postgres run --rm app-postgresql-fixtures
+```
+
+The fixture service is structurally ordered after the Flyway service and connects with the restricted runtime role, not the bootstrap or migration role. It creates deterministic development buyer and seller identities plus their profiles. The script is transactional and idempotent: rerunning it does not duplicate users, profiles, or their audit records. If a deterministic fixture identity conflicts with existing data, the script exits nonzero and rolls back the run. It intentionally does not seed OTP challenges, marketplace records, wallets, files, notifications, or outbox state because those boundaries are either transient or not yet migrated from MongoDB.
+
 For an existing PostgreSQL volume, an authorized operator must provision and verify the roles instead of relying on the init hook. Set the protected `PGHOST`, `PGDATABASE`, `PGUSER`, and `PGPASSWORD` connection variables together with the four `APP_POSTGRES_*` role variables, review the output, and run:
 
 ```bash
@@ -58,7 +66,7 @@ For any future PostgreSQL-backed application deployment:
 
 1. Provision/back up the target database and migration credentials.
 2. Run the restricted JDBC migration job and require success.
-3. Run PostgreSQL fixtures and reconciliation checks against that exact database.
+3. Run the PostgreSQL fixtures for every migrated repository and reconciliation checks against that exact database.
 4. Roll out application code only after both steps pass.
 5. Enable the PostgreSQL runtime feature only for a build whose required repositories and health checks are PostgreSQL-ready.
 
@@ -72,11 +80,11 @@ The actual Flyway container path can be smoke-tested locally with the same restr
 ./deploy/postgres/compose-smoke-test.sh
 ```
 
-This opt-in check starts the Compose PostgreSQL service, runs the real `flyway/flyway:10.20.1` service, and then confirms that an invalid database target returns nonzero. It uses an isolated Compose project and removes only that project during cleanup.
+This opt-in check starts the Compose PostgreSQL service, runs the real `flyway/flyway:10.20.1` service, applies the identity/profile fixtures twice to prove idempotency through the real runtime role, and then confirms that an invalid database target returns nonzero. It uses an isolated Compose project and removes only that project during cleanup.
 
 ## Cutover gates still open
 
-- Migrate each production business repository behind its existing service boundary and run its fixtures against PostgreSQL.
+- Migrate the remaining production business repositories behind their existing service boundaries and add PostgreSQL fixtures only as each boundary becomes authoritative. Identity/profile fixtures are implemented; marketplace, wallet, file, notification, and other remaining fixtures are still open.
 - Decide explicitly whether any local data needs import. If so, implement an idempotent importer and identity, wallet, marketplace, and file reconciliation before enabling cutover.
 - Block cutover when any reconciliation error remains.
 - Verify PostgreSQL-backed application behavior and rollback compatibility before removing MongoDB dependencies or changing the primary database.

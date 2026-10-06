@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -78,6 +80,23 @@ class PostgresqlMigrationResourceTest {
         assertThat(sql).contains("CREATE ROLE audit_writer NOLOGIN");
         assertThat(sql).contains("CREATE ROLE audit_reader NOLOGIN");
         assertThat(sql).contains("REVOKE UPDATE, DELETE, TRUNCATE ON audit_events");
+    }
+
+    @Test
+    void developmentIdentityFixturesAreTransactionalAndIdempotent() throws IOException {
+        String sql = Files.readString(Path.of("deploy/postgres/fixtures/identity-fixtures.sql"));
+
+        assertThat(sql).startsWith("BEGIN;");
+        assertThat(sql).endsWith("COMMIT;\n");
+        assertThat(sql).contains("INSERT INTO app_users");
+        assertThat(sql).contains("INSERT INTO buyer_profiles");
+        assertThat(sql).contains("INSERT INTO seller_profiles");
+        assertThat(sql).contains("ON CONFLICT DO NOTHING");
+        assertThat(sql).contains("RAISE EXCEPTION 'development buyer fixture conflicts");
+        assertThat(sql).contains("RAISE EXCEPTION 'development seller fixture conflicts");
+        assertThat(sql).doesNotContain("INSERT INTO otp_challenges");
+        assertThat(sql).doesNotContain("INSERT INTO wallets");
+        assertThat(sql).doesNotContain("INSERT INTO files");
     }
 
     private String readResource(String resource) throws IOException {

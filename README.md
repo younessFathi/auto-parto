@@ -78,6 +78,6 @@ participant Executor as RetryExecutor
 
 # PostgreSQL development migration
 
-The PostgreSQL schema is still being introduced incrementally; the application continues to use MongoDB for business repositories. To exercise the PostgreSQL schema locally, follow [`docs/postgresql-development-cutover.md`](docs/postgresql-development-cutover.md). The opt-in Compose profile provisions distinct runtime and migration roles and runs Flyway as a one-shot job. Do not treat this profile as a PostgreSQL application cutover until the AP-0003 gates in that runbook are satisfied.
+The PostgreSQL schema is still being introduced incrementally; the application continues to use MongoDB for business repositories that have not been migrated. To exercise the PostgreSQL schema locally, follow [`docs/postgresql-development-cutover.md`](docs/postgresql-development-cutover.md). The opt-in Compose profile provisions distinct runtime and migration roles, runs Flyway as a one-shot job, and provides idempotent development fixtures for the migrated identity/profile boundary. Do not treat this profile as a PostgreSQL application cutover until the AP-0003 gates in that runbook are satisfied.
 
 Authentication currently uses the OTP-to-JWT canonical model documented in [`docs/canonical-authentication.md`](docs/canonical-authentication.md). Incomplete Google and Clerk integrations remain disabled.

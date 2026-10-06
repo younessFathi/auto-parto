@@ -16,6 +16,21 @@ trap cleanup EXIT INT TERM
 
 $compose up -d app-postgresql
 $compose run --rm app-postgresql-migrate
+$compose run --rm --no-deps app-postgresql-fixtures
+$compose run --rm --no-deps app-postgresql-fixtures
+
+fixture_counts="$($compose exec -T \
+    -e PGPASSWORD="$APP_POSTGRES_RUNTIME_PASSWORD" \
+    app-postgresql psql \
+    --username "${APP_POSTGRES_RUNTIME_USER:-auto_parto_runtime}" \
+    --dbname "${APP_POSTGRES_DB:-auto_parto}" \
+    --tuples-only --no-align \
+    --command "SELECT (SELECT count(*) FROM app_users WHERE key_version = 'dev-fixture-v1'), (SELECT count(*) FROM buyer_profiles WHERE public_id = '00000000-0000-4000-8000-000000000201'), (SELECT count(*) FROM seller_profiles WHERE public_id = '00000000-0000-4000-8000-000000000202')")"
+
+if [ "$fixture_counts" != "2|1|1" ]; then
+    echo "Expected idempotent PostgreSQL identity fixtures, got: $fixture_counts" >&2
+    exit 1
+fi
 
 if $compose run --rm \
         -e FLYWAY_URL=jdbc:postgresql://app-postgresql:5432/missing_database \
@@ -25,4 +40,4 @@ if $compose run --rm \
     exit 1
 fi
 
-echo "Compose PostgreSQL migration smoke test passed, including failure stop behavior."
+echo "Compose PostgreSQL migration and fixture smoke test passed, including idempotency and failure stop behavior."

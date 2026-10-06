@@ -129,6 +129,24 @@ services:
     networks:
       - app-network
 
+  app-postgresql-fixtures:
+    image: postgres:16-alpine
+    profiles: ["postgres"]
+    command: ["psql", "--set", "ON_ERROR_STOP=1", "--file", "/fixtures/identity-fixtures.sql"]
+    environment:
+      PGHOST: app-postgresql
+      PGDATABASE: ${APP_POSTGRES_DB:-auto_parto}
+      PGUSER: ${APP_POSTGRES_RUNTIME_USER:-auto_parto_runtime}
+      PGPASSWORD: ${APP_POSTGRES_RUNTIME_PASSWORD:?set APP_POSTGRES_RUNTIME_PASSWORD for the postgres profile}
+    volumes:
+      - ./deploy/postgres/fixtures:/fixtures:ro
+    depends_on:
+      app-postgresql-migrate:
+        condition: service_completed_successfully
+    restart: "no"
+    networks:
+      - app-network
+
 volumes:
   mongo-data:
   redis_data:
