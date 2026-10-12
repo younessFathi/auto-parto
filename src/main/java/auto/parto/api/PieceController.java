@@ -4,6 +4,7 @@ import auto.parto.dto.PagedResponse;
 import auto.parto.dto.PieceDto;
 import auto.parto.exception.EntityNotFoundException;
 import auto.parto.service.iservice.IPieceService;
+import auto.parto.security.CanonicalSecurity;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
@@ -44,10 +46,12 @@ public class PieceController {
     public Mono<ResponseEntity<PagedResponse<PieceDto>>> getAllPiecesByCustomerId(
             @Parameter(description = "ID of the customer", required = true, example = "customer1")
             @PathVariable String customerId,
+            Authentication authentication,
             @Parameter(description = "Page number (starting from 0)", example = "0")
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page number (starting from 0)", example = "0")
             @RequestParam(defaultValue = "10") int size){
+        CanonicalSecurity.requireOwner(authentication, customerId, "ROLE_BUYER");
         if (page < 0) {
             return Mono.error(new IllegalArgumentException("page must be >= 0"));
         }

@@ -24,6 +24,7 @@ import java.util.Map;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockAuthentication;
 
 @WebFluxTest(controllers = FcmNotificationController.class)
 @Import({TestConfig.class, OtpExceptionHandler.class})
@@ -45,7 +46,6 @@ class FcmNotificationControllerTest {
     private SecurityHelper securityHelper;
 
     @Test
-    @WithMockUser
     void registerToken_returns200() {
         RegisterTokenRequest request = new RegisterTokenRequest();
         request.setDeviceToken("fcm-token-123");
@@ -55,7 +55,8 @@ class FcmNotificationControllerTest {
         when(deviceTokenService.registerToken(anyString(), any(RegisterTokenRequest.class)))
                 .thenReturn(Mono.just(true));
 
-        webTestClient.post()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("user-1")))
+                .post()
                 .uri("/api/v1/notifications/fcm/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
@@ -121,7 +122,6 @@ class FcmNotificationControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "BUYER")
     void notifySellersAboutSearch_returns200() {
         SearchNotificationRequest request = SearchNotificationRequest.builder()
                 .buyerId("buyer-1")
@@ -135,7 +135,8 @@ class FcmNotificationControllerTest {
         when(fcmService.sendToUsers(any(), any())).thenReturn(Mono.just(
                 BatchFcmResult.builder().totalUsers(2).successfulUsers(2).failedUsers(0).build()));
 
-        webTestClient.post()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("buyer-1")))
+                .post()
                 .uri("/api/v1/notifications/fcm/notify/search")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
@@ -144,7 +145,6 @@ class FcmNotificationControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "BUYER")
     void notifySellersAboutSearch_returns404_whenNoMatchingSellers() {
         SearchNotificationRequest request = SearchNotificationRequest.builder()
                 .buyerId("buyer-1")
@@ -156,7 +156,8 @@ class FcmNotificationControllerTest {
         when(securityHelper.validateBuyer(any())).thenReturn(Mono.just(true));
         when(sellerService.findMatchingSellers()).thenReturn(Mono.just(List.of()));
 
-        webTestClient.post()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("buyer-1")))
+                .post()
                 .uri("/api/v1/notifications/fcm/notify/search")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
@@ -165,7 +166,6 @@ class FcmNotificationControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "SELLER")
     void notifyBuyerAboutResponse_returns200() {
         SellerResponseRequest request = SellerResponseRequest.builder()
                 .buyerId("buyer-1")
@@ -180,7 +180,8 @@ class FcmNotificationControllerTest {
         when(fcmService.sendToUser(anyString(), any())).thenReturn(Mono.just(
                 FcmDeliveryResult.success("buyer-1", "msg-1")));
 
-        webTestClient.post()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.seller("seller-1")))
+                .post()
                 .uri("/api/v1/notifications/fcm/notify/response")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
@@ -211,11 +212,11 @@ class FcmNotificationControllerTest {
     }
 
     @Test
-    @WithMockUser
     void getUserStats_returns200() {
         when(deviceTokenService.getActiveTokens("user-1")).thenReturn(Mono.just(List.of("abcdefghijklmnop", "qrstuvwxyz123456")));
 
-        webTestClient.get()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("user-1")))
+                .get()
                 .uri("/api/v1/notifications/fcm/stats/user-1")
                 .exchange()
                 .expectStatus().isOk()
@@ -223,6 +224,22 @@ class FcmNotificationControllerTest {
                 .jsonPath("$.userId").isEqualTo("user-1")
                 .jsonPath("$.activeTokens").isEqualTo(2)
                 .jsonPath("$.hasTokens").isEqualTo(true);
+    }
+
+    @Test
+    void registerToken_returns403_whenUserIdBelongsToAnotherPrincipal() {
+        RegisterTokenRequest request = new RegisterTokenRequest();
+        request.setDeviceToken("fcm-token-123");
+        request.setPlatform("android");
+        request.setUserId("user-2");
+
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("user-1")))
+                .post()
+                .uri("/api/v1/notifications/fcm/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isForbidden();
     }
 
     @Test

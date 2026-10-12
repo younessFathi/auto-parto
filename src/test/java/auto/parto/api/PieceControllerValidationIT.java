@@ -17,6 +17,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockAuthentication;
 
 @WebFluxTest(controllers = PieceController.class)
 @Import(TestConfig.class)
@@ -31,7 +32,8 @@ class PieceControllerValidationIT {
     @Test
     @WithMockUser
     void rejectsNegativePage() {
-        webTestClient.get()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("customer1")))
+                .get()
                 .uri("/pieces/customer1?page=-1&size=10")
                 .exchange()
                 .expectStatus().isBadRequest()
@@ -44,7 +46,8 @@ class PieceControllerValidationIT {
     @Test
     @WithMockUser
     void rejectsOversizedPageSize() {
-        webTestClient.get()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("customer1")))
+                .get()
                 .uri("/pieces/customer1?page=0&size=101")
                 .exchange()
                 .expectStatus().isBadRequest()
@@ -64,7 +67,8 @@ class PieceControllerValidationIT {
         response.setTotalItems(1);
         when(pieceService.getAllPiecesByCustomerId(anyString(), anyInt(), anyInt())).thenReturn(Mono.just(response));
 
-        webTestClient.get()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("customer1")))
+                .get()
                 .uri("/pieces/customer1?page=0&size=10")
                 .exchange()
                 .expectStatus().isOk();

@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.support.WebExchangeBindException;
 import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.server.ResponseStatusException;
 import jakarta.validation.ConstraintViolationException;
 
 import java.time.LocalDateTime;
@@ -84,6 +85,15 @@ public class OtpExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleIllegalArgumentException(IllegalArgumentException ex,
                                                                            ServerWebExchange exchange) {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), exchange, null);
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiErrorResponse> handleResponseStatusException(ResponseStatusException ex,
+                                                                            ServerWebExchange exchange) {
+        HttpStatus status = HttpStatus.resolve(ex.getStatusCode().value());
+        HttpStatus safeStatus = status == null ? HttpStatus.INTERNAL_SERVER_ERROR : status;
+        String message = safeStatus.is4xxClientError() ? ex.getReason() : "An unexpected error occurred";
+        return buildErrorResponse(safeStatus, message, exchange, null);
     }
 
     @ExceptionHandler(Exception.class)

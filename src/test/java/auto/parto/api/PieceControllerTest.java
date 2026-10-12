@@ -17,6 +17,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockAuthentication;
 
 @WebFluxTest(controllers = PieceController.class)
 @Import(TestConfig.class)
@@ -29,7 +30,6 @@ class PieceControllerTest {
     private IPieceService pieceService;
 
     @Test
-    @WithMockUser
     void getAllPiecesByCustomerId_returns200() {
         PagedResponse<PieceDto> response = new PagedResponse<>();
         response.setData(List.of(PieceDto.builder().id("piece-1").name("Test Piece").build()));
@@ -39,14 +39,14 @@ class PieceControllerTest {
 
         when(pieceService.getAllPiecesByCustomerId(anyString(), anyInt(), anyInt())).thenReturn(Mono.just(response));
 
-        webTestClient.get()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("customer1")))
+                .get()
                 .uri("/pieces/customer1?page=0&size=10")
                 .exchange()
                 .expectStatus().isOk();
     }
 
     @Test
-    @WithMockUser
     void getAllPiecesByCustomerId_returns404_whenEmpty() {
         PagedResponse<PieceDto> response = new PagedResponse<>();
         response.setData(List.of());
@@ -56,7 +56,8 @@ class PieceControllerTest {
 
         when(pieceService.getAllPiecesByCustomerId(anyString(), anyInt(), anyInt())).thenReturn(Mono.just(response));
 
-        webTestClient.get()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("customer1")))
+                .get()
                 .uri("/pieces/customer1?page=0&size=10")
                 .exchange()
                 .expectStatus().isNotFound();
@@ -83,5 +84,14 @@ class PieceControllerTest {
                 .uri("/pieces/customer1?page=0&size=10")
                 .exchange()
                 .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void getAllPiecesByCustomerId_returns403_forAnotherCustomer() {
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("customer1")))
+                .get()
+                .uri("/pieces/customer2?page=0&size=10")
+                .exchange()
+                .expectStatus().isForbidden();
     }
 }

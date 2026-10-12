@@ -11,6 +11,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
 
+import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockAuthentication;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+
 import static org.mockito.Mockito.when;
 
 @WebFluxTest(controllers = BuyerController.class)
@@ -24,18 +28,29 @@ class BuyerControllerTest {
     private IBuyerService buyerService;
 
     @Test
-    @WithMockUser
     void deactivateBuyer_returns200() {
-        BuyerDto dto = BuyerDto.builder().id("id-1").isActive(false).build();
-        when(buyerService.deactivateBuyer("id-1")).thenReturn(Mono.just(dto));
+        BuyerDto dto = BuyerDto.builder().id("buyer-1").isActive(false).build();
+        when(buyerService.deactivateBuyer("buyer-1")).thenReturn(Mono.just(dto));
 
-        webTestClient.put()
-                .uri("/customers/id-1/deactivate")
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("buyer-1")))
+                .put()
+                .uri("/customers/buyer-1/deactivate")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
-                .jsonPath("$.id").isEqualTo("id-1")
+                .jsonPath("$.id").isEqualTo("buyer-1")
                 .jsonPath("$.isActive").isEqualTo(false);
+    }
+
+    @Test
+    void deactivateBuyer_returns403_forAnotherBuyer() {
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("buyer-1")))
+                .put()
+                .uri("/customers/buyer-2/deactivate")
+                .exchange()
+                .expectStatus().isForbidden();
+
+        verify(buyerService, never()).deactivateBuyer("buyer-2");
     }
 
     @Test

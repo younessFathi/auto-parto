@@ -3,6 +3,7 @@ package auto.parto.api;
 import auto.parto.dto.SellerDto;
 import auto.parto.exception.EntityNotFoundException;
 import auto.parto.service.iservice.ISellerService;
+import auto.parto.security.CanonicalSecurity;
 import auto.parto.utils.Constants;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -13,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -63,7 +65,9 @@ public class SellerController {
                     content = @Content)
     })
     @PostMapping("/{id}/wallet/add")
-    public Mono<SellerDto> addFunds(@PathVariable String id, @RequestParam BigDecimal amount) {
+    public Mono<SellerDto> addFunds(@PathVariable String id, @RequestParam BigDecimal amount,
+                                    Authentication authentication) {
+        CanonicalSecurity.requireOwner(authentication, id, "ROLE_SELLER");
         return sellerService.addFunds(id, amount)
                         .switchIfEmpty(Mono.error(new EntityNotFoundException("Seller not found")));
     }
@@ -77,7 +81,9 @@ public class SellerController {
                     content = @Content)
     })
     @PostMapping("/{id}/wallet/deduct")
-    public Mono<SellerDto> deductFunds(@PathVariable String id, @RequestParam BigDecimal amount) {
+    public Mono<SellerDto> deductFunds(@PathVariable String id, @RequestParam BigDecimal amount,
+                                       Authentication authentication) {
+        CanonicalSecurity.requireOwner(authentication, id, "ROLE_SELLER");
         return sellerService.addFunds(id, amount.negate())
                 .switchIfEmpty(Mono.error(new EntityNotFoundException("Seller not found")));
     }
@@ -91,7 +97,8 @@ public class SellerController {
                     content = @Content)
     })
     @PostMapping("/{id}/deactivate")
-    public Mono<SellerDto> deactivateSeller(@PathVariable String id) {
+    public Mono<SellerDto> deactivateSeller(@PathVariable String id, Authentication authentication) {
+        CanonicalSecurity.requireOwner(authentication, id, "ROLE_SELLER");
         return sellerService.deactivate(id)
                 .switchIfEmpty(Mono.error(new EntityNotFoundException("Seller not found")));
     }

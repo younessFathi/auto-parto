@@ -22,6 +22,7 @@ import java.util.Map;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockAuthentication;
 
 @WebFluxTest(controllers = NotificationController.class)
 @Import(TestConfig.class)
@@ -53,7 +54,6 @@ class NotificationControllerTest {
     }
 
     @Test
-    @WithMockUser
     void subscribeToUser_returnsSseStream() {
         Sinks.Many<NotificationRequest> userSink = Sinks.many().multicast().onBackpressureBuffer();
         when(resilientNotificationService.registerConnection("user-1")).thenReturn(userSink);
@@ -64,11 +64,21 @@ class NotificationControllerTest {
         connectionSink.tryEmitComplete();
         when(sseNotificationService.getUserConnections("user-1")).thenReturn(connectionSink);
 
-        webTestClient.get()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("user-1")))
+                .get()
                 .uri("/notifications/subscribe/user-1")
                 .exchange()
                 .expectStatus().isOk()
                 .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM_VALUE);
+    }
+
+    @Test
+    void subscribeToUser_returns403_forAnotherPrincipal() {
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("user-1")))
+                .get()
+                .uri("/notifications/subscribe/user-2")
+                .exchange()
+                .expectStatus().isForbidden();
     }
 
     @Test

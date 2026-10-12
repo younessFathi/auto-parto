@@ -4,6 +4,8 @@ import auto.parto.dto.*;
 import auto.parto.exception.NoMatchigSellersFoundException;
 import auto.parto.service.SellerService;
 import auto.parto.service.notification.*;
+import auto.parto.security.CanonicalPrincipal;
+import auto.parto.security.CanonicalSecurity;
 import auto.parto.utils.SecurityHelper;
 import com.google.firebase.FirebaseApp;
 import jakarta.validation.Valid;
@@ -39,9 +41,13 @@ public class FcmNotificationController {
      */
     @PostMapping("/register")
     public Mono<ResponseEntity<Map<String, Object>>> registerToken(
-            @Valid @RequestBody RegisterTokenRequest request) {
+            @Valid @RequestBody RegisterTokenRequest request,
+            Authentication authentication) {
 
-        String userId = request.getUserId();
+        CanonicalPrincipal principal = CanonicalSecurity.requireClaimedOwner(
+                authentication, request.getUserId(), null);
+        String userId = principal.getId();
+        request.setUserId(userId);
         log.info("Registering FCM token for user: {}, platform: {}", userId, request.getPlatform());
 
         return deviceTokenService.registerToken(userId, request)
@@ -113,6 +119,9 @@ public class FcmNotificationController {
             @Valid @RequestBody SearchNotificationRequest request,
             Authentication authentication) {
 
+        CanonicalPrincipal principal = CanonicalSecurity.requireClaimedOwner(
+                authentication, request.getBuyerId(), "ROLE_BUYER");
+        request.setBuyerId(principal.getId());
         return securityHelper.validateBuyer(authentication).flatMap(
                 isValid -> {
                     Mono<ResponseEntity<Object>> UNAUTHORIZED = checkAuthentication(authentication.getName(), isValid);
@@ -190,6 +199,9 @@ public class FcmNotificationController {
     public Mono<ResponseEntity<?>> notifyBuyerAboutResponse(
             @Valid @RequestBody SellerResponseRequest request,
             Authentication authentication) {
+       CanonicalPrincipal principal = CanonicalSecurity.requireClaimedOwner(
+               authentication, request.getSellerId(), "ROLE_SELLER");
+       request.setSellerId(principal.getId());
        return securityHelper.validateSeller(authentication)
                         .flatMap(isValid -> {
                             Mono<ResponseEntity<Object>> UNAUTHORIZED = checkAuthentication(authentication.getName(), isValid);
@@ -264,7 +276,13 @@ public class FcmNotificationController {
      */
     @GetMapping("/stats/{userId}")
     @PreAuthorize("#userId == authentication.principal.id or hasRole('ADMIN')")
-    public Mono<ResponseEntity<Map<String, Object>>> getUserStats(@PathVariable String userId) {
+    public Mono<ResponseEntity<Map<String, Object>>> getUserStats(
+            @PathVariable String userId,
+            Authentication authentication) {
+        CanonicalPrincipal principal = CanonicalSecurity.requirePrincipal(authentication);
+        if (!"ROLE_ADMIN".equals(principal.getRole())) {
+            CanonicalSecurity.requireOwner(authentication, userId, null);
+        }
         return deviceTokenService.getActiveTokens(userId)
                 .map(tokens -> ResponseEntity.ok().body(
                         Map.of(

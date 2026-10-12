@@ -21,4 +21,6 @@ Google OAuth and Clerk authentication are currently disabled because their issue
 
 Invalid, expired, malformed, or unsigned tokens are rejected with `401 Unauthorized`. Protected endpoints require the canonical principal, and method-level role checks use its authorities. Authentication and authorization remain separate: role access does not replace resource ownership checks.
 
+Sensitive resource operations derive the acting buyer or seller ID from `CanonicalPrincipal.id`. A client-supplied actor ID may be omitted, but when supplied it must match the canonical ID; mismatches and cross-user mutations return `403 Forbidden`.
+
 The JWT signing secret is required through `JWT_SECRET` and must be a Base64-encoded key of at least 256 bits. It must be supplied through the environment or an approved secret manager and must not be committed to the repository.

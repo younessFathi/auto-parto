@@ -6,6 +6,7 @@ import auto.parto.service.notification.PendingNotificationService;
 import auto.parto.service.notification.ResilientNotificationService;
 import auto.parto.service.notification.ResilientPendingNotificationService;
 import auto.parto.service.notification.SSENotificationService;
+import auto.parto.security.CanonicalSecurity;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -72,7 +73,10 @@ public class NotificationController {
 
     // Subscribe with user-specific notifications
     @GetMapping(value = "/subscribe/{userId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<NotificationRequest>> subscribeToUser(@PathVariable String userId) {
+    public Flux<ServerSentEvent<NotificationRequest>> subscribeToUser(
+            @PathVariable String userId,
+            org.springframework.security.core.Authentication authentication) {
+        CanonicalSecurity.requireOwner(authentication, userId, null);
         Sinks.Many<NotificationRequest> userSink = resilientNotificationService.registerConnection(userId);
         return resilientPendingNotificationService.deliverPendingOnConnect(userId).thenMany(
             sseNotificationService.getUserConnections(userId)
@@ -200,4 +204,3 @@ public class NotificationController {
     }
 
 }
-

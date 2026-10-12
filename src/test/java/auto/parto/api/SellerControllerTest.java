@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockAuthentication;
 
 @WebFluxTest(controllers = SellerController.class)
 @Import(TestConfig.class)
@@ -82,41 +83,59 @@ class SellerControllerTest {
     }
 
     @Test
-    @WithMockUser
     void addFunds_returns200() {
         SellerDto dto = SellerDto.builder().id("seller-1").build();
         when(sellerService.addFunds("seller-1", new BigDecimal("100.00"))).thenReturn(Mono.just(dto));
 
-        webTestClient.post()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.seller("seller-1")))
+                .post()
                 .uri("/seller/seller-1/wallet/add?amount=100.00")
                 .exchange()
                 .expectStatus().isOk();
     }
 
     @Test
-    @WithMockUser
     void deductFunds_returns200() {
         SellerDto dto = SellerDto.builder().id("seller-1").build();
         when(sellerService.addFunds("seller-1", new BigDecimal("-50.00"))).thenReturn(Mono.just(dto));
 
-        webTestClient.post()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.seller("seller-1")))
+                .post()
                 .uri("/seller/seller-1/wallet/deduct?amount=50.00")
                 .exchange()
                 .expectStatus().isOk();
     }
 
     @Test
-    @WithMockUser
     void deactivateSeller_returns200() {
         SellerDto dto = SellerDto.builder().id("seller-1").isActive(false).build();
         when(sellerService.deactivate("seller-1")).thenReturn(Mono.just(dto));
 
-        webTestClient.post()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.seller("seller-1")))
+                .post()
                 .uri("/seller/seller-1/deactivate")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.isActive").isEqualTo(false);
+    }
+
+    @Test
+    void walletMutation_returns403_forAnotherSeller() {
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.seller("seller-1")))
+                .post()
+                .uri("/seller/seller-2/wallet/add?amount=100.00")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void walletMutation_returns403_forWrongRole() {
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("seller-1")))
+                .post()
+                .uri("/seller/seller-1/wallet/add?amount=100.00")
+                .exchange()
+                .expectStatus().isForbidden();
     }
 
     @Test

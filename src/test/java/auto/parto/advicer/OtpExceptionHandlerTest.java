@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
+import org.springframework.web.server.ResponseStatusException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -71,5 +72,23 @@ class OtpExceptionHandlerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getMessage()).isEqualTo("Account is locked due to too many failed attempts");
         assertThat(response.getBody().getRequestId()).isEqualTo("req-lock-001");
+    }
+
+    @Test
+    void mapsResponseStatusExceptionWithoutExposingUnexpectedDetails() {
+        OtpExceptionHandler handler = new OtpExceptionHandler();
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/seller/seller-2/deactivate").build()
+        );
+
+        ResponseEntity<ApiErrorResponse> response = handler.handleResponseStatusException(
+                new ResponseStatusException(HttpStatus.FORBIDDEN, "The authenticated principal does not own this resource"),
+                exchange
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage())
+                .isEqualTo("The authenticated principal does not own this resource");
     }
 }
