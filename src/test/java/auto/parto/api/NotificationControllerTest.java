@@ -82,11 +82,11 @@ class NotificationControllerTest {
     }
 
     @Test
-    @WithMockUser
     void broadcast_returnsOk() {
         NotificationRequest notification = new NotificationRequest("id-1", "user-1", auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "test", System.currentTimeMillis());
 
-        webTestClient.post()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.admin("admin-1")))
+                .post()
                 .uri("/notifications/broadcast")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(notification)
@@ -95,14 +95,14 @@ class NotificationControllerTest {
     }
 
     @Test
-    @WithMockUser
     void sendToUser_returnsDelivered_whenOnline() {
         NotificationRequest notification = new NotificationRequest("id-1", "user-1", auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "test", System.currentTimeMillis());
 
         when(resilientNotificationService.hasActiveConnection("user-1")).thenReturn(true);
         when(resilientNotificationService.sendNotification(any(NotificationRequest.class))).thenReturn(true);
 
-        webTestClient.post()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.admin("admin-1")))
+                .post()
                 .uri("/notifications/send")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(notification)
@@ -113,7 +113,6 @@ class NotificationControllerTest {
     }
 
     @Test
-    @WithMockUser
     void sendToUser_returnsAccepted_whenOffline() {
         NotificationRequest notification = new NotificationRequest("id-1", "user-1", auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "test", System.currentTimeMillis());
 
@@ -121,7 +120,8 @@ class NotificationControllerTest {
         when(pendingNotificationService.addPendingNotification(any(NotificationRequest.class)))
                 .thenReturn(Mono.just(true));
 
-        webTestClient.post()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.admin("admin-1")))
+                .post()
                 .uri("/notifications/send")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(notification)
@@ -129,6 +129,32 @@ class NotificationControllerTest {
                 .expectStatus().isAccepted()
                 .expectBody()
                 .jsonPath("$.status").isEqualTo("PENDING");
+    }
+
+    @Test
+    void broadcast_returns403_forBuyer() {
+        NotificationRequest notification = new NotificationRequest("id-1", "user-2", auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "test", System.currentTimeMillis());
+
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("buyer-1")))
+                .post()
+                .uri("/notifications/broadcast")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(notification)
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void sendToUser_returns403_forBuyerTargetingAnotherUser() {
+        NotificationRequest notification = new NotificationRequest("id-1", "user-2", auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "test", System.currentTimeMillis());
+
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("buyer-1")))
+                .post()
+                .uri("/notifications/send")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(notification)
+                .exchange()
+                .expectStatus().isForbidden();
     }
 
     @Test

@@ -60,6 +60,20 @@ class CanonicalSecurityTest {
     }
 
     @Test
+    void requireRoleAcceptsRequiredRole() {
+        assertThat(CanonicalSecurity.requireRole(BUYER, "ROLE_BUYER").getId())
+                .isEqualTo("buyer-1");
+    }
+
+    @Test
+    void requireRoleRejectsDifferentRole() {
+        assertThatThrownBy(() -> CanonicalSecurity.requireRole(BUYER, "ROLE_ADMIN"))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(error -> ((ResponseStatusException) error).getStatusCode().value())
+                .isEqualTo(403);
+    }
+
+    @Test
     void requireClaimedOwnerAllowsOmittedClaimAndRejectsDifferentClaim() {
         assertThat(CanonicalSecurity.requireClaimedOwner(BUYER, null, "ROLE_BUYER").getId())
                 .isEqualTo("buyer-1");

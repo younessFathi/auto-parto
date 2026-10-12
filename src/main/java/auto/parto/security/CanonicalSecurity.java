@@ -33,6 +33,17 @@ public final class CanonicalSecurity {
         return principal;
     }
 
+    public static CanonicalPrincipal requireRole(
+            Authentication authentication,
+            String requiredRole) {
+        CanonicalPrincipal principal = requirePrincipal(authentication);
+        if (requiredRole != null && !requiredRole.equals(principal.getRole())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Required role is missing");
+        }
+        return principal;
+    }
+
     public static CanonicalPrincipal requireClaimedOwner(
             Authentication authentication,
             String claimedId,

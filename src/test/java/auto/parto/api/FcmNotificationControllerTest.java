@@ -82,7 +82,6 @@ class FcmNotificationControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "BUYER")
     void sendToUser_returns200() {
         FcmRequest request = FcmRequest.builder()
                 .userId("user-1")
@@ -94,7 +93,8 @@ class FcmNotificationControllerTest {
         when(fcmService.sendToUser(anyString(), any())).thenReturn(Mono.just(
                 FcmDeliveryResult.success("user-1", "msg-1")));
 
-        webTestClient.post()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.admin("admin-1")))
+                .post()
                 .uri("/api/v1/notifications/fcm/send")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
@@ -103,7 +103,6 @@ class FcmNotificationControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "BUYER")
     void sendToUser_returns401_whenNotAuthenticated() {
         FcmRequest request = FcmRequest.builder()
                 .userId("user-1")
@@ -119,6 +118,23 @@ class FcmNotificationControllerTest {
                 .bodyValue(request)
                 .exchange()
                 .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void sendToUser_returns403_forNonAdminPrincipal() {
+        FcmRequest request = FcmRequest.builder()
+                .userId("user-2")
+                .title("Test")
+                .body("Message")
+                .build();
+
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("buyer-1")))
+                .post()
+                .uri("/api/v1/notifications/fcm/send")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isForbidden();
     }
 
     @Test
@@ -166,7 +182,7 @@ class FcmNotificationControllerTest {
     }
 
     @Test
-    void notifyBuyerAboutResponse_returns200() {
+    void notifyBuyerAboutResponse_returns200_forAdminDispatch() {
         SellerResponseRequest request = SellerResponseRequest.builder()
                 .buyerId("buyer-1")
                 .sellerId("seller-1")
@@ -176,9 +192,27 @@ class FcmNotificationControllerTest {
                 .searchId("search-1")
                 .build();
 
-        when(securityHelper.validateSeller(any())).thenReturn(Mono.just(true));
+        when(securityHelper.validateAdmin(any())).thenReturn(Mono.just(true));
         when(fcmService.sendToUser(anyString(), any())).thenReturn(Mono.just(
                 FcmDeliveryResult.success("buyer-1", "msg-1")));
+
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.admin("admin-1")))
+                .post()
+                .uri("/api/v1/notifications/fcm/notify/response")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isOk();
+    }
+
+    @Test
+    void notifyBuyerAboutResponse_returns403_forSellerWithoutPersistedRelationship() {
+        SellerResponseRequest request = SellerResponseRequest.builder()
+                .buyerId("buyer-1")
+                .sellerId("seller-1")
+                .responseId("response-1")
+                .searchId("search-1")
+                .build();
 
         webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.seller("seller-1")))
                 .post()
@@ -186,7 +220,7 @@ class FcmNotificationControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus().isForbidden();
     }
 
     @Test

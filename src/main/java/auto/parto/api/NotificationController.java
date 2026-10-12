@@ -108,7 +108,11 @@ public class NotificationController {
 
     // Broadcast notification to all connected clients
     @PostMapping("/broadcast")
-    public Mono<Void> broadcast(@RequestBody NotificationRequest notificationRequest) {
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+    public Mono<Void> broadcast(
+            @RequestBody NotificationRequest notificationRequest,
+            org.springframework.security.core.Authentication authentication) {
+        CanonicalSecurity.requireRole(authentication, "ROLE_ADMIN");
         return Mono.fromRunnable(() -> {
             notificationSink.tryEmitNext(notificationRequest);
             log.info("Broadcast message {} " , notificationRequest);
@@ -117,8 +121,11 @@ public class NotificationController {
 
     // Send notification to specific user
     @PostMapping("/send")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
     public Mono<ResponseEntity<Map<String, Object>>> sendToUser(
-            @RequestBody NotificationRequest notificationRequest) {
+            @RequestBody NotificationRequest notificationRequest,
+            org.springframework.security.core.Authentication authentication) {
+        CanonicalSecurity.requireRole(authentication, "ROLE_ADMIN");
         String userId = notificationRequest.userId();
         log.info(SENDING_NOTIFICATION_TO_USER_TYPE, userId, notificationRequest.type());
         return Mono.defer(() -> {

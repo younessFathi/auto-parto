@@ -65,11 +65,12 @@ public class FcmNotificationController {
      * Send notification to specific user (e.g., notify buyer about seller response)
      */
     @PostMapping("/send")
-    @PreAuthorize("hasAnyRole('SELLER', 'BUYER' ,  'ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public Mono<ResponseEntity<?>> sendToUser(
             @Valid @RequestBody FcmRequest request,
             Authentication authentication) {
 
+        CanonicalSecurity.requireRole(authentication, "ROLE_ADMIN");
         return securityHelper.validateAuthentication(authentication)
                         .flatMap(isValid->{
                             Mono<ResponseEntity<Object>> UNAUTHORIZED = checkAuthentication(authentication.getName(), isValid);
@@ -195,14 +196,12 @@ public class FcmNotificationController {
      * Notify buyer about seller's response
      */
     @PostMapping("/notify/response")
-    @PreAuthorize("hasRole('SELLER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public Mono<ResponseEntity<?>> notifyBuyerAboutResponse(
             @Valid @RequestBody SellerResponseRequest request,
             Authentication authentication) {
-       CanonicalPrincipal principal = CanonicalSecurity.requireClaimedOwner(
-               authentication, request.getSellerId(), "ROLE_SELLER");
-       request.setSellerId(principal.getId());
-       return securityHelper.validateSeller(authentication)
+       CanonicalSecurity.requireRole(authentication, "ROLE_ADMIN");
+       return securityHelper.validateAdmin(authentication)
                         .flatMap(isValid -> {
                             Mono<ResponseEntity<Object>> UNAUTHORIZED = checkAuthentication(authentication.getName(), isValid);
                             if (UNAUTHORIZED != null) return UNAUTHORIZED;

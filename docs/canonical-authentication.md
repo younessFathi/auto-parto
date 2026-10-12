@@ -23,4 +23,6 @@ Invalid, expired, malformed, or unsigned tokens are rejected with `401 Unauthori
 
 Sensitive resource operations derive the acting buyer or seller ID from `CanonicalPrincipal.id`. A client-supplied actor ID may be omitted, but when supplied it must match the canonical ID; mismatches and cross-user mutations return `403 Forbidden`.
 
+Generic FCM and SSE dispatch endpoints, including broadcast and seller-response delivery, are admin/internal operations. They do not accept ordinary buyer or seller callers. Seller self-service response delivery remains unavailable until persisted search/response relationships can be loaded and checked against the authenticated seller and recipient buyer.
+
 The JWT signing secret is required through `JWT_SECRET` and must be a Base64-encoded key of at least 256 bits. It must be supplied through the environment or an approved secret manager and must not be committed to the repository.
