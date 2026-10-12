@@ -184,6 +184,17 @@ Every human or AI prompt or contribution session must record a concise trace in 
 - Report files changed, tests run, test limitations, and any unresolved risks.
 - If a requirement conflicts with security, data integrity, or an existing user change, stop and ask for clarification.
 
+## Commit Review Workflow
+
+For every requested commit review, use the same complete workflow:
+
+1. Check the working tree, commit metadata, parent diff, and whether the reviewed commit is on the current branch; preserve unrelated user changes.
+2. Read the related ticket and prior review/follow-up material, then inspect every affected implementation, DTO/model, persistence boundary, security/configuration path, and test.
+3. Trace each sensitive request path through authentication, authorization, ownership, validation, persistence, and asynchronous/retry behavior as applicable; distinguish newly introduced defects from pre-existing limitations.
+4. Add one dated review under `.architecture-backlog/reviews/` using `REVIEW-TEMPLATE.md`, with severity-ranked findings, acceptance-criteria and scenario results, exact `path:line` evidence, verification, required corrections, and residual risks.
+5. Run `git diff --check` for the reviewed range, focused affected tests, and `./mvnw -B test`; run `./mvnw -B verify` when Docker is available. Clearly report any command that cannot complete and why.
+6. Add a new sanitized `.agent-trace/` record for the review. Do not modify a prior review or trace except when explicitly asked to correct it.
+
 ## Contribution Checklist
 
 Before editing:
