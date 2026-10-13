@@ -28,9 +28,9 @@ public class FileService implements IFileService {
     }
 
     @Autowired
-    public FileService(IFileRepository fileRepository, FileDbMapper fileDbMapper,
+    public FileService(ObjectProvider<IFileRepository> fileRepositoryProvider, FileDbMapper fileDbMapper,
                        ObjectProvider<FileRepository> postgresqlFileRepositoryProvider) {
-        this(fileRepository, fileDbMapper, postgresqlFileRepositoryProvider.getIfAvailable());
+        this(fileRepositoryProvider.getIfAvailable(), fileDbMapper, postgresqlFileRepositoryProvider.getIfAvailable());
     }
 
     public FileService(IFileRepository fileRepository, FileDbMapper fileDbMapper,
@@ -42,6 +42,7 @@ public class FileService implements IFileService {
 
     @Override
     public Mono<FileDto> save(FileDto fileDto) {
+        if (fileRepository == null) return legacyPersistenceUnavailable();
         return fileRepository.save(fileDbMapper.toEntity(fileDto))
                             .map(fileDbMapper::toDto);
     }
@@ -54,6 +55,8 @@ public class FileService implements IFileService {
             return postgresqlFileRepository.findByRequest(requestPublicId, 100)
                     .map(this::toDto);
         }
+        if (fileRepository == null) return Flux.error(new IllegalStateException(
+                "MongoDB persistence is disabled; use the PostgreSQL file boundary"));
         return fileRepository.getFilesByPieceId(pieceId)
                              .map(fileDbMapper::toDto);
     }
@@ -65,6 +68,8 @@ public class FileService implements IFileService {
             return postgresqlFileRepository.findByPublicIds(publicIds, 100)
                     .map(this::toDto);
         }
+        if (fileRepository == null) return Flux.error(new IllegalStateException(
+                "MongoDB persistence is disabled; use canonical file IDs"));
         return fileRepository.findAllByIds(imagesId)
                 .map(fileDbMapper::toDto);
     }
@@ -100,5 +105,9 @@ public class FileService implements IFileService {
         } catch (IllegalArgumentException ignored) {
             return null;
         }
+    }
+
+    private static <T> Mono<T> legacyPersistenceUnavailable() {
+        return Mono.error(new IllegalStateException("MongoDB persistence is disabled; use the PostgreSQL file boundary"));
     }
 }

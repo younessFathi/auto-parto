@@ -6,10 +6,13 @@ import auto.parto.repository.mongo_repository.PieceOfferRepository;
 import auto.parto.service.iservice.IPieceOfferService;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import reactor.core.publisher.Mono;
 
 @Service
 @AllArgsConstructor
+@ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.cutover", name = "mongo-disabled",
+        havingValue = "false", matchIfMissing = true)
 public class PieceOfferService implements IPieceOfferService {
     private final PieceOfferRepository pieceOfferRepository;
     private final PieceOfferDbMapper pieceOfferDbMapper;

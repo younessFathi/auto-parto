@@ -40,11 +40,11 @@ public class BuyerService implements IBuyerService {
     }
 
     @Autowired
-    public BuyerService(BuyerRepository buyerRepository, ISellerRepository sellerRepository,
+    public BuyerService(ObjectProvider<BuyerRepository> buyerProvider, ObjectProvider<ISellerRepository> sellerProvider,
                         BuyerDbMapper buyerDbMapper, SellerDbMapper sellerDbMapper,
                         ObjectProvider<AppUserRepository> userProvider,
                         ObjectProvider<BuyerProfileRepository> profileProvider) {
-        this(buyerRepository, sellerRepository, buyerDbMapper, sellerDbMapper,
+        this(getIfAvailable(buyerProvider), getIfAvailable(sellerProvider), buyerDbMapper, sellerDbMapper,
                 getIfAvailable(userProvider), getIfAvailable(profileProvider));
     }
 
@@ -61,6 +61,7 @@ public class BuyerService implements IBuyerService {
 
     @Override
     public Mono<Boolean> checkIfBuyerExistUsingPhoneNumber(String phoneNumber) {
+        if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.exists(phoneNumber, "phoneNumber");
     }
 
@@ -71,6 +72,7 @@ public class BuyerService implements IBuyerService {
                     .filter(user -> "BUYER".equals(user.role()) && "ACTIVE".equals(user.status()))
                     .hasElement();
         }
+        if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.exists(email, "email");
     }
 
@@ -83,6 +85,7 @@ public class BuyerService implements IBuyerService {
                     .filter(user -> "BUYER".equals(user.role()) && "ACTIVE".equals(user.status()))
                     .hasElement();
         }
+        if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.existsById(id);
     }
 
@@ -96,11 +99,14 @@ public class BuyerService implements IBuyerService {
                     .zipWhen(user -> postgresqlProfileRepository.findByUserPublicId(publicId))
                     .map(result -> toDto(result.getT1(), result.getT2()));
         }
+        if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.deactivateCustomer(id).map(buyerDbMapper::toDto);
     }
 
     @Override
     public Mono<BuyerDto> createBuyerFromClerkAuth(BuyerDto customerDto) {
+        if (postgresqlIdentityReady()) return canonicalOnboardingRequired();
+        if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.save(
                 buyerDbMapper.toEntity(customerDto)
         ).map(buyerDbMapper::toDto);
@@ -108,6 +114,7 @@ public class BuyerService implements IBuyerService {
 
     @Override
     public Mono<Boolean> checkIfBuyerExistClerkId(String userId) {
+        if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.exists(userId, "clerkId");
     }
 
@@ -122,12 +129,15 @@ public class BuyerService implements IBuyerService {
                     .map(result -> toDto(result.getT1(), result.getT2()));
         }
         buyerDto.setIsActive(true);
+        if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.save(buyerDbMapper.toEntity(buyerDto)).map(buyerDbMapper::toDto);
     }
 
     @Override
     public Mono<BuyerDto> create(OtpRequestDto otpRequestDto, String otp) {
         log.info("Creating new customer with email: {}", otpRequestDto.getEmail());
+        if (postgresqlIdentityReady()) return canonicalOnboardingRequired();
+        if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.save(
                 buyerDbMapper.toEntity(otpRequestDto , otp)
         ).map(buyerDbMapper::toDto);
@@ -135,12 +145,14 @@ public class BuyerService implements IBuyerService {
 
     @Override
     public Mono<BuyerDto> findBuyerByPhoneNumber(String phoneNumber) {
+        if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.findBy(phoneNumber, "phoneNumber").map(buyerDbMapper::toDto);
     }
 
     @Override
     public Mono<BuyerDto> updateGeneratedOtpByPhoneNumber(String phoneNumber, String sentOtp) {
         log.info("Updating generated OTP for phone number: {}", phoneNumber);
+        if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.updateGeneratedOtp(
                             phoneNumber, sentOtp ,
                         "phoneNumber"
@@ -150,6 +162,7 @@ public class BuyerService implements IBuyerService {
     @Override
     public Mono<BuyerDto> updateGeneratedOtpByEmail(String email, String sentOtp) {
         log.info("Updating generated OTP for email: {}", email);
+        if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.updateGeneratedOtp(
                 email, sentOtp ,
                 "email"
@@ -164,6 +177,7 @@ public class BuyerService implements IBuyerService {
                     .zipWhen(user -> postgresqlProfileRepository.findByUserPublicId(user.publicId()))
                     .map(result -> toDto(result.getT1(), result.getT2()));
         }
+        if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.findBy(email , "email").map(buyerDbMapper::toDto);
     }
 
@@ -188,6 +202,7 @@ public class BuyerService implements IBuyerService {
                                         .failedAttempts(newFailedAttempts)
                                         .lockedUntil(newLockedUntil)
                                         .build());
+                                if (buyerRepository == null) return legacyPersistenceUnavailable();
                                 return buyerRepository.save(buyerDbMapper.toEntity(updated))
                                         .map(buyerDbMapper::toDto);
                             });
@@ -224,5 +239,13 @@ public class BuyerService implements IBuyerService {
 
     private static <T> T getIfAvailable(ObjectProvider<T> provider) {
         return provider == null ? null : provider.getIfAvailable();
+    }
+
+    private static <T> Mono<T> legacyPersistenceUnavailable() {
+        return Mono.error(new IllegalStateException("MongoDB persistence is disabled; use the PostgreSQL identity boundary"));
+    }
+
+    private static <T> Mono<T> canonicalOnboardingRequired() {
+        return Mono.error(new IllegalStateException("PostgreSQL identity onboarding must be used when the canonical boundary is enabled"));
     }
 }

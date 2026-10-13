@@ -8,6 +8,7 @@ import org.bson.types.Binary;
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
@@ -16,6 +17,8 @@ import java.util.Base64;
 @Repository
 @AllArgsConstructor
 @Slf4j
+@ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.cutover", name = "mongo-disabled",
+        havingValue = "false", matchIfMissing = true)
 public class SearchPieceRepository implements ISearchPieceRepository {
     private final ReactiveMongoTemplate reactiveMongoTemplate;
 

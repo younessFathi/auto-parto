@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -16,6 +17,8 @@ import java.util.List;
 @Repository
 @RequiredArgsConstructor
 @Slf4j
+@ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.cutover", name = "mongo-disabled",
+        havingValue = "false", matchIfMissing = true)
 public class FileRepository implements IFileRepository {
     private final ReactiveMongoTemplate reactiveMongoTemplate;
     @Override

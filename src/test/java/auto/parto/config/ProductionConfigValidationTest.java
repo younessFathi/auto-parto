@@ -43,4 +43,16 @@ class ProductionConfigValidationTest {
         ProductionConfigValidation validation = new ProductionConfigValidation(environment);
         assertThatCode(validation::afterPropertiesSet).doesNotThrowAnyException();
     }
+
+    @Test
+    void allowsProductionWithoutMongoWhenPostgresqlCutoverDisablesIt() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setActiveProfiles("prod");
+        environment.setProperty("jwt.secretKey", "jwt-secret");
+        environment.setProperty("resend.api-key", "resend");
+        environment.setProperty("spring.data.redis.password", "redis-secret");
+        environment.setProperty("auto.parto.persistence.postgresql.cutover.mongo-disabled", "true");
+
+        assertThatCode(new ProductionConfigValidation(environment)::afterPropertiesSet).doesNotThrowAnyException();
+    }
 }

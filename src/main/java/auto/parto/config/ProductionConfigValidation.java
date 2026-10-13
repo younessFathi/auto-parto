@@ -27,7 +27,9 @@ public class ProductionConfigValidation implements InitializingBean {
         List<String> missingProperties = new ArrayList<>();
         validateRequiredProperty("jwt.secretKey", missingProperties);
         validateRequiredProperty("resend.api-key", missingProperties);
-        validateRequiredProperty("spring.data.mongodb.uri", missingProperties);
+        if (!environment.getProperty("auto.parto.persistence.postgresql.cutover.mongo-disabled", Boolean.class, false)) {
+            validateRequiredProperty("spring.data.mongodb.uri", missingProperties);
+        }
         validateRequiredProperty("spring.data.redis.password", missingProperties);
 
         if (!missingProperties.isEmpty()) {

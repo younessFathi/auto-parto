@@ -32,6 +32,8 @@ import java.util.UUID;
 public class ImageController {
     @Value("${auto.parto.images.uploads}")
     private String uploadsDirectory;
+    @Value("${auto.parto.persistence.postgresql.files.enabled:false}")
+    private boolean postgresqlFilesEnabled;
     private final IFileManagerService fileManagerService;
     private final FileRepository fileRepository;
     private final FileStorage fileStorage;
@@ -105,6 +107,10 @@ public class ImageController {
 
     @GetMapping("/{folderName}")
     public Flux<Resource> listImages(@PathVariable String folderName , @RequestParam(required = false) FileRequestFlag flag) {
+        if (postgresqlFilesEnabled) {
+            return Flux.error(new IllegalStateException(
+                    "Legacy folder image access is disabled; use /images/files/{fileId}"));
+        }
         // Validate the folder name
         log.info("Validating folder name {} " , folderName);
         if (!isValidFolderName(folderName)) {

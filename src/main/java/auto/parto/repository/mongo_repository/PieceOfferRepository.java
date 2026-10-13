@@ -8,6 +8,7 @@ import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
@@ -15,6 +16,8 @@ import java.util.List;
 
 @Repository
 @AllArgsConstructor
+@ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.cutover", name = "mongo-disabled",
+        havingValue = "false", matchIfMissing = true)
 public class PieceOfferRepository implements IPieceOfferRepository {
     private ReactiveMongoTemplate reactiveMongoTemplate;
 

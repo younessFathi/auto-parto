@@ -32,9 +32,9 @@ public class PieceService implements IPieceService {
     }
 
     @Autowired
-    public PieceService(IPieceRepository pieceRepository, PieceDbMapper pieceDbMapper,
+    public PieceService(ObjectProvider<IPieceRepository> pieceRepositoryProvider, PieceDbMapper pieceDbMapper,
                         ObjectProvider<PartRequestRepository> partRequestRepositoryProvider) {
-        this(pieceRepository, pieceDbMapper, partRequestRepositoryProvider.getIfAvailable());
+        this(pieceRepositoryProvider.getIfAvailable(), pieceDbMapper, partRequestRepositoryProvider.getIfAvailable());
     }
 
     public PieceService(IPieceRepository pieceRepository, PieceDbMapper pieceDbMapper,
@@ -50,6 +50,7 @@ public class PieceService implements IPieceService {
         if (partRequestRepository != null && publicId != null) {
             return partRequestRepository.findByPublicId(publicId).hasElement();
         }
+        if (pieceRepository == null) return legacyPersistenceUnavailable();
         return pieceRepository.checkIfPieceById(id);
     }
 
@@ -65,6 +66,7 @@ public class PieceService implements IPieceService {
                             valueOf(pieceDto.getCondition()), valueOf(pieceDto.getCategory()))
                     .map(this::toDto);
         }
+        if (pieceRepository == null) return legacyPersistenceUnavailable();
         return pieceRepository.save(pieceDbMapper.toEntity(pieceDto)).map(pieceDbMapper::toDto);
     }
 
@@ -82,6 +84,7 @@ public class PieceService implements IPieceService {
             // request after validating that it cannot introduce legacy IDs.
             return partRequestRepository.findByPublicId(requestPublicId).map(this::toDto);
         }
+        if (pieceRepository == null) return legacyPersistenceUnavailable();
         return pieceRepository.update(pieceDto.getId() , pieceDto.getImagesId()).map(pieceDbMapper::toDto);
     }
 
@@ -103,6 +106,7 @@ public class PieceService implements IPieceService {
                         return response;
                     });
         }
+        if (pieceRepository == null) return legacyPersistenceUnavailable();
         return pieceRepository.getAllPieces(id , page , size)
                               .map(pieceDbMapper::toDto)
                               .collectList()
@@ -124,6 +128,7 @@ public class PieceService implements IPieceService {
         if (partRequestRepository != null && publicId != null) {
             return partRequestRepository.findByPublicId(publicId).map(this::toDto);
         }
+        if (pieceRepository == null) return legacyPersistenceUnavailable();
         return pieceRepository.findById(pieceId).map(pieceDbMapper::toDto);
     }
 
@@ -179,5 +184,9 @@ public class PieceService implements IPieceService {
                 throw new IllegalArgumentException("canonical image IDs must be UUIDs", exception);
             }
         });
+    }
+
+    private static <T> Mono<T> legacyPersistenceUnavailable() {
+        return Mono.error(new IllegalStateException("MongoDB persistence is disabled; use the PostgreSQL marketplace boundary"));
     }
 }

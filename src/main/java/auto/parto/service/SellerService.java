@@ -44,11 +44,11 @@ public class SellerService implements ISellerService {
     }
 
     @Autowired
-    public SellerService(ISellerRepository sellerRepository, SellerDbMapper sellerDbMapper,
+    public SellerService(ObjectProvider<ISellerRepository> sellerProvider, SellerDbMapper sellerDbMapper,
                          ObjectProvider<AppUserRepository> userProvider,
                          ObjectProvider<SellerProfileRepository> profileProvider,
                          ObjectProvider<WalletRepository> walletProvider) {
-        this(sellerRepository, sellerDbMapper,
+        this(getIfAvailable(sellerProvider), sellerDbMapper,
                 getIfAvailable(userProvider), getIfAvailable(profileProvider), getIfAvailable(walletProvider));
     }
 
@@ -64,12 +64,16 @@ public class SellerService implements ISellerService {
 
     @Override
     public Mono<SellerDto> create(SellerDto sellerDto) {
+        if (postgresqlIdentityReady()) return canonicalOnboardingRequired();
+        if (sellerRepository == null) return legacyPersistenceUnavailable();
         return sellerRepository.save(sellerDbMapper.toEntity(sellerDto))
                                 .map(sellerDbMapper::toDto);
     }
 
     @Override
     public Mono<SellerDto> create(OtpRequestDto request, String otp) {
+        if (postgresqlIdentityReady()) return canonicalOnboardingRequired();
+        if (sellerRepository == null) return legacyPersistenceUnavailable();
         return sellerRepository.save(sellerDbMapper.toEntity(request, otp)).map(sellerDbMapper::toDto);
     }
 
@@ -83,6 +87,7 @@ public class SellerService implements ISellerService {
                     .zipWhen(user -> postgresqlProfileRepository.findByUserPublicId(user.publicId()))
                     .map(result -> toDto(result.getT1(), result.getT2(), null));
         }
+        if (sellerRepository == null) return legacyPersistenceUnavailable();
         return sellerRepository.getSellerById(id)
                                 .map(sellerDbMapper::toDto);
     }
@@ -112,6 +117,7 @@ public class SellerService implements ISellerService {
                     .onErrorMap(error -> error instanceof IllegalStateException
                             ? new InsufficientBalanceException("Insufficient balance") : error);
         }
+        if (sellerRepository == null) return legacyPersistenceUnavailable();
         return sellerRepository.addFunds(id, amount)
                 .switchIfEmpty(Mono.error(new InsufficientBalanceException("Insufficient balance")))
                 .map(sellerDbMapper::toDto);
@@ -125,6 +131,7 @@ public class SellerService implements ISellerService {
                     .zipWhen(user -> postgresqlProfileRepository.findByUserPublicId(publicId))
                     .map(result -> toDto(result.getT1(), result.getT2(), null));
         }
+        if (sellerRepository == null) return legacyPersistenceUnavailable();
         return sellerRepository.getSellerById(id)
                 .flatMap(seller -> {
                     seller.setIsActive(false); // Assuming there is an 'active' field in Seller entity
@@ -140,12 +147,14 @@ public class SellerService implements ISellerService {
                     .filter(user -> "SELLER".equals(user.role()) && "ACTIVE".equals(user.status()))
                     .hasElement();
         }
+        if (sellerRepository == null) return legacyPersistenceUnavailable();
         return sellerRepository.exists(email, "email");
     }
 
     @Override
     public Mono<SellerDto> updateGeneratedOtpByEmail(String email, String sentOtp) {
         log.info("Updating generated OTP for email: {}", email);
+        if (sellerRepository == null) return legacyPersistenceUnavailable();
         return sellerRepository.updateGeneratedOtp(
                             email,
                             sentOtp,
@@ -160,12 +169,15 @@ public class SellerService implements ISellerService {
                     .zipWhen(profile -> postgresqlUserRepository.findByPublicId(profile.userPublicId()))
                     .map(result -> toDto(result.getT2(), result.getT1(), null));
         }
+        if (sellerRepository == null) return legacyPersistenceUnavailable();
         return sellerRepository.findBy(email, "email").map(sellerDbMapper::toDto);
     }
 
     @Override
     public Mono<SellerDto> activateUser(SellerDto sellerDto) {
         log.info("Activate seller with id {}" , sellerDto.getId());
+        if (postgresqlIdentityReady() && parseUuid(sellerDto.getId()) == null) return canonicalOnboardingRequired();
+        if (sellerRepository == null) return legacyPersistenceUnavailable();
         sellerDto.setIsActive(true);
         return sellerRepository.save(sellerDbMapper.toEntity(sellerDto)).map(sellerDbMapper::toDto);
     }
@@ -175,6 +187,7 @@ public class SellerService implements ISellerService {
             return postgresqlUserRepository.findPublicIdsByRole("SELLER", 1000)
                     .map(UUID::toString).collectList();
         }
+        if (sellerRepository == null) return legacyPersistenceUnavailable();
         return sellerRepository.findMatchingSellers();
     }
 
@@ -271,5 +284,13 @@ public class SellerService implements ISellerService {
 
     private static <T> T getIfAvailable(ObjectProvider<T> provider) {
         return provider == null ? null : provider.getIfAvailable();
+    }
+
+    private static <T> Mono<T> legacyPersistenceUnavailable() {
+        return Mono.error(new IllegalStateException("MongoDB persistence is disabled; use the PostgreSQL identity boundary"));
+    }
+
+    private static <T> Mono<T> canonicalOnboardingRequired() {
+        return Mono.error(new IllegalStateException("PostgreSQL identity onboarding must be used when the canonical boundary is enabled"));
     }
 }
