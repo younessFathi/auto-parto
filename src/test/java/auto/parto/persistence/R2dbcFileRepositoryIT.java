@@ -58,8 +58,9 @@ class R2dbcFileRepositoryIT {
     @Test
     void rejectsFileWhenTargetIsNotOwned() {
         UUID owner = UUID.randomUUID();
+        UUID actualOwner = UUID.randomUUID();
         UUID request = UUID.randomUUID();
-        StepVerifier.create(insertRequest(UUID.randomUUID(), request)
+        StepVerifier.create(insertRequest(actualOwner, request)
                         .then(repository.createForRequest(owner, request, "objects/b", "photo.jpg", "image/jpeg", 12, null)))
                 .verifyComplete();
     }

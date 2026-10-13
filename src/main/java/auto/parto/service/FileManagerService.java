@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.buffer.DataBufferUtils;
+import org.springframework.core.io.buffer.DataBufferLimitException;
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -28,7 +29,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.Locale;
 import java.util.UUID;
 
 import static org.apache.commons.io.FilenameUtils.getExtension;
@@ -41,32 +42,44 @@ public class FileManagerService implements IFileManagerService {
     private IFileService fileService;
     private final FileRepository postgresqlFileRepository;
     private final FileStorage fileStorage;
+    private final long maxUploadBytes;
 
     public FileManagerService(@Value("${auto.parto.images.uploads}") String uploadsDirectory , IFileService fileService) {
-        this(uploadsDirectory, fileService, null, new LocalFileStorage(uploadsDirectory, "test"));
+        this(uploadsDirectory, fileService, null, new LocalFileStorage(uploadsDirectory, "test"), 10 * 1024 * 1024L);
     }
 
     public FileManagerService(@Value("${auto.parto.images.uploads}") String uploadsDirectory,
                               IFileService fileService, FileRepository postgresqlFileRepository) {
         this(uploadsDirectory, fileService, postgresqlFileRepository,
-                new LocalFileStorage(uploadsDirectory, "test"));
+                new LocalFileStorage(uploadsDirectory, "test"), 10 * 1024 * 1024L);
     }
 
     public FileManagerService(String uploadsDirectory, IFileService fileService,
                               FileRepository postgresqlFileRepository, FileStorage fileStorage) {
+        this(uploadsDirectory, fileService, postgresqlFileRepository, fileStorage, 10 * 1024 * 1024L);
+    }
+
+    public FileManagerService(String uploadsDirectory, IFileService fileService,
+                              FileRepository postgresqlFileRepository, FileStorage fileStorage,
+                              long maxUploadBytes) {
+        if (maxUploadBytes < 1 || maxUploadBytes > Integer.MAX_VALUE - 1) {
+            throw new IllegalArgumentException("max upload bytes must be between 1 and 2147483646");
+        }
         this.uploadsDirectory = uploadsDirectory;
         this.fileService = fileService;
         this.postgresqlFileRepository = postgresqlFileRepository;
         this.fileStorage = fileStorage;
+        this.maxUploadBytes = maxUploadBytes;
     }
 
     @Autowired
     public FileManagerService(@Value("${auto.parto.images.uploads}") String uploadsDirectory,
                               IFileService fileService,
                               ObjectProvider<FileRepository> postgresqlFileRepositoryProvider,
-                              ObjectProvider<FileStorage> fileStorageProvider) {
+                              ObjectProvider<FileStorage> fileStorageProvider,
+                              @Value("${auto.parto.storage.max-upload-bytes:10485760}") long maxUploadBytes) {
         this(uploadsDirectory, fileService, postgresqlFileRepositoryProvider.getIfAvailable(),
-                fileStorageProvider.getIfAvailable());
+                fileStorageProvider.getIfAvailable(), maxUploadBytes);
     }
 
     @Override
@@ -146,23 +159,41 @@ public class FileManagerService implements IFileManagerService {
         if (image == null || image.filename() == null || image.filename().isBlank()) {
             return Mono.error(new FileUploadException(Constants.FileUpload.INVALID_FILE_TYPE_ONLY_IMAGE_FILES_ARE_ALLOWED));
         }
-        Path rootLocation = Paths.get(uploadsDirectory, folderName);
-        createUploadDirectory(rootLocation);
         String fileExtension = getExtension(image.filename());
         if (!isAllowedExtension(fileExtension)) {
             return Mono.error(new FileUploadException(Constants.FileUpload.INVALID_FILE_TYPE_ONLY_IMAGE_FILES_ARE_ALLOWED));
         }
+        String declaredContentType = contentType(image);
         String generatedFileName = UUID.randomUUID() + "." + fileExtension;
+        Path rootLocation = Paths.get(uploadsDirectory, folderName);
         Path destinationFile = rootLocation.resolve(generatedFileName).normalize();
-        AtomicLong byteSize = new AtomicLong();
-        MessageDigest digest = sha256();
-        return DataBufferUtils.write(image.content().doOnNext(buffer -> {
-                    byteSize.addAndGet(buffer.readableByteCount());
-                    digest.update(buffer.asByteBuffer().asReadOnlyBuffer());
-                }), destinationFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
-                .doOnTerminate(() -> log.info("{} : {}", Constants.FileUpload.FILE_SAVED_TO_DISK, destinationFile))
-                .then(Mono.fromSupplier(() -> new StoredImage(generatedFileName, destinationFile, byteSize.get(),
-                        HexFormat.of().formatHex(digest.digest()))));
+        return DataBufferUtils.join(image.content(), Math.toIntExact(maxUploadBytes))
+                .onErrorMap(DataBufferLimitException.class, error -> new FileUploadException(
+                        "Image exceeds the configured upload size limit", error))
+                .flatMap(buffer -> {
+                    byte[] bytes = new byte[buffer.readableByteCount()];
+                    try {
+                        buffer.read(bytes);
+                    } finally {
+                        DataBufferUtils.release(buffer);
+                    }
+                    try {
+                        validateImage(image.filename(), declaredContentType, bytes);
+                    } catch (FileUploadException error) {
+                        return Mono.error(error);
+                    }
+                    return Mono.fromCallable(() -> {
+                                createUploadDirectory(rootLocation);
+                                Files.write(destinationFile, bytes, StandardOpenOption.CREATE,
+                                        StandardOpenOption.TRUNCATE_EXISTING);
+                                MessageDigest digest = sha256();
+                                return new StoredImage(generatedFileName, destinationFile, bytes.length,
+                                        HexFormat.of().formatHex(digest.digest(bytes)));
+                            })
+                            .subscribeOn(Schedulers.boundedElastic())
+                            .doOnSuccess(ignored -> log.info("{} : {}", Constants.FileUpload.FILE_SAVED_TO_DISK,
+                                    destinationFile));
+                });
     }
 
     private static Mono<Void> deleteStagedFile(Path destinationFile) {
@@ -201,6 +232,40 @@ public class FileManagerService implements IFileManagerService {
 
     private boolean isAllowedExtension(String fileExtension) {
         return  Constants.FileUpload.ALLOWED_EXTENSIONS.contains(fileExtension.toLowerCase());
+    }
+
+    private void validateImage(String filename, String contentType, byte[] bytes) {
+        String extension = getExtension(filename).toLowerCase(Locale.ROOT);
+        String normalizedType = contentType.toLowerCase(Locale.ROOT);
+        String expectedType = switch (extension) {
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "png" -> "image/png";
+            case "gif" -> "image/gif";
+            case "bmp" -> "image/bmp";
+            default -> "";
+        };
+        if (!expectedType.equals(normalizedType) || !hasImageSignature(normalizedType, bytes)) {
+            throw new FileUploadException(Constants.FileUpload.INVALID_FILE_TYPE_ONLY_IMAGE_FILES_ARE_ALLOWED);
+        }
+    }
+
+    private boolean hasImageSignature(String contentType, byte[] bytes) {
+        return switch (contentType) {
+            case "image/jpeg" -> bytes.length >= 3 && (bytes[0] & 0xff) == 0xff
+                    && (bytes[1] & 0xff) == 0xd8 && (bytes[2] & 0xff) == 0xff;
+            case "image/png" -> startsWith(bytes, new byte[]{(byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a});
+            case "image/gif" -> startsWith(bytes, "GIF87a".getBytes()) || startsWith(bytes, "GIF89a".getBytes());
+            case "image/bmp" -> startsWith(bytes, new byte[]{0x42, 0x4d});
+            default -> false;
+        };
+    }
+
+    private static boolean startsWith(byte[] value, byte[] prefix) {
+        if (value.length < prefix.length) return false;
+        for (int index = 0; index < prefix.length; index++) {
+            if (value[index] != prefix[index]) return false;
+        }
+        return true;
     }
 
 }

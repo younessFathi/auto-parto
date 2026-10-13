@@ -82,6 +82,7 @@ auto:
       uploads: ../uploads
     storage:
       provider: ${APP_FILE_STORAGE_PROVIDER:local}
+      max-upload-bytes: ${APP_FILE_STORAGE_MAX_UPLOAD_BYTES:10485760}
       local:
         root: ${APP_FILE_STORAGE_LOCAL_ROOT:${auto.parto.images.uploads}}
       s3:

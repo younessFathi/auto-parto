@@ -29,28 +29,38 @@ public final class StorageReconciliationService {
     }
 
     public Mono<StorageReconciliationReport> reconcile() {
-        return fileRepository.findActive(maxFiles)
-                .concatMap(record -> fileStorage.exists(record.objectKey())
-                        .map(exists -> new CheckedFile(record, exists)))
-                .collectList()
-                .map(this::report);
+        return fileRepository.countActive().flatMap(activeCount -> {
+            if (activeCount > maxFiles) {
+                return Mono.just(new StorageReconciliationReport(0, List.of(), true));
+            }
+            return fileRepository.findActive(maxFiles)
+                    .concatMap(record -> fileStorage.exists(record.objectKey())
+                            .map(exists -> new CheckedFile(record, exists)))
+                    .collectList()
+                    .map(checked -> report(checked, false));
+        });
     }
 
-    private StorageReconciliationReport report(List<CheckedFile> checkedFiles) {
+    private StorageReconciliationReport report(List<CheckedFile> checkedFiles, boolean capacityExceeded) {
         List<String> missing = checkedFiles.stream().filter(file -> !file.exists())
                 .map(file -> file.record().objectKey()).toList();
-        return new StorageReconciliationReport(checkedFiles.size(), missing);
+        return new StorageReconciliationReport(checkedFiles.size(), missing, capacityExceeded);
     }
 
     private record CheckedFile(FileRecord record, boolean exists) {}
 
-    public record StorageReconciliationReport(int checkedFiles, List<String> missingObjectKeys) {
+    public record StorageReconciliationReport(int checkedFiles, List<String> missingObjectKeys,
+                                              boolean capacityExceeded) {
+        public StorageReconciliationReport(int checkedFiles, List<String> missingObjectKeys) {
+            this(checkedFiles, missingObjectKeys, false);
+        }
+
         public StorageReconciliationReport {
             missingObjectKeys = List.copyOf(missingObjectKeys);
         }
 
         public boolean healthy() {
-            return missingObjectKeys.isEmpty();
+            return !capacityExceeded && missingObjectKeys.isEmpty();
         }
     }
 }

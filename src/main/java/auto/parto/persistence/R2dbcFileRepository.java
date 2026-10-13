@@ -63,8 +63,13 @@ public class R2dbcFileRepository implements FileRepository {
         requireText(contentType, "contentType");
         if (byteSize < 0) throw new IllegalArgumentException("byteSize cannot be negative");
         String targetColumn = requestPublicId != null ? "part_request_id" : "part_listing_id";
-        String targetSql = requestPublicId != null ? "SELECT id FROM part_requests WHERE public_id = :targetPublicId"
-                : "SELECT id FROM part_listings WHERE public_id = :targetPublicId";
+        String targetSql = requestPublicId != null
+                ? "SELECT request.id FROM part_requests request "
+                + "JOIN app_users request_owner ON request_owner.id = request.buyer_user_id "
+                + "WHERE request.public_id = :targetPublicId AND request_owner.public_id = :ownerPublicId"
+                : "SELECT listing.id FROM part_listings listing "
+                + "JOIN app_users listing_owner ON listing_owner.id = listing.seller_user_id "
+                + "WHERE listing.public_id = :targetPublicId AND listing_owner.public_id = :ownerPublicId";
         String sql = """
                 INSERT INTO files (public_id, owner_user_id, %s, object_key, original_filename,
                                    content_type, byte_size, checksum)
@@ -120,6 +125,12 @@ public class R2dbcFileRepository implements FileRepository {
         return databaseClient.sql(SELECT
                         + " WHERE file.status = 'ACTIVE' ORDER BY file.created_at, file.public_id LIMIT :limit")
                 .bind("limit", limit).map((row, metadata) -> map(row)).all();
+    }
+
+    @Override
+    public Mono<Long> countActive() {
+        return databaseClient.sql("SELECT COUNT(*) AS active_count FROM files WHERE status = 'ACTIVE'")
+                .map((row, metadata) -> row.get("active_count", Long.class)).one();
     }
 
     private Flux<FileRecord> findForTarget(UUID targetPublicId, String targetColumn, int limit) {

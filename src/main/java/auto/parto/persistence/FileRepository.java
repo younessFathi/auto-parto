@@ -22,6 +22,8 @@ public interface FileRepository {
 
     Flux<FileRecord> findActive(int limit);
 
+    Mono<Long> countActive();
+
     Mono<FileRecord> findByPublicId(UUID filePublicId);
 
     Mono<FileRecord> activate(UUID filePublicId, UUID ownerUserPublicId);

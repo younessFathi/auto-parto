@@ -45,9 +45,9 @@ class FileManagerServicePostgresqlTest {
 
         assertThat(result).isEqualTo(file.toString());
         Path stored = Files.list(uploadRoot.resolve(request.toString())).findFirst().orElseThrow();
-        assertThat(Files.readString(stored)).isEqualTo("hello");
+        assertThat(Files.readAllBytes(stored)).startsWith((byte) 0xff, (byte) 0xd8, (byte) 0xff);
         verify(repository).createForRequest(eq(owner), eq(request), contains(request.toString()), eq("photo.jpg"),
-                eq("image/jpeg"), eq(5L), anyString());
+                eq("image/jpeg"), eq(8L), anyString());
     }
 
     @Test
@@ -94,7 +94,37 @@ class FileManagerServicePostgresqlTest {
         assertThat(service.saveForListing(imagePart("photo.jpg", "image/jpeg", "hello"), owner, listing).block())
                 .isEqualTo(file.toString());
         verify(repository).createForListing(eq(owner), eq(listing), contains(listing.toString()), eq("photo.jpg"),
-                eq("image/jpeg"), eq(5L), anyString());
+                eq("image/jpeg"), eq(8L), anyString());
+    }
+
+    @Test
+    void rejectsContentThatDoesNotMatchAnAllowedImageSignature() {
+        FileManagerService service = new FileManagerService(uploadRoot.toString(), mock(IFileService.class),
+                mock(FileRepository.class), new auto.parto.storage.LocalFileStorage(uploadRoot.toString(), "test"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service
+                .saveForRequest(imagePart("photo.jpg", "image/jpeg", "plain text"), UUID.randomUUID(), UUID.randomUUID())
+                .block()).isInstanceOf(auto.parto.exception.FileUploadException.class);
+    }
+
+    @Test
+    void rejectsMismatchedDeclaredContentType() {
+        FileManagerService service = new FileManagerService(uploadRoot.toString(), mock(IFileService.class),
+                mock(FileRepository.class), new auto.parto.storage.LocalFileStorage(uploadRoot.toString(), "test"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service
+                .saveForRequest(imagePart("photo.jpg", "image/png", "hello"), UUID.randomUUID(), UUID.randomUUID())
+                .block()).isInstanceOf(auto.parto.exception.FileUploadException.class);
+    }
+
+    @Test
+    void rejectsImagesLargerThanConfiguredLimit() {
+        FileManagerService service = new FileManagerService(uploadRoot.toString(), mock(IFileService.class),
+                mock(FileRepository.class), new auto.parto.storage.LocalFileStorage(uploadRoot.toString(), "test"), 3);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service
+                .saveForRequest(imagePart("photo.jpg", "image/jpeg", "hello"), UUID.randomUUID(), UUID.randomUUID())
+                .block()).isInstanceOf(auto.parto.exception.FileUploadException.class);
     }
 
     private static FilePart imagePart(String filename, String contentType, String content) {
@@ -103,7 +133,10 @@ class FileManagerServicePostgresqlTest {
         headers.setContentType(MediaType.parseMediaType(contentType));
         when(image.filename()).thenReturn(filename);
         when(image.headers()).thenReturn(headers);
-        when(image.content()).thenReturn(Flux.just(new DefaultDataBufferFactory().wrap(content.getBytes())));
+        byte[] bytes = content.equals("hello")
+                ? new byte[]{(byte) 0xff, (byte) 0xd8, (byte) 0xff, 'h', 'e', 'l', 'l', 'o'}
+                : content.getBytes();
+        when(image.content()).thenReturn(Flux.just(new DefaultDataBufferFactory().wrap(bytes)));
         return image;
     }
 }

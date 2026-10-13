@@ -41,6 +41,18 @@ class StorageReconciliationServiceTest {
                 .verifyComplete();
     }
 
+    @Test
+    void failsClosedWhenActiveFileCountExceedsBoundedScan() {
+        FileRepository repository = new StubRepository(List.of(record("objects/missing-later")), 2);
+        FileStorage storage = new StubStorage();
+
+        StepVerifier.create(new StorageReconciliationService(repository, storage, 1).reconcile())
+                .assertNext(report -> {
+                    assertThat(report.capacityExceeded()).isTrue();
+                    assertThat(report.healthy()).isFalse();
+                }).verifyComplete();
+    }
+
     private static FileRecord record(String key) {
         return new FileRecord(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null, key,
                 "file.jpg", "image/jpeg", 1, "sha", "ACTIVE", Instant.now(), Instant.now());
@@ -48,8 +60,14 @@ class StorageReconciliationServiceTest {
 
     private static final class StubRepository implements FileRepository {
         private final List<FileRecord> records;
-        private StubRepository(List<FileRecord> records) { this.records = records; }
+        private final long activeCount;
+        private StubRepository(List<FileRecord> records) { this(records, records.size()); }
+        private StubRepository(List<FileRecord> records, long activeCount) {
+            this.records = records;
+            this.activeCount = activeCount;
+        }
         public Flux<FileRecord> findActive(int limit) { return Flux.fromIterable(records).take(limit); }
+        public Mono<Long> countActive() { return Mono.just(activeCount); }
         public Mono<FileRecord> createForRequest(UUID a, UUID b, String c, String d, String e, long f, String g) { return Mono.empty(); }
         public Mono<FileRecord> createForListing(UUID a, UUID b, String c, String d, String e, long f, String g) { return Mono.empty(); }
         public Flux<FileRecord> findByRequest(UUID a, int b) { return Flux.empty(); }
