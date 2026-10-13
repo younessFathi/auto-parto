@@ -118,6 +118,14 @@ class PostgresqlMigrationResourceTest {
         assertThat(sql).contains("ROLLBACK;");
     }
 
+    @Test
+    void reconciliationShellWrapperDelegatesToTransactionalSqlScript() throws IOException {
+        String script = Files.readString(Path.of("deploy/postgres/operations/reconcile-development-fixtures.sh"));
+
+        assertThat(script).contains("psql --set ON_ERROR_STOP=1 --file");
+        assertThat(script).contains("reconcile-development-fixtures.sql");
+    }
+
     private String readResource(String resource) throws IOException {
         try (InputStream stream = getClass().getResourceAsStream(resource)) {
             assertThat(stream).isNotNull();
