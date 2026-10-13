@@ -41,7 +41,9 @@ class PostgresqlOfferServiceTest {
     void actorFilterHidesOffersOwnedByAnotherUser() {
         when(repository.findByPublicId(offer)).thenReturn(Mono.just(record));
 
-        assertThat(service.findForActor(offer, UUID.randomUUID()).block()).isNull();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service
+                        .findForActor(offer, UUID.randomUUID()).block())
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
     }
 
     @Test
