@@ -14,6 +14,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.test.StepVerifier;
 
 import java.util.UUID;
+import java.util.List;
 
 import static io.r2dbc.spi.ConnectionFactoryOptions.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -60,6 +61,18 @@ class R2dbcFileRepositoryIT {
         UUID request = UUID.randomUUID();
         StepVerifier.create(insertRequest(UUID.randomUUID(), request)
                         .then(repository.createForRequest(owner, request, "objects/b", "photo.jpg", "image/jpeg", 12, null)))
+                .verifyComplete();
+    }
+
+    @Test
+    void findsCanonicalFileBatchWithBoundedQuery() {
+        UUID owner = UUID.randomUUID();
+        UUID request = UUID.randomUUID();
+        StepVerifier.create(insertRequest(owner, request)
+                        .then(repository.createForRequest(owner, request, "objects/batch", "photo.jpg",
+                                "image/jpeg", 12, "sha"))
+                        .flatMapMany(file -> repository.findByPublicIds(List.of(file.publicId()), 10)))
+                .assertNext(file -> assertThat(file.objectKey()).isEqualTo("objects/batch"))
                 .verifyComplete();
     }
 

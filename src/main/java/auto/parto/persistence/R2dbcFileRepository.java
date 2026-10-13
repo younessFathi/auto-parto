@@ -10,6 +10,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.List;
 
 @Repository
 @ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.files", name = "enabled", havingValue = "true")
@@ -92,6 +93,25 @@ public final class R2dbcFileRepository implements FileRepository {
     @Override
     public Flux<FileRecord> findByListing(UUID listingPublicId, int limit) {
         return findForTarget(listingPublicId, "listing.public_id", limit);
+    }
+
+    @Override
+    public Flux<FileRecord> findByPublicIds(List<UUID> filePublicIds, int limit) {
+        if (filePublicIds == null || filePublicIds.isEmpty() || filePublicIds.size() > 100) {
+            throw new IllegalArgumentException("filePublicIds must contain between 1 and 100 IDs");
+        }
+        requireLimit(limit);
+        String placeholders = java.util.stream.IntStream.range(0, filePublicIds.size())
+                .mapToObj(index -> ":filePublicId" + index)
+                .collect(java.util.stream.Collectors.joining(", "));
+        DatabaseClient.GenericExecuteSpec query = databaseClient.sql(SELECT +
+                " WHERE file.public_id IN (" + placeholders + ") AND file.status <> 'TOMBSTONED' " +
+                "ORDER BY file.created_at LIMIT :limit");
+        for (int index = 0; index < filePublicIds.size(); index++) {
+            requirePublicId(filePublicIds.get(index), "filePublicIds");
+            query = query.bind("filePublicId" + index, filePublicIds.get(index));
+        }
+        return query.bind("limit", limit).map((row, metadata) -> map(row)).all();
     }
 
     private Flux<FileRecord> findForTarget(UUID targetPublicId, String targetColumn, int limit) {

@@ -60,8 +60,22 @@ public class FileService implements IFileService {
 
     @Override
     public Flux<FileDto> findAllByIds(List<String> imagesId) {
+        List<UUID> publicIds = parsePublicIds(imagesId);
+        if (postgresqlFileRepository != null && publicIds.size() == imagesId.size() && !publicIds.isEmpty()) {
+            return postgresqlFileRepository.findByPublicIds(publicIds, 100)
+                    .map(this::toDto);
+        }
         return fileRepository.findAllByIds(imagesId)
                 .map(fileDbMapper::toDto);
+    }
+
+    private static List<UUID> parsePublicIds(List<String> values) {
+        if (values == null || values.isEmpty() || values.size() > 100) return List.of();
+        try {
+            return values.stream().map(UUID::fromString).toList();
+        } catch (IllegalArgumentException exception) {
+            return List.of();
+        }
     }
 
     private FileDto toDto(FileRecord record) {

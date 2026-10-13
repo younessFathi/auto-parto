@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,5 +53,22 @@ class FileServicePostgresqlRoutingTest {
         assertThat(result).isSameAs(dto);
         verify(mongoRepository).getFilesByPieceId("piece-1");
         verifyNoInteractions(postgresqlRepository);
+    }
+
+    @Test
+    void canonicalFileBatchReadsBoundedPostgresqlMetadata() {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        when(postgresqlRepository.findByPublicIds(List.of(first, second), 100)).thenReturn(Flux.just(
+                new FileRecord(first, UUID.randomUUID(), UUID.randomUUID(), null, "objects/one.jpg",
+                        "one.jpg", "image/jpeg", 1L, "one", "ACTIVE", Instant.now(), Instant.now()),
+                new FileRecord(second, UUID.randomUUID(), UUID.randomUUID(), null, "objects/two.jpg",
+                        "two.jpg", "image/jpeg", 2L, "two", "ACTIVE", Instant.now(), Instant.now())));
+
+        List<FileDto> result = service.findAllByIds(List.of(first.toString(), second.toString())).collectList().block();
+
+        assertThat(result).hasSize(2).extracting(FileDto::getId).containsExactly(first.toString(), second.toString());
+        verify(postgresqlRepository).findByPublicIds(List.of(first, second), 100);
+        verifyNoInteractions(mongoRepository, mapper);
     }
 }

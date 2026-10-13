@@ -4,6 +4,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
+import java.util.List;
 
 public interface FileRepository {
 
@@ -16,6 +17,8 @@ public interface FileRepository {
     Flux<FileRecord> findByRequest(UUID requestPublicId, int limit);
 
     Flux<FileRecord> findByListing(UUID listingPublicId, int limit);
+
+    Flux<FileRecord> findByPublicIds(List<UUID> filePublicIds, int limit);
 
     Mono<FileRecord> findByPublicId(UUID filePublicId);
 
