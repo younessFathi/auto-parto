@@ -11,6 +11,8 @@ public interface AppUserRepository {
 
     Mono<AppUserRecord> findByEmail(String email);
 
+    Mono<AppUserRecord> findByProviderSubject(String provider, String providerSubject);
+
     Mono<AppUserRecord> create(AppUserRecord user);
 
     Flux<UUID> findPublicIdsByRole(String role, int limit);

@@ -84,6 +84,15 @@ class BuyerServicePostgresqlRoutingTest {
         verify(mongoRepository, never()).findBy(any(), any());
     }
 
+    @Test
+    void clerkSubjectLookupUsesPostgresqlIdentity() {
+        when(users.findByProviderSubject("clerk", "user_101"))
+                .thenReturn(Mono.just(user("ACTIVE", "BUYER")));
+
+        assertThat(service.checkIfBuyerExistClerkId("user_101").block()).isTrue();
+        verify(mongoRepository, never()).exists("user_101", "clerkId");
+    }
+
     private static AppUserRecord user(String status, String role) {
         Instant now = Instant.parse("2026-10-13T10:00:00Z");
         return new AppUserRecord(BUYER_ID, "OTP", null, "buyer@example.test", role,

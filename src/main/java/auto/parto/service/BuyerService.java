@@ -134,6 +134,11 @@ public class BuyerService implements IBuyerService {
 
     @Override
     public Mono<Boolean> checkIfBuyerExistClerkId(String userId) {
+        if (postgresqlIdentityReady()) {
+            return postgresqlUserRepository.findByProviderSubject("clerk", userId)
+                    .filter(user -> "BUYER".equals(user.role()) && "ACTIVE".equals(user.status()))
+                    .hasElement();
+        }
         if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.exists(userId, "clerkId");
     }

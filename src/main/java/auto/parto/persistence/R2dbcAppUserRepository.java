@@ -51,6 +51,22 @@ public final class R2dbcAppUserRepository implements AppUserRepository {
     }
 
     @Override
+    public Mono<AppUserRecord> findByProviderSubject(String provider, String providerSubject) {
+        if (provider == null || provider.isBlank()) {
+            return Mono.error(new IllegalArgumentException("provider is required"));
+        }
+        if (providerSubject == null || providerSubject.isBlank()) {
+            return Mono.error(new IllegalArgumentException("providerSubject is required"));
+        }
+        return databaseClient.sql("SELECT " + USER_COLUMNS
+                        + " FROM app_users WHERE provider = :provider AND provider_subject = :providerSubject")
+                .bind("provider", provider)
+                .bind("providerSubject", providerSubject)
+                .map((row, metadata) -> mapUser(row))
+                .one();
+    }
+
+    @Override
     public Mono<AppUserRecord> create(AppUserRecord user) {
         validateUser(user);
         DatabaseClient.GenericExecuteSpec insert = databaseClient.sql("""

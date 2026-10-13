@@ -88,6 +88,26 @@ class R2dbcAppUserRepositoryIT {
     }
 
     @Test
+    void findsUserByProviderSubjectAndReturnsEmptyForUnknownSubject() {
+        UUID publicId = UUID.randomUUID();
+        AppUserRecord requested = new AppUserRecord(
+                publicId, "clerk", "user_" + publicId, "clerk-" + publicId + "@example.test",
+                "BUYER", "ACTIVE", "v1", null, null);
+
+        StepVerifier.create(repository.create(requested)
+                        .then(repository.findByProviderSubject("clerk", requested.providerSubject())))
+                .assertNext(found -> {
+                    assertThat(found.publicId()).isEqualTo(publicId);
+                    assertThat(found.provider()).isEqualTo("clerk");
+                    assertThat(found.providerSubject()).isEqualTo(requested.providerSubject());
+                })
+                .verifyComplete();
+
+        StepVerifier.create(repository.findByProviderSubject("clerk", "unknown-" + publicId))
+                .verifyComplete();
+    }
+
+    @Test
     void createRollsBackWhenDatabaseRejectsInvalidRole() {
         UUID publicId = UUID.randomUUID();
         AppUserRecord invalid = new AppUserRecord(
