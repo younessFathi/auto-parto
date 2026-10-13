@@ -25,9 +25,9 @@ public class NotificationPreferencesService {
     }
 
     @Autowired
-    public NotificationPreferencesService(NotificationPreferencesRepository repository,
+    public NotificationPreferencesService(ObjectProvider<NotificationPreferencesRepository> repositoryProvider,
                                           ObjectProvider<auto.parto.persistence.NotificationPreferencesRepository> provider) {
-        this.repository = repository;
+        this.repository = repositoryProvider.getIfAvailable();
         this.postgresqlRepository = provider.getIfAvailable();
     }
 
@@ -131,11 +131,12 @@ public class NotificationPreferencesService {
             return postgresqlUser(userId).flatMap(postgresqlRepository::findByUserPublicId)
                     .map(this::fromRecord);
         }
-        Mono<NotificationPreferences> canonical = repository.findByUserId(userId);
+        Mono<NotificationPreferences> canonical = repository == null
+                ? Mono.empty() : repository.findByUserId(userId);
         if (legacyEmail == null || legacyEmail.equals(userId)) {
             return canonical;
         }
-        return canonical.switchIfEmpty(repository.findByUserId(legacyEmail)
+        return canonical.switchIfEmpty(repository == null ? Mono.empty() : repository.findByUserId(legacyEmail)
                 .flatMap(legacy -> {
                     legacy.setUserId(userId);
                     legacy.setUpdatedAt(LocalDateTime.now());
@@ -145,6 +146,9 @@ public class NotificationPreferencesService {
 
     private Mono<NotificationPreferences> saveCanonical(NotificationPreferences preferences, String userId) {
         if (postgresqlRepository == null) {
+            if (repository == null) {
+                return Mono.error(new IllegalStateException("No notification preferences persistence is configured"));
+            }
             return repository.save(preferences);
         }
         return postgresqlUser(userId)

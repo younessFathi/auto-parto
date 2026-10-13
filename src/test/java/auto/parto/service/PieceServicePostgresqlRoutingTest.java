@@ -74,6 +74,31 @@ class PieceServicePostgresqlRoutingTest {
         verify(postgresqlRepository, never()).findByPublicId(Mockito.any());
     }
 
+    @Test
+    void canonicalUpdateDoesNotWriteLegacyMongoImageRelationship() {
+        PieceDto request = PieceDto.builder()
+                .id(REQUEST_ID.toString())
+                .imagesId(List.of(UUID.randomUUID().toString()))
+                .build();
+        when(postgresqlRepository.findByPublicId(REQUEST_ID)).thenReturn(Mono.just(record("OPEN")));
+
+        PieceDto result = service.update(request).block();
+
+        assertThat(result.getId()).isEqualTo(REQUEST_ID.toString());
+        verify(mongoRepository, never()).update(Mockito.anyString(), Mockito.anyList());
+    }
+
+    @Test
+    void canonicalUpdateRejectsLegacyImageIdentifier() {
+        PieceDto request = PieceDto.builder().id(REQUEST_ID.toString()).imagesId(List.of("legacy-image")).build();
+
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> service.update(request).block()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("canonical image IDs");
+        verify(postgresqlRepository, never()).findByPublicId(Mockito.any());
+        verify(mongoRepository, never()).update(Mockito.anyString(), Mockito.anyList());
+    }
+
     private static PartRequestRecord record(String status) {
         Instant timestamp = Instant.parse("2026-10-13T10:00:00Z");
         return new PartRequestRecord(REQUEST_ID, BUYER_ID, "Brake pad", "Front axle",

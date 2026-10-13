@@ -74,6 +74,14 @@ public class PieceService implements IPieceService {
             @CacheEvict(value = "pieceDetails", key = "#pieceDto.id")
     })
     public Mono<PieceDto> update(PieceDto pieceDto) {
+        UUID requestPublicId = parseUuid(pieceDto.getId());
+        if (partRequestRepository != null && requestPublicId != null) {
+            validateCanonicalImageIds(pieceDto.getImagesId());
+            // Canonical image ownership is created by the PostgreSQL file upload
+            // transaction. The legacy update endpoint therefore only returns the
+            // request after validating that it cannot introduce legacy IDs.
+            return partRequestRepository.findByPublicId(requestPublicId).map(this::toDto);
+        }
         return pieceRepository.update(pieceDto.getId() , pieceDto.getImagesId()).map(pieceDbMapper::toDto);
     }
 
@@ -158,5 +166,18 @@ public class PieceService implements IPieceService {
         } catch (IllegalArgumentException ignored) {
             return null;
         }
+    }
+
+    private static void validateCanonicalImageIds(java.util.List<String> imageIds) {
+        if (imageIds == null || imageIds.size() > 100) {
+            throw new IllegalArgumentException("imagesId must contain between 0 and 100 canonical IDs");
+        }
+        imageIds.forEach(id -> {
+            try {
+                UUID.fromString(id);
+            } catch (RuntimeException exception) {
+                throw new IllegalArgumentException("canonical image IDs must be UUIDs", exception);
+            }
+        });
     }
 }
