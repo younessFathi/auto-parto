@@ -1,13 +1,19 @@
 package auto.parto.api;
 
+import auto.parto.persistence.FileRecord;
+import auto.parto.persistence.FileRepository;
 import auto.parto.security.CanonicalPrincipal;
 import auto.parto.service.iservice.IFileManagerService;
+import auto.parto.storage.FileStorage;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.http.codec.multipart.FilePart;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -51,6 +57,38 @@ class ImageControllerUploadTest {
 
         assertThat(result).isEqualTo("file-2");
         verify(service).saveForListing(image, owner, request);
+    }
+
+    @Test
+    void canonicalFileReadStreamsActiveObjectFromStorage() {
+        FileRepository repository = mock(FileRepository.class);
+        FileStorage storage = mock(FileStorage.class);
+        UUID fileId = UUID.randomUUID();
+        when(repository.findByPublicId(fileId)).thenReturn(Mono.just(new FileRecord(fileId, owner, request, null,
+                "requests/object.jpg", "object.jpg", "image/jpeg", 7, "checksum", "ACTIVE",
+                Instant.now(), Instant.now())));
+        when(storage.read("requests/object.jpg")).thenReturn(Flux.just(
+                new DefaultDataBufferFactory().wrap("payload".getBytes())));
+
+        var response = new ImageController(service, repository, storage).getFile(fileId).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        verify(storage).read("requests/object.jpg");
+    }
+
+    @Test
+    void canonicalFileReadReturnsNotFoundForMissingMetadata() {
+        FileRepository repository = mock(FileRepository.class);
+        FileStorage storage = mock(FileStorage.class);
+        UUID fileId = UUID.randomUUID();
+        when(repository.findByPublicId(fileId)).thenReturn(Mono.empty());
+
+        var response = new ImageController(service, repository, storage).getFile(fileId).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatusCode().value()).isEqualTo(404);
+        verifyNoInteractions(storage);
     }
 
     private static Authentication authentication(UUID owner, String role) {

@@ -79,6 +79,19 @@ class R2dbcFileRepositoryIT {
                 .verifyComplete();
     }
 
+    @Test
+    void activatesPendingFileOnceForItsOwner() {
+        UUID owner = UUID.randomUUID();
+        UUID request = UUID.randomUUID();
+        StepVerifier.create(insertRequest(owner, request)
+                        .then(repository.createForRequest(owner, request, "objects/active", "photo.jpg",
+                                "image/jpeg", 12, "sha"))
+                        .flatMapMany(file -> repository.activate(file.publicId(), owner)
+                                .concatWith(repository.activate(file.publicId(), owner))))
+                .assertNext(active -> assertThat(active.status()).isEqualTo("ACTIVE"))
+                .verifyComplete();
+    }
+
     private reactor.core.publisher.Mono<Void> insertRequest(UUID owner, UUID request) {
         return databaseClient.sql("INSERT INTO app_users (public_id, email, role, status) VALUES (:owner, :email, 'BUYER', 'ACTIVE')")
                 .bind("owner", owner).bind("email", "file-" + owner + "@example.test").fetch().rowsUpdated().then()

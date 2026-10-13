@@ -1,15 +1,20 @@
 package auto.parto.api;
 
 import auto.parto.enums.FileRequestFlag;
+import auto.parto.persistence.FileRecord;
+import auto.parto.persistence.FileRepository;
 import auto.parto.security.CanonicalPrincipal;
 import auto.parto.security.CanonicalSecurity;
 import auto.parto.service.iservice.IFileManagerService;
+import auto.parto.storage.FileStorage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.PathResource;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -28,18 +33,29 @@ public class ImageController {
     @Value("${auto.parto.images.uploads}")
     private String uploadsDirectory;
     private final IFileManagerService fileManagerService;
+    private final FileRepository fileRepository;
+    private final FileStorage fileStorage;
 
     public ImageController() {
-        this.fileManagerService = null;
+        this((IFileManagerService) null, (FileRepository) null, (FileStorage) null);
     }
 
     public ImageController(IFileManagerService fileManagerService) {
+        this(fileManagerService, null, null);
+    }
+
+    public ImageController(IFileManagerService fileManagerService, FileRepository fileRepository,
+                           FileStorage fileStorage) {
         this.fileManagerService = fileManagerService;
+        this.fileRepository = fileRepository;
+        this.fileStorage = fileStorage;
     }
 
     @org.springframework.beans.factory.annotation.Autowired
-    public ImageController(ObjectProvider<IFileManagerService> provider) {
-        this(provider.getIfAvailable());
+    public ImageController(ObjectProvider<IFileManagerService> provider,
+                           ObjectProvider<FileRepository> fileRepositoryProvider,
+                           ObjectProvider<FileStorage> fileStorageProvider) {
+        this(provider.getIfAvailable(), fileRepositoryProvider.getIfAvailable(), fileStorageProvider.getIfAvailable());
     }
 
     @PostMapping(value = "/requests/{requestId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -64,6 +80,27 @@ public class ImageController {
             return Mono.error(new IllegalStateException("File upload service is unavailable"));
         }
         return fileManagerService.saveForListing(image, ownerId, listingId);
+    }
+
+    @GetMapping("/files/{fileId}")
+    public Mono<ResponseEntity<Flux<DataBuffer>>> getFile(@PathVariable UUID fileId) {
+        if (fileRepository == null || fileStorage == null) {
+            return Mono.just(ResponseEntity.status(503).build());
+        }
+        return fileRepository.findByPublicId(fileId)
+                .filter(record -> "ACTIVE".equals(record.status()))
+                .map(this::toResponse)
+                .switchIfEmpty(Mono.just(ResponseEntity.notFound().build()));
+    }
+
+    private ResponseEntity<Flux<DataBuffer>> toResponse(FileRecord record) {
+        MediaType contentType;
+        try {
+            contentType = MediaType.parseMediaType(record.contentType());
+        } catch (IllegalArgumentException ignored) {
+            contentType = MediaType.APPLICATION_OCTET_STREAM;
+        }
+        return ResponseEntity.ok().contentType(contentType).body(fileStorage.read(record.objectKey()));
     }
 
     @GetMapping("/{folderName}")

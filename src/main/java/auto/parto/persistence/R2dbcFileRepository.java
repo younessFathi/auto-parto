@@ -103,6 +103,24 @@ public final class R2dbcFileRepository implements FileRepository {
     }
 
     @Override
+    public Mono<FileRecord> activate(UUID filePublicId, UUID ownerUserPublicId) {
+        requirePublicId(filePublicId, "filePublicId");
+        requirePublicId(ownerUserPublicId, "ownerUserPublicId");
+        return transactions.transactional(insertAudit(filePublicId, ownerUserPublicId)
+                .flatMap(auditId -> databaseClient.sql("""
+                                UPDATE files SET status = 'ACTIVE', last_audit_record_id = :auditId
+                                WHERE public_id = :filePublicId
+                                  AND owner_user_id = (SELECT id FROM app_users WHERE public_id = :ownerPublicId)
+                                  AND status = 'PENDING'
+                                RETURNING public_id
+                                """)
+                        .bind("auditId", auditId).bind("filePublicId", filePublicId)
+                        .bind("ownerPublicId", ownerUserPublicId)
+                        .map((row, metadata) -> row.get("public_id", UUID.class)).one())
+                .flatMap(this::findByPublicId));
+    }
+
+    @Override
     public Mono<Boolean> tombstone(UUID filePublicId, UUID ownerUserPublicId) {
         requirePublicId(filePublicId, "filePublicId");
         requirePublicId(ownerUserPublicId, "ownerUserPublicId");
@@ -130,7 +148,9 @@ public final class R2dbcFileRepository implements FileRepository {
                 .map((row, metadata) -> row.get("id", Long.class)).one();
     }
 
-    private Mono<FileRecord> findByPublicId(UUID publicId) {
+    @Override
+    public Mono<FileRecord> findByPublicId(UUID publicId) {
+        requirePublicId(publicId, "filePublicId");
         return databaseClient.sql(SELECT + " WHERE file.public_id = :publicId")
                 .bind("publicId", publicId).map((row, metadata) -> map(row)).one();
     }

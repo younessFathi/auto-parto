@@ -3,8 +3,11 @@ package auto.parto.service;
 import auto.parto.dto.FileDto;
 import auto.parto.exception.FileUploadException;
 import auto.parto.persistence.FileRepository;
+import auto.parto.persistence.FileRecord;
 import auto.parto.service.iservice.IFileManagerService;
 import auto.parto.service.iservice.IFileService;
+import auto.parto.storage.FileStorage;
+import auto.parto.storage.LocalFileStorage;
 import auto.parto.utils.Constants;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,23 +40,33 @@ public class FileManagerService implements IFileManagerService {
     private String uploadsDirectory;
     private IFileService fileService;
     private final FileRepository postgresqlFileRepository;
+    private final FileStorage fileStorage;
 
     public FileManagerService(@Value("${auto.parto.images.uploads}") String uploadsDirectory , IFileService fileService) {
-        this(uploadsDirectory, fileService, (FileRepository) null);
+        this(uploadsDirectory, fileService, null, new LocalFileStorage(uploadsDirectory, "test"));
     }
 
     public FileManagerService(@Value("${auto.parto.images.uploads}") String uploadsDirectory,
                               IFileService fileService, FileRepository postgresqlFileRepository) {
+        this(uploadsDirectory, fileService, postgresqlFileRepository,
+                new LocalFileStorage(uploadsDirectory, "test"));
+    }
+
+    public FileManagerService(String uploadsDirectory, IFileService fileService,
+                              FileRepository postgresqlFileRepository, FileStorage fileStorage) {
         this.uploadsDirectory = uploadsDirectory;
         this.fileService = fileService;
         this.postgresqlFileRepository = postgresqlFileRepository;
+        this.fileStorage = fileStorage;
     }
 
     @Autowired
     public FileManagerService(@Value("${auto.parto.images.uploads}") String uploadsDirectory,
                               IFileService fileService,
-                              ObjectProvider<FileRepository> postgresqlFileRepositoryProvider) {
-        this(uploadsDirectory, fileService, postgresqlFileRepositoryProvider.getIfAvailable());
+                              ObjectProvider<FileRepository> postgresqlFileRepositoryProvider,
+                              ObjectProvider<FileStorage> fileStorageProvider) {
+        this(uploadsDirectory, fileService, postgresqlFileRepositoryProvider.getIfAvailable(),
+                fileStorageProvider.getIfAvailable());
     }
 
     @Override
@@ -93,18 +106,40 @@ public class FileManagerService implements IFileManagerService {
         if (ownerUserPublicId == null || targetPublicId == null) {
             return Mono.error(new IllegalArgumentException("owner and target IDs are required"));
         }
-        return writeImage(image, targetPublicId.toString())
-                .flatMap(stored -> (requestTarget
-                                ? postgresqlFileRepository.createForRequest(ownerUserPublicId, targetPublicId,
-                                targetPublicId + "/" + stored.generatedFilename(), image.filename(),
-                                contentType(image), stored.byteSize(), stored.checksum())
-                                : postgresqlFileRepository.createForListing(ownerUserPublicId, targetPublicId,
-                                targetPublicId + "/" + stored.generatedFilename(), image.filename(),
-                                contentType(image), stored.byteSize(), stored.checksum()))
-                        .switchIfEmpty(Mono.error(new IllegalArgumentException("target is not owned by the authenticated user")))
-                        .map(record -> record.publicId().toString())
-                        .onErrorResume(error -> deleteStagedFile(stored.destinationFile())
-                                .then(Mono.error(error))));
+        if (fileStorage == null) {
+            return Mono.error(new IllegalStateException("File storage is not enabled"));
+        }
+        return writeStagedImage(image)
+                .flatMap(staged -> {
+                    String objectKey = targetPublicId + "/" + staged.generatedFilename();
+                    Mono<FileRecord> metadata = requestTarget
+                            ? postgresqlFileRepository.createForRequest(ownerUserPublicId, targetPublicId,
+                            objectKey, image.filename(), contentType(image), staged.byteSize(), staged.checksum())
+                            : postgresqlFileRepository.createForListing(ownerUserPublicId, targetPublicId,
+                            objectKey, image.filename(), contentType(image), staged.byteSize(), staged.checksum());
+                    return metadata
+                            .switchIfEmpty(Mono.error(new IllegalArgumentException("target is not owned by the authenticated user")))
+                            .flatMap(record -> fileStorage.put(objectKey, staged.destinationFile(), contentType(image),
+                                            staged.byteSize(), staged.checksum())
+                                    .then(postgresqlFileRepository.activate(record.publicId(), ownerUserPublicId))
+                                    .switchIfEmpty(Mono.error(new IllegalStateException("file activation failed")))
+                                    .map(recordAfterActivation -> recordAfterActivation.publicId().toString())
+                                    .delayUntil(ignored -> deleteStagedFile(staged.destinationFile()))
+                                    .onErrorResume(error -> fileStorage.delete(objectKey)
+                                            .onErrorResume(cleanupError -> Mono.empty())
+                                            .then(postgresqlFileRepository.tombstone(record.publicId(), ownerUserPublicId)
+                                                    .onErrorResume(cleanupError -> Mono.empty()))
+                                            .then(deleteStagedFile(staged.destinationFile()))
+                                            .then(Mono.error(error))))
+                            .onErrorResume(error -> fileStorage.delete(objectKey)
+                                    .onErrorResume(cleanupError -> Mono.empty())
+                                    .then(deleteStagedFile(staged.destinationFile()))
+                                    .then(Mono.error(error)));
+                });
+    }
+
+    private Mono<StoredImage> writeStagedImage(FilePart image) {
+        return writeImage(image, ".staging/" + UUID.randomUUID());
     }
 
     private Mono<StoredImage> writeImage(FilePart image, String folderName) {

@@ -35,6 +35,9 @@ class FileManagerServicePostgresqlTest {
                 anyString(), anyLong(), anyString()))
                 .thenReturn(reactor.core.publisher.Mono.just(new FileRecord(file, owner, request, null,
                         "object", "photo.jpg", "image/jpeg", 5, "checksum", "PENDING", Instant.now(), Instant.now())));
+        when(repository.activate(eq(file), eq(owner))).thenReturn(reactor.core.publisher.Mono.just(
+                new FileRecord(file, owner, request, null, "object", "photo.jpg", "image/jpeg", 5,
+                        "checksum", "ACTIVE", Instant.now(), Instant.now())));
 
         FileManagerService service = new FileManagerService(uploadRoot.toString(), mock(IFileService.class), repository);
 
@@ -83,6 +86,9 @@ class FileManagerServicePostgresqlTest {
         when(repository.createForListing(any(), any(), anyString(), anyString(), anyString(), anyLong(), anyString()))
                 .thenReturn(reactor.core.publisher.Mono.just(new FileRecord(file, owner, null, listing,
                         "object", "photo.jpg", "image/jpeg", 5, "checksum", "PENDING", Instant.now(), Instant.now())));
+        when(repository.activate(eq(file), eq(owner))).thenReturn(reactor.core.publisher.Mono.just(
+                new FileRecord(file, owner, null, listing, "object", "photo.jpg", "image/jpeg", 5,
+                        "checksum", "ACTIVE", Instant.now(), Instant.now())));
         FileManagerService service = new FileManagerService(uploadRoot.toString(), mock(IFileService.class), repository);
 
         assertThat(service.saveForListing(imagePart("photo.jpg", "image/jpeg", "hello"), owner, listing).block())

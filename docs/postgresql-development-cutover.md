@@ -8,6 +8,12 @@ The first marketplace persistence boundaries are introduced behind `APP_POSTGRES
 
 No local-data importer is selected for this development cutover. Local development data should be recreated using PostgreSQL-backed fixtures after the corresponding repositories are migrated. Transient OTP, device-token, notification, and outbox state is not imported by default.
 
+## Object storage boundary
+
+PostgreSQL stores file metadata and object keys only. PostgreSQL-backed uploads create metadata in `PENDING`, write the object through the provider-neutral `FileStorage` port, and then activate the metadata transactionally; failed writes clean up the object and tombstone metadata when it was created. Canonical file reads resolve metadata by public UUID and stream bytes through the same port.
+
+Use `APP_FILE_STORAGE_PROVIDER=local` for local development and tests. The local adapter uses bounded filesystem work and is rejected when the `prod` Spring profile is active. Production must set `APP_FILE_STORAGE_PROVIDER=s3` and provide `APP_FILE_STORAGE_S3_ENDPOINT`, `APP_FILE_STORAGE_S3_BUCKET`, `APP_FILE_STORAGE_S3_REGION`, `APP_FILE_STORAGE_S3_ACCESS_KEY`, and `APP_FILE_STORAGE_S3_SECRET_KEY`; the adapter uses the asynchronous S3 client and path-style addressing for SeaweedFS's S3 gateway. Keep credentials in the approved secrets system.
+
 ## Local PostgreSQL schema migration
 
 Supply these variables through a local ignored `.env` file or the shell. Use distinct generated values; never commit them:
@@ -86,7 +92,7 @@ This opt-in check starts the Compose PostgreSQL service, runs the real `flyway/f
 
 ## Cutover gates still open
 
-- Migrate the remaining production business repositories behind their existing service boundaries and add PostgreSQL fixtures only as each boundary becomes authoritative. Identity/profile, marketplace request persistence, seller identity reads and wallet mutations, device-token, notification records, notification attempts, file metadata, notification preferences, authenticated request/listing image uploads, and offer API ownership wiring are implemented as boundaries; image relationship writes, object-storage replacement, and final PostgreSQL-only traffic verification still require cutover work.
+- Migrate the remaining production business repositories behind their existing service boundaries and add PostgreSQL fixtures only as each boundary becomes authoritative. Identity/profile, marketplace request persistence, seller identity reads and wallet mutations, device-token, notification records, notification attempts, file metadata, notification preferences, authenticated request/listing image uploads, canonical object reads, and offer API ownership wiring are implemented as boundaries; legacy image relationship writes, storage reconciliation, and final PostgreSQL-only traffic verification still require cutover work.
 - Decide explicitly whether any local data needs import. If so, implement an idempotent importer and identity, wallet, marketplace, and file reconciliation before enabling cutover.
 - Block cutover when any reconciliation error remains.
 - Verify PostgreSQL-backed application behavior and rollback compatibility before removing MongoDB dependencies or changing the primary database.

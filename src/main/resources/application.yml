@@ -76,6 +76,17 @@ auto:
           enabled: ${APP_POSTGRES_NOTIFICATION_PREFERENCES_ENABLED:false}
     images:
       uploads: ../uploads
+    storage:
+      provider: ${APP_FILE_STORAGE_PROVIDER:local}
+      local:
+        root: ${APP_FILE_STORAGE_LOCAL_ROOT:${auto.parto.images.uploads}}
+      s3:
+        endpoint: ${APP_FILE_STORAGE_S3_ENDPOINT:http://localhost:8333}
+        region: ${APP_FILE_STORAGE_S3_REGION:us-east-1}
+        bucket: ${APP_FILE_STORAGE_S3_BUCKET:auto-parto-files}
+        access-key: ${APP_FILE_STORAGE_S3_ACCESS_KEY:}
+        secret-key: ${APP_FILE_STORAGE_S3_SECRET_KEY:}
+        max-concurrency: ${APP_FILE_STORAGE_S3_MAX_CONCURRENCY:32}
     executor:
       retry:
         pool-size: 3

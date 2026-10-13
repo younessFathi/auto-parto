@@ -17,5 +17,9 @@ public interface FileRepository {
 
     Flux<FileRecord> findByListing(UUID listingPublicId, int limit);
 
+    Mono<FileRecord> findByPublicId(UUID filePublicId);
+
+    Mono<FileRecord> activate(UUID filePublicId, UUID ownerUserPublicId);
+
     Mono<Boolean> tombstone(UUID filePublicId, UUID ownerUserPublicId);
 }

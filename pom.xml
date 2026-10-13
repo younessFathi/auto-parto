@@ -47,6 +47,7 @@
 		<resend.version>4.11.0</resend.version>
 		<jjwt.version>0.12.6</jjwt.version>
 		<commons-io.version>2.16.1</commons-io.version>
+		<aws.sdk.version>2.30.11</aws.sdk.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -220,6 +221,16 @@
 			<groupId>commons-io</groupId>
 			<artifactId>commons-io</artifactId>
 			<version>${commons-io.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+			<version>${aws.sdk.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>netty-nio-client</artifactId>
+			<version>${aws.sdk.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
