@@ -3,6 +3,12 @@ package auto.parto.security;
 import auto.parto.config.BaseIntegrationTest;
 import auto.parto.model.NotificationPreferences;
 import auto.parto.repository.NotificationPreferencesRepository;
+import auto.parto.service.SellerService;
+import auto.parto.service.notification.BatchFcmResult;
+import auto.parto.service.notification.DeviceTokenService;
+import auto.parto.service.notification.FcmDeliveryResult;
+import auto.parto.service.notification.ResilientFcmService;
+import auto.parto.utils.SecurityHelper;
 import auto.parto.utils.JwtTokenGenerator;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.JwtBuilder;
@@ -11,20 +17,29 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Mono;
 
 import javax.crypto.SecretKey;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
 import java.util.Date;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 @AutoConfigureWebTestClient
 class SecurityAuthorizationIT extends BaseIntegrationTest {
@@ -37,10 +52,19 @@ class SecurityAuthorizationIT extends BaseIntegrationTest {
     private WebTestClient webTestClient;
 
     @Autowired
-    private JwtTokenGenerator jwtTokenGenerator;
-
-    @Autowired
     private NotificationPreferencesRepository preferencesRepository;
+
+    @MockitoBean
+    private ResilientFcmService fcmService;
+
+    @MockitoBean
+    private DeviceTokenService deviceTokenService;
+
+    @MockitoBean
+    private SellerService sellerService;
+
+    @MockitoBean
+    private SecurityHelper securityHelper;
 
     @DynamicPropertySource
     static void jwtProperties(DynamicPropertyRegistry registry) {
@@ -103,6 +127,46 @@ class SecurityAuthorizationIT extends BaseIntegrationTest {
     }
 
     @Test
+    void protectedRouteRejectsMissingCanonicalEmail() {
+        requestPreferences(signedToken(TEST_SIGNING_KEY, builder -> { },
+                Map.of("principal_id", "buyer-1", "roles", "ROLE_BUYER")))
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void protectedRouteRejectsBlankCanonicalEmail() {
+        requestPreferences(signedToken(TEST_SIGNING_KEY, builder -> { },
+                Map.of("principal_id", "buyer-1", "email", " ", "roles", "ROLE_BUYER")))
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void protectedRouteRejectsMissingCanonicalRoles() {
+        requestPreferences(signedToken(TEST_SIGNING_KEY, builder -> { },
+                Map.of("principal_id", "buyer-1", "email", "buyer@example.test")))
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void protectedRouteRejectsBlankCanonicalRoles() {
+        requestPreferences(signedToken(TEST_SIGNING_KEY, builder -> { },
+                Map.of("principal_id", "buyer-1", "email", "buyer@example.test", "roles", " ")))
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void protectedRouteRejectsNonCanonicalPrincipal() {
+        UsernamePasswordAuthenticationToken nonCanonical = new UsernamePasswordAuthenticationToken(
+                "legacy@example.test", null, List.of(new SimpleGrantedAuthority("ROLE_BUYER")));
+
+        webTestClient.mutateWith(SecurityMockServerConfigurers.mockAuthentication(nonCanonical))
+                .get()
+                .uri("/api/v1/notifications/preferences")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
     void protectedRouteRejectsUnsupportedRole() {
         String token = signedToken(TEST_SIGNING_KEY, builder -> { },
                 Map.of("principal_id", "buyer-1", "email", "buyer@example.test", "roles", "ROLE_OPERATOR"));
@@ -124,34 +188,99 @@ class SecurityAuthorizationIT extends BaseIntegrationTest {
     void fcmSendRequiresAdminRole() {
         assertForbiddenForFcmSend("BUYER");
         assertForbiddenForFcmSend("SELLER");
-        assertFcmRouteIsNotForbidden("ADMIN", "/api/v1/notifications/fcm/send", "POST");
+        when(securityHelper.validateAuthentication(any())).thenReturn(Mono.just(true));
+        when(fcmService.sendToUser(anyString(), any())).thenReturn(Mono.just(
+                FcmDeliveryResult.success("victim", "message-1")));
+        webTestClient.post()
+                .uri("/api/v1/notifications/fcm/send")
+                .header("Authorization", "Bearer " + canonicalToken("admin-1", "admin@example.test", "ADMIN"))
+                .bodyValue(Map.of("userId", "victim", "title", "test", "body", "test"))
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
     void fcmSearchNotificationRequiresBuyerRole() {
         assertForbiddenForFcmSearch("SELLER");
         assertForbiddenForFcmSearch("ADMIN");
+        when(securityHelper.validateBuyer(any())).thenReturn(Mono.just(true));
+        when(sellerService.findMatchingSellers()).thenReturn(Mono.just(java.util.List.of("seller-1")));
+        when(fcmService.sendToUsers(any(), any())).thenReturn(Mono.just(
+                BatchFcmResult.builder().totalUsers(1).successfulUsers(1).failedUsers(0).build()));
+        webTestClient.post()
+                .uri("/api/v1/notifications/fcm/notify/search")
+                .header("Authorization", "Bearer " + canonicalToken("buyer-1", "buyer@example.test", "BUYER"))
+                .bodyValue(Map.of("buyerId", "buyer-1", "partName", "brakes", "carMake", "Toyota",
+                        "buyerLocation", "Casablanca"))
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
     void fcmResponseNotificationRequiresAdminDispatchRole() {
         assertForbiddenForFcmResponse("BUYER");
         assertForbiddenForFcmResponse("SELLER");
-        assertFcmRouteIsNotForbidden("ADMIN", "/api/v1/notifications/fcm/notify/response", "POST");
+        when(securityHelper.validateAdmin(any())).thenReturn(Mono.just(true));
+        when(fcmService.sendToUser(anyString(), any())).thenReturn(Mono.just(
+                FcmDeliveryResult.success("buyer-1", "message-1")));
+        assertResponseRouteSucceeds("ADMIN");
     }
 
     @Test
     void fcmUrgentNotificationRequiresAdminRole() {
         assertForbiddenForFcmUrgent("BUYER");
         assertForbiddenForFcmUrgent("SELLER");
-        assertFcmRouteIsNotForbidden("ADMIN", "/api/v1/notifications/fcm/urgent", "POST");
+        when(securityHelper.validateAdmin(any())).thenReturn(Mono.just(true));
+        when(fcmService.sendToUsers(any(), any())).thenReturn(Mono.just(
+                BatchFcmResult.builder().totalUsers(1).successfulUsers(1).failedUsers(0).build()));
+        webTestClient.post()
+                .uri("/api/v1/notifications/fcm/urgent")
+                .header("Authorization", "Bearer " + canonicalToken("admin-1", "admin@example.test", "ADMIN"))
+                .bodyValue(Map.of("userIds", java.util.List.of("victim"), "title", "test", "message", "test"))
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
     void fcmHealthRequiresAdminRole() {
         assertForbiddenForFcmHealth("BUYER");
         assertForbiddenForFcmHealth("SELLER");
-        assertFcmRouteIsNotForbidden("ADMIN", "/api/v1/notifications/fcm/health", "GET");
+        when(securityHelper.validateAdmin(any())).thenReturn(Mono.just(true));
+        webTestClient.get()
+                .uri("/api/v1/notifications/fcm/health")
+                .header("Authorization", "Bearer " + canonicalToken("admin-1", "admin@example.test", "ADMIN"))
+                .exchange()
+                .expectStatus().isEqualTo(503);
+    }
+
+    @Test
+    void fcmRegistrationRequiresCanonicalOwner() {
+        when(deviceTokenService.registerToken(anyString(), any())).thenReturn(Mono.just(true));
+        webTestClient.post()
+                .uri("/api/v1/notifications/fcm/register")
+                .header("Authorization", "Bearer " + canonicalToken("buyer-1", "buyer@example.test", "BUYER"))
+                .bodyValue(Map.of("userId", "buyer-1", "deviceToken", "token-123456", "platform", "android"))
+                .exchange()
+                .expectStatus().isOk();
+
+        webTestClient.post()
+                .uri("/api/v1/notifications/fcm/register")
+                .header("Authorization", "Bearer " + canonicalToken("buyer-1", "buyer@example.test", "BUYER"))
+                .bodyValue(Map.of("userId", "other-buyer", "deviceToken", "token-123456", "platform", "android"))
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void fcmStatisticsAllowsOwnerAndAdminButRejectsOtherOwners() {
+        when(deviceTokenService.getActiveTokens(anyString())).thenReturn(Mono.just(java.util.List.of("token-123456789")));
+
+        requestFcmStats("buyer-1", "buyer-1", "BUYER")
+                .expectStatus().isOk();
+        requestFcmStats("buyer-1", "admin-1", "ADMIN")
+                .expectStatus().isOk();
+        requestFcmStats("buyer-1", "other-buyer", "BUYER")
+                .expectStatus().isForbidden();
     }
 
     @Test
@@ -235,27 +364,21 @@ class SecurityAuthorizationIT extends BaseIntegrationTest {
                 .expectStatus().isForbidden();
     }
 
-    private void assertFcmRouteIsNotForbidden(String role, String uri, String method) {
-        WebTestClient.RequestHeadersSpec<?> request;
-        if ("GET".equals(method)) {
-            request = webTestClient.get().uri(uri);
-        } else {
-            request = webTestClient.post().uri(uri)
-                    .bodyValue(notificationBody(uri));
-        }
-        request.header("Authorization", "Bearer " + canonicalToken("admin-1", "admin@example.test", role))
-                .exchange()
-                .expectStatus().value(status -> assertThat(status).isNotEqualTo(403));
+    private WebTestClient.ResponseSpec requestFcmStats(String userId, String principalId, String role) {
+        return webTestClient.get()
+                .uri("/api/v1/notifications/fcm/stats/{userId}", userId)
+                .header("Authorization", "Bearer " + canonicalToken(principalId, principalId + "@example.test", role))
+                .exchange();
     }
 
-    private Map<String, Object> notificationBody(String uri) {
-        if (uri.endsWith("/urgent")) {
-            return Map.of("userIds", Stream.of("victim").toList(), "title", "test", "message", "test");
-        }
-        if (uri.endsWith("/response")) {
-            return Map.of("buyerId", "buyer-1", "sellerId", "seller-1", "responseId", "response-1", "searchId", "search-1");
-        }
-        return Map.of("userId", "victim", "title", "test", "body", "test");
+    private void assertResponseRouteSucceeds(String role) {
+        webTestClient.post()
+                .uri("/api/v1/notifications/fcm/notify/response")
+                .header("Authorization", "Bearer " + canonicalToken("admin-1", "admin@example.test", role))
+                .bodyValue(Map.of("buyerId", "buyer-1", "sellerId", "seller-1", "responseId", "response-1", "searchId", "search-1",
+                        "sellerName", "Seller", "partName", "Brake pads"))
+                .exchange()
+                .expectStatus().isOk();
     }
 
     private String canonicalToken(String id, String email, String role) {
