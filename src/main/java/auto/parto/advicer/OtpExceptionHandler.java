@@ -5,6 +5,7 @@ import auto.parto.dto.ApiErrorResponse;
 import auto.parto.exception.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.support.WebExchangeBindException;
@@ -94,6 +95,12 @@ public class OtpExceptionHandler {
         HttpStatus safeStatus = status == null ? HttpStatus.INTERNAL_SERVER_ERROR : status;
         String message = safeStatus.is4xxClientError() ? ex.getReason() : "An unexpected error occurred";
         return buildErrorResponse(safeStatus, message, exchange, null);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccessDeniedException(AccessDeniedException ex,
+                                                                          ServerWebExchange exchange) {
+        return buildErrorResponse(HttpStatus.FORBIDDEN, "Access denied", exchange, null);
     }
 
     @ExceptionHandler(Exception.class)
