@@ -2,20 +2,34 @@ package auto.parto.service;
 
 import auto.parto.dto.NotificationPreferencesDto;
 import auto.parto.model.NotificationPreferences;
+import auto.parto.persistence.NotificationPreferencesRecord;
 import auto.parto.repository.NotificationPreferencesRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class NotificationPreferencesService {
 
     private final NotificationPreferencesRepository repository;
+    private final auto.parto.persistence.NotificationPreferencesRepository postgresqlRepository;
+
+    public NotificationPreferencesService(NotificationPreferencesRepository repository) {
+        this.repository = repository;
+        this.postgresqlRepository = null;
+    }
+
+    @Autowired
+    public NotificationPreferencesService(NotificationPreferencesRepository repository,
+                                          ObjectProvider<auto.parto.persistence.NotificationPreferencesRepository> provider) {
+        this.repository = repository;
+        this.postgresqlRepository = provider.getIfAvailable();
+    }
 
     public Mono<NotificationPreferencesDto> getPreferences(String userId) {
         return preferencesFor(userId, null)
@@ -51,7 +65,7 @@ public class NotificationPreferencesService {
                     existing.setOrderUpdateEnabled(dto.isOrderUpdateEnabled());
                     existing.setMarketingEnabled(dto.isMarketingEnabled());
                     existing.setUpdatedAt(LocalDateTime.now());
-                    return repository.save(existing);
+                    return saveCanonical(existing, userId);
                 })
                 .switchIfEmpty(Mono.defer(() -> {
                     NotificationPreferences preferences = NotificationPreferences.builder()
@@ -67,7 +81,7 @@ public class NotificationPreferencesService {
                             .createdAt(LocalDateTime.now())
                             .updatedAt(LocalDateTime.now())
                             .build();
-                    return repository.save(preferences);
+                    return saveCanonical(preferences, userId);
                 }))
                 .map(this::toDto);
     }
@@ -113,6 +127,10 @@ public class NotificationPreferencesService {
     }
 
     private Mono<NotificationPreferences> preferencesFor(String userId, String legacyEmail) {
+        if (postgresqlRepository != null) {
+            return postgresqlUser(userId).flatMap(postgresqlRepository::findByUserPublicId)
+                    .map(this::fromRecord);
+        }
         Mono<NotificationPreferences> canonical = repository.findByUserId(userId);
         if (legacyEmail == null || legacyEmail.equals(userId)) {
             return canonical;
@@ -123,6 +141,15 @@ public class NotificationPreferencesService {
                     legacy.setUpdatedAt(LocalDateTime.now());
                     return repository.save(legacy);
                 }));
+    }
+
+    private Mono<NotificationPreferences> saveCanonical(NotificationPreferences preferences, String userId) {
+        if (postgresqlRepository == null) {
+            return repository.save(preferences);
+        }
+        return postgresqlUser(userId)
+                .flatMap(owner -> postgresqlRepository.save(owner, toRecord(preferences)))
+                .map(this::fromRecord);
     }
 
     private boolean channelEnabled(NotificationPreferences prefs, String channel) {
@@ -171,5 +198,33 @@ public class NotificationPreferencesService {
                 .orderUpdateEnabled(true)
                 .marketingEnabled(false)
                 .build();
+    }
+
+    private Mono<java.util.UUID> postgresqlUser(String userId) {
+        try {
+            return Mono.just(java.util.UUID.fromString(userId));
+        } catch (IllegalArgumentException exception) {
+            return Mono.empty();
+        }
+    }
+
+    private NotificationPreferences fromRecord(NotificationPreferencesRecord record) {
+        return NotificationPreferences.builder().id(record.publicId().toString())
+                .userId(record.userPublicId().toString()).emailEnabled(record.emailEnabled())
+                .pushEnabled(record.pushEnabled()).smsEnabled(record.smsEnabled())
+                .newOfferEnabled(record.newOfferEnabled()).priceAlertEnabled(record.priceAlertEnabled())
+                .searchMatchEnabled(record.searchMatchEnabled()).orderUpdateEnabled(record.orderUpdateEnabled())
+                .marketingEnabled(record.marketingEnabled()).build();
+    }
+
+    private NotificationPreferencesRecord toRecord(NotificationPreferences preferences) {
+        java.util.UUID publicId = null;
+        if (preferences.getId() != null) {
+            try { publicId = java.util.UUID.fromString(preferences.getId()); } catch (IllegalArgumentException ignored) { }
+        }
+        return new NotificationPreferencesRecord(publicId, null, preferences.isEmailEnabled(),
+                preferences.isPushEnabled(), preferences.isSmsEnabled(), preferences.isNewOfferEnabled(),
+                preferences.isPriceAlertEnabled(), preferences.isSearchMatchEnabled(),
+                preferences.isOrderUpdateEnabled(), preferences.isMarketingEnabled(), null, null);
     }
 }

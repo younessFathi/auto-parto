@@ -70,6 +70,15 @@ class PostgresqlMigrationResourceTest {
     }
 
     @Test
+    void notificationPreferencesMigrationUsesCanonicalUserOwnership() throws IOException {
+        String sql = readResource("/db/migration/V4__create_notification_preferences.sql");
+
+        assertThat(sql).contains("CREATE TABLE notification_preferences");
+        assertThat(sql).contains("user_id BIGINT NOT NULL UNIQUE REFERENCES app_users (id)");
+        assertThat(sql).contains("email_enabled BOOLEAN NOT NULL DEFAULT TRUE");
+    }
+
+    @Test
     void auditDatabaseMigrationIsAppendOnlyAndIdempotentByEventId() throws IOException {
         String sql = readResource("/db/audit-migration/V1__create_audit_event_schema.sql");
 
@@ -83,7 +92,7 @@ class PostgresqlMigrationResourceTest {
     }
 
     @Test
-    void developmentIdentityFixturesAreTransactionalAndIdempotent() throws IOException {
+    void developmentFixturesAreTransactionalAndIdempotent() throws IOException {
         String sql = Files.readString(Path.of("deploy/postgres/fixtures/identity-fixtures.sql"));
 
         assertThat(sql).startsWith("BEGIN;");
@@ -95,8 +104,18 @@ class PostgresqlMigrationResourceTest {
         assertThat(sql).contains("RAISE EXCEPTION 'development buyer fixture conflicts");
         assertThat(sql).contains("RAISE EXCEPTION 'development seller fixture conflicts");
         assertThat(sql).doesNotContain("INSERT INTO otp_challenges");
-        assertThat(sql).doesNotContain("INSERT INTO wallets");
         assertThat(sql).doesNotContain("INSERT INTO files");
+        assertThat(sql).doesNotContain("INSERT INTO notifications");
+    }
+
+    @Test
+    void reconciliationGateFailsOnMissingOrMismatchedFixtures() throws IOException {
+        String sql = Files.readString(Path.of("deploy/postgres/operations/reconcile-development-fixtures.sql"));
+
+        assertThat(sql).startsWith("BEGIN;");
+        assertThat(sql).contains("development fixture reconciliation failed");
+        assertThat(sql).contains("wallet balance does not equal ledger sum");
+        assertThat(sql).contains("ROLLBACK;");
     }
 
     private String readResource(String resource) throws IOException {

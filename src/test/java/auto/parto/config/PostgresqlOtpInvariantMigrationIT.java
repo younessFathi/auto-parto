@@ -47,7 +47,7 @@ class PostgresqlOtpInvariantMigrationIT {
                 .locations("classpath:db/migration")
                 .load()
                 .migrate()
-                .migrationsExecuted).isEqualTo(1);
+                .migrationsExecuted).isEqualTo(2);
 
         try (Connection connection = POSTGRES.createConnection("")) {
             assertThat(activeChallengeCount(connection, userId)).isEqualTo(1);

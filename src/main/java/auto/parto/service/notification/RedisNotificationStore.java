@@ -311,6 +311,13 @@ public class RedisNotificationStore {
                 .then();
     }
 
+    public Mono<Void> markTokenInvalidByToken(String token) {
+        String ownerKey = "fcm:token:owner:" + token;
+        return redisTemplate.opsForValue().get(ownerKey)
+                .flatMap(userId -> markTokenInvalid(token, ownerKey, "fcm:user:tokens:" + userId))
+                .switchIfEmpty(redisTemplate.opsForValue().delete(ownerKey).then());
+    }
+
     /**
      * Get all active tokens for a user from Redis
      */

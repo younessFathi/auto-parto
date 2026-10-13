@@ -4,6 +4,8 @@
 
 This is an incremental development migration, not yet an application cutover. PostgreSQL currently hosts the versioned target schema, the AP-0002 identity/profile and audit-outbox adapters, and deterministic development fixtures for the migrated identity/profile boundary. The remaining business repositories still use reactive MongoDB. Do not remove MongoDB dependencies, import local MongoDB data, or direct all business traffic to PostgreSQL until the remaining repository, fixture, and reconciliation gates pass.
 
+The first marketplace persistence boundaries are introduced behind `APP_POSTGRES_MARKETPLACE_ENABLED`. They cover PostgreSQL part-request, part-listing, and offer reads and mutations with canonical public UUIDs, bounded owner pagination, target constraints, and optimistic version checks. `PieceService` routes canonical UUID request reads and creation through this boundary. Buyer identity checks and deactivation, seller identity reads/deactivation, and seller wallet mutations also route through PostgreSQL when their boundaries are enabled; wallet mutations require an `Idempotency-Key` and explicit currency. Image relationships and offer API ownership wiring remain gated by their service contracts. The device-token boundary is introduced behind `APP_POSTGRES_DEVICE_TOKENS_ENABLED`; PostgreSQL owns active token registration and invalidation while Redis remains the notification delivery projection. The notification record boundary is introduced behind `APP_POSTGRES_NOTIFICATIONS_ENABLED` for durable pending event records, recipient-scoped reads, and transactional pending-to-dispatched transitions. File service traffic remains on MongoDB because the current DTO does not carry the owner, target, object key, content type, size, and checksum required by the PostgreSQL file contract.
+
 No local-data importer is selected for this development cutover. Local development data should be recreated using PostgreSQL-backed fixtures after the corresponding repositories are migrated. Transient OTP, device-token, notification, and outbox state is not imported by default.
 
 ## Local PostgreSQL schema migration
@@ -41,7 +43,7 @@ After migration succeeds, run the development identity/profile fixtures:
 docker compose --profile postgres run --rm app-postgresql-fixtures
 ```
 
-The fixture service is structurally ordered after the Flyway service and connects with the restricted runtime role, not the bootstrap or migration role. It creates deterministic development buyer and seller identities plus their profiles. The script is transactional and idempotent: rerunning it does not duplicate users, profiles, or their audit records. If a deterministic fixture identity conflicts with existing data, the script exits nonzero and rolls back the run. It intentionally does not seed OTP challenges, marketplace records, wallets, files, notifications, or outbox state because those boundaries are either transient or not yet migrated from MongoDB.
+The fixture service is structurally ordered after the Flyway service and connects with the restricted runtime role, not the bootstrap or migration role. It creates deterministic development buyer and seller identities, profiles, marketplace records, a wallet/ledger pair, and one active device token. The script is transactional and idempotent: rerunning it does not duplicate users, profiles, marketplace records, wallet entries, or device tokens. If a deterministic fixture conflicts with existing data, the script exits nonzero and rolls back the run. It intentionally does not seed OTP challenges, files, notifications, or outbox state because those boundaries are either transient or their API/object-storage contracts are not yet migrated from MongoDB.
 
 For an existing PostgreSQL volume, an authorized operator must provision and verify the roles instead of relying on the init hook. Set the protected `PGHOST`, `PGDATABASE`, `PGUSER`, and `PGPASSWORD` connection variables together with the four `APP_POSTGRES_*` role variables, review the output, and run:
 
@@ -70,7 +72,7 @@ For any future PostgreSQL-backed application deployment:
 4. Roll out application code only after both steps pass.
 5. Enable the PostgreSQL runtime feature only for a build whose required repositories and health checks are PostgreSQL-ready.
 
-The current repository has no production deployment job, so the migration command is an operator gate rather than a CI/CD rollout dependency. Add it to the deployment pipeline together with AP-0003's fixtures/reconciliation gate before production cutover.
+The current repository has no production deployment job. When `APP_POSTGRES_CUTOVER_GATE=true` is set in a protected deployment pipeline, the `postgresql-migration-gate` job runs the restricted Flyway migration and the dependent `postgresql-reconciliation-gate` job applies fixtures with the runtime role and runs `deploy/postgres/operations/reconcile-development-fixtures.sh`. A failed migration, fixture conflict, or reconciliation mismatch prevents the package/deploy stages from proceeding. Application startup also refuses `APP_POSTGRES_CUTOVER_ENABLED=true` unless every API contract has been verified and `APP_POSTGRES_MONGO_DISABLED=true` explicitly confirms that MongoDB has been removed from the selected deployment.
 
 If migration fails, stop rollout and preserve the database and logs. Fix the migration or use a new forward migration. Application rollback is safe only when the prior application version remains compatible with the expanded schema. Prefer forward-fix for an applied migration; restore a verified backup only under the approved recovery procedure when data integrity requires it. Never downgrade destructively or delete development/production volumes to make a migration pass.
 
@@ -84,7 +86,9 @@ This opt-in check starts the Compose PostgreSQL service, runs the real `flyway/f
 
 ## Cutover gates still open
 
-- Migrate the remaining production business repositories behind their existing service boundaries and add PostgreSQL fixtures only as each boundary becomes authoritative. Identity/profile fixtures are implemented; marketplace, wallet, file, notification, and other remaining fixtures are still open.
+- Migrate the remaining production business repositories behind their existing service boundaries and add PostgreSQL fixtures only as each boundary becomes authoritative. Identity/profile, marketplace request persistence, seller identity reads and wallet mutations, device-token, notification records, notification attempts, file metadata, and notification preferences are implemented as boundaries; offer, file service, image relationships, and remaining API traffic still require contract-level cutover work.
 - Decide explicitly whether any local data needs import. If so, implement an idempotent importer and identity, wallet, marketplace, and file reconciliation before enabling cutover.
 - Block cutover when any reconciliation error remains.
 - Verify PostgreSQL-backed application behavior and rollback compatibility before removing MongoDB dependencies or changing the primary database.
+
+The reconciliation gate is intentionally fail-closed. It verifies deterministic identities, marketplace records, device tokens, and wallet totals against the immutable ledger inside a rollback-only transaction. It is a development cutover gate and must be extended with file/object-storage comparisons before file traffic is switched; the current fixture policy deliberately recreates no files because the application has no authenticated PostgreSQL file-upload boundary yet.

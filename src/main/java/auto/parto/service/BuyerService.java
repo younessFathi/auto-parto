@@ -4,27 +4,60 @@ import auto.parto.dto.BuyerDto;
 import auto.parto.dto.OtpRequestDto;
 import auto.parto.mapper.BuyerDbMapper;
 import auto.parto.mapper.SellerDbMapper;
+import auto.parto.persistence.AppUserRecord;
+import auto.parto.persistence.AppUserRepository;
+import auto.parto.persistence.BuyerProfileRecord;
+import auto.parto.persistence.BuyerProfileRepository;
 import auto.parto.repository.ISellerRepository;
 import auto.parto.repository.mongo_repository.BuyerRepository;
 import auto.parto.service.iservice.IBuyerService;
-import auto.parto.utils.JwtTokenGenerator;
-import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.UUID;
 
 @Component
-@AllArgsConstructor
 @Slf4j
 public class BuyerService implements IBuyerService {
     private final BuyerRepository buyerRepository;
     private final ISellerRepository sellerRepository;
     private final BuyerDbMapper buyerDbMapper;
     private final SellerDbMapper sellerDbMapper;
+    private final AppUserRepository postgresqlUserRepository;
+    private final BuyerProfileRepository postgresqlProfileRepository;
     private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final int LOCKOUT_MINUTES = 15;
+
+    public BuyerService(BuyerRepository buyerRepository, ISellerRepository sellerRepository,
+                        BuyerDbMapper buyerDbMapper, SellerDbMapper sellerDbMapper) {
+        this(buyerRepository, sellerRepository, buyerDbMapper, sellerDbMapper,
+                (AppUserRepository) null, (BuyerProfileRepository) null);
+    }
+
+    @Autowired
+    public BuyerService(BuyerRepository buyerRepository, ISellerRepository sellerRepository,
+                        BuyerDbMapper buyerDbMapper, SellerDbMapper sellerDbMapper,
+                        ObjectProvider<AppUserRepository> userProvider,
+                        ObjectProvider<BuyerProfileRepository> profileProvider) {
+        this(buyerRepository, sellerRepository, buyerDbMapper, sellerDbMapper,
+                getIfAvailable(userProvider), getIfAvailable(profileProvider));
+    }
+
+    public BuyerService(BuyerRepository buyerRepository, ISellerRepository sellerRepository,
+                        BuyerDbMapper buyerDbMapper, SellerDbMapper sellerDbMapper,
+                        AppUserRepository userRepository, BuyerProfileRepository profileRepository) {
+        this.buyerRepository = buyerRepository;
+        this.sellerRepository = sellerRepository;
+        this.buyerDbMapper = buyerDbMapper;
+        this.sellerDbMapper = sellerDbMapper;
+        this.postgresqlUserRepository = userRepository;
+        this.postgresqlProfileRepository = profileRepository;
+    }
 
     @Override
     public Mono<Boolean> checkIfBuyerExistUsingPhoneNumber(String phoneNumber) {
@@ -33,18 +66,36 @@ public class BuyerService implements IBuyerService {
 
     @Override
     public Mono<Boolean> checkIfBuyerExistUsingEmail(String email) {
+        if (postgresqlIdentityReady()) {
+            return postgresqlUserRepository.findByEmail(email)
+                    .filter(user -> "BUYER".equals(user.role()) && "ACTIVE".equals(user.status()))
+                    .hasElement();
+        }
         return buyerRepository.exists(email, "email");
     }
 
     @Override
     public Mono<Boolean> checkIfBuyerExistUsingId(String id) {
         log.info("Check if customer exist using id {} " , id);
+        UUID publicId = parseUuid(id);
+        if (postgresqlIdentityReady() && publicId != null) {
+            return postgresqlUserRepository.findByPublicId(publicId)
+                    .filter(user -> "BUYER".equals(user.role()) && "ACTIVE".equals(user.status()))
+                    .hasElement();
+        }
         return buyerRepository.existsById(id);
     }
 
     @Override
     public Mono<BuyerDto> deactivateBuyer(String id) {
         log.info("Deactivate customer by id : {} " , id);
+        UUID publicId = parseUuid(id);
+        if (postgresqlIdentityReady() && publicId != null) {
+            return postgresqlUserRepository.updateStatus(publicId, "INACTIVE")
+                    .filter(user -> "BUYER".equals(user.role()))
+                    .zipWhen(user -> postgresqlProfileRepository.findByUserPublicId(publicId))
+                    .map(result -> toDto(result.getT1(), result.getT2()));
+        }
         return buyerRepository.deactivateCustomer(id).map(buyerDbMapper::toDto);
     }
 
@@ -63,6 +114,13 @@ public class BuyerService implements IBuyerService {
     @Override
     public Mono<BuyerDto> activateUser(BuyerDto buyerDto) {
         log.info("Activate buyer with id {} " , buyerDto.getId());
+        UUID publicId = parseUuid(buyerDto.getId());
+        if (postgresqlIdentityReady() && publicId != null) {
+            return postgresqlUserRepository.updateStatus(publicId, "ACTIVE")
+                    .filter(user -> "BUYER".equals(user.role()))
+                    .zipWhen(user -> postgresqlProfileRepository.findByUserPublicId(publicId))
+                    .map(result -> toDto(result.getT1(), result.getT2()));
+        }
         buyerDto.setIsActive(true);
         return buyerRepository.save(buyerDbMapper.toEntity(buyerDto)).map(buyerDbMapper::toDto);
     }
@@ -100,6 +158,12 @@ public class BuyerService implements IBuyerService {
 
     @Override
     public Mono<BuyerDto> findBuyerByEmail(String email) {
+        if (postgresqlIdentityReady()) {
+            return postgresqlUserRepository.findByEmail(email)
+                    .filter(user -> "BUYER".equals(user.role()))
+                    .zipWhen(user -> postgresqlProfileRepository.findByUserPublicId(user.publicId()))
+                    .map(result -> toDto(result.getT1(), result.getT2()));
+        }
         return buyerRepository.findBy(email , "email").map(buyerDbMapper::toDto);
     }
 
@@ -128,5 +192,37 @@ public class BuyerService implements IBuyerService {
                                         .map(buyerDbMapper::toDto);
                             });
                 });
+    }
+
+    private boolean postgresqlIdentityReady() {
+        return postgresqlUserRepository != null && postgresqlProfileRepository != null;
+    }
+
+    private static UUID parseUuid(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private static BuyerDto toDto(AppUserRecord user, BuyerProfileRecord profile) {
+        return BuyerDto.builder()
+                .id(user.publicId().toString())
+                .firstName(profile.firstName())
+                .lastName(profile.lastName())
+                .email(user.email())
+                .phoneNumber(profile.phoneNumber())
+                .picture(profile.pictureUrl())
+                .isActive("ACTIVE".equals(user.status()))
+                .keyVersion(user.keyVersion())
+                .createAt(user.createdAt() == null ? null : LocalDateTime.ofInstant(user.createdAt(), ZoneOffset.UTC))
+                .updatedAt(user.updatedAt() == null ? null : LocalDateTime.ofInstant(user.updatedAt(), ZoneOffset.UTC))
+                .build();
+    }
+
+    private static <T> T getIfAvailable(ObjectProvider<T> provider) {
+        return provider == null ? null : provider.getIfAvailable();
     }
 }

@@ -1,6 +1,7 @@
 package auto.parto.api;
 
 import auto.parto.dto.SellerDto;
+import auto.parto.enums.Currency;
 import auto.parto.exception.EntityNotFoundException;
 import auto.parto.service.iservice.ISellerService;
 import auto.parto.security.CanonicalSecurity;
@@ -64,11 +65,21 @@ public class SellerController {
             @ApiResponse(responseCode = "404", description = "Seller not found",
                     content = @Content)
     })
-    @PostMapping("/{id}/wallet/add")
     public Mono<SellerDto> addFunds(@PathVariable String id, @RequestParam BigDecimal amount,
                                     Authentication authentication) {
+        return addFunds(id, amount, Currency.MAD, null, authentication);
+    }
+
+    @PostMapping("/{id}/wallet/add")
+    public Mono<SellerDto> addFunds(@PathVariable String id, @RequestParam BigDecimal amount,
+                                    @RequestParam(defaultValue = "MAD") Currency currency,
+                                    @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+                                    Authentication authentication) {
         CanonicalSecurity.requireOwner(authentication, id, "ROLE_SELLER");
-        return sellerService.addFunds(id, amount)
+        Mono<SellerDto> mutation = idempotencyKey == null
+                ? sellerService.addFunds(id, amount)
+                : sellerService.addFunds(id, amount, currency, idempotencyKey);
+        return mutation
                         .switchIfEmpty(Mono.error(new EntityNotFoundException("Seller not found")));
     }
 
@@ -80,11 +91,21 @@ public class SellerController {
             @ApiResponse(responseCode = "404", description = "Seller not found",
                     content = @Content)
     })
-    @PostMapping("/{id}/wallet/deduct")
     public Mono<SellerDto> deductFunds(@PathVariable String id, @RequestParam BigDecimal amount,
                                        Authentication authentication) {
+        return deductFunds(id, amount, Currency.MAD, null, authentication);
+    }
+
+    @PostMapping("/{id}/wallet/deduct")
+    public Mono<SellerDto> deductFunds(@PathVariable String id, @RequestParam BigDecimal amount,
+                                       @RequestParam(defaultValue = "MAD") Currency currency,
+                                       @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+                                       Authentication authentication) {
         CanonicalSecurity.requireOwner(authentication, id, "ROLE_SELLER");
-        return sellerService.addFunds(id, amount.negate())
+        Mono<SellerDto> mutation = idempotencyKey == null
+                ? sellerService.addFunds(id, amount.negate())
+                : sellerService.addFunds(id, amount.negate(), currency, idempotencyKey);
+        return mutation
                 .switchIfEmpty(Mono.error(new EntityNotFoundException("Seller not found")));
     }
 

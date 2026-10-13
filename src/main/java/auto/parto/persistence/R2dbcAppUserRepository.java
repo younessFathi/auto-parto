@@ -5,6 +5,7 @@ import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 
 import java.util.UUID;
 
@@ -69,6 +70,33 @@ public final class R2dbcAppUserRepository implements AppUserRepository {
         return transactionalOperator.transactional(insert
                 .map((row, metadata) -> mapUser(row))
                 .one());
+    }
+
+    @Override
+    public Flux<UUID> findPublicIdsByRole(String role, int limit) {
+        if (role == null || role.isBlank()) throw new IllegalArgumentException("role is required");
+        if (limit < 1 || limit > 1000) throw new IllegalArgumentException("limit must be between 1 and 1000");
+        return databaseClient.sql("""
+                        SELECT public_id FROM app_users
+                        WHERE role = :role AND status = 'ACTIVE'
+                        ORDER BY created_at, id
+                        LIMIT :limit
+                        """)
+                .bind("role", role).bind("limit", limit)
+                .map((row, metadata) -> row.get("public_id", UUID.class)).all();
+    }
+
+    @Override
+    public Mono<AppUserRecord> updateStatus(UUID publicId, String status) {
+        if (publicId == null) throw new IllegalArgumentException("publicId is required");
+        if (status == null || status.isBlank()) throw new IllegalArgumentException("status is required");
+        return transactionalOperator.transactional(databaseClient.sql("""
+                        UPDATE app_users SET status = :status
+                        WHERE public_id = :publicId
+                        RETURNING
+                        """ + USER_COLUMNS)
+                .bind("publicId", publicId).bind("status", status)
+                .map((row, metadata) -> mapUser(row)).one());
     }
 
     private static DatabaseClient.GenericExecuteSpec bindNullable(

@@ -19,15 +19,19 @@ $compose run --rm app-postgresql-migrate
 $compose run --rm --no-deps app-postgresql-fixtures
 $compose run --rm --no-deps app-postgresql-fixtures
 
+$compose run --rm --no-deps \
+    -v "$(pwd)/deploy/postgres/operations:/operations:ro" \
+    app-postgresql psql --set ON_ERROR_STOP=1 --file /operations/reconcile-development-fixtures.sql
+
 fixture_counts="$($compose exec -T \
     -e PGPASSWORD="$APP_POSTGRES_RUNTIME_PASSWORD" \
     app-postgresql psql \
     --username "${APP_POSTGRES_RUNTIME_USER:-auto_parto_runtime}" \
     --dbname "${APP_POSTGRES_DB:-auto_parto}" \
     --tuples-only --no-align \
-    --command "SELECT (SELECT count(*) FROM app_users WHERE key_version = 'dev-fixture-v1'), (SELECT count(*) FROM buyer_profiles WHERE public_id = '00000000-0000-4000-8000-000000000201'), (SELECT count(*) FROM seller_profiles WHERE public_id = '00000000-0000-4000-8000-000000000202')")"
+    --command "SELECT (SELECT count(*) FROM app_users WHERE key_version = 'dev-fixture-v1'), (SELECT count(*) FROM buyer_profiles WHERE public_id = '00000000-0000-4000-8000-000000000201'), (SELECT count(*) FROM seller_profiles WHERE public_id = '00000000-0000-4000-8000-000000000202'), (SELECT count(*) FROM files)")"
 
-if [ "$fixture_counts" != "2|1|1" ]; then
+if [ "$fixture_counts" != "2|1|1|0" ]; then
     echo "Expected idempotent PostgreSQL identity fixtures, got: $fixture_counts" >&2
     exit 1
 fi

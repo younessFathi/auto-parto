@@ -2,6 +2,7 @@ package auto.parto.service.iservice;
 
 import auto.parto.dto.OtpRequestDto;
 import auto.parto.dto.SellerDto;
+import auto.parto.enums.Currency;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -15,6 +16,7 @@ public interface ISellerService {
     Mono<SellerDto> create(@Valid OtpRequestDto request , String otp);
     Mono<SellerDto> getSellerById(String id);
     Mono<SellerDto> addFunds(String id, BigDecimal amount);
+    Mono<SellerDto> addFunds(String id, BigDecimal amount, Currency currency, String idempotencyKey);
     Mono<SellerDto> deactivate(String id);
     Mono<Boolean> checkIfSellerExistUsingEmail(@NotNull @NotBlank String phoneNumber);
     Mono<SellerDto> updateGeneratedOtpByEmail(@Email String email, String sentOtp);

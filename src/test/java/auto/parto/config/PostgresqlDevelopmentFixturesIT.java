@@ -44,6 +44,7 @@ class PostgresqlDevelopmentFixturesIT {
                     "/docker-entrypoint-initdb.d/01-create-application-roles.sql");
 
     private String fixtureSql;
+    private String reconciliationSql;
 
     @BeforeAll
     void migrateWithRestrictedMigrationRole() throws Exception {
@@ -53,6 +54,7 @@ class PostgresqlDevelopmentFixturesIT {
                 .load()
                 .migrate();
         fixtureSql = Files.readString(Path.of("deploy/postgres/fixtures/identity-fixtures.sql"));
+        reconciliationSql = Files.readString(Path.of("deploy/postgres/operations/reconcile-development-fixtures.sql"));
     }
 
     @Test
@@ -61,6 +63,7 @@ class PostgresqlDevelopmentFixturesIT {
                 POSTGRES.getJdbcUrl(), RUNTIME_USER, RUNTIME_PASSWORD)) {
             executeFixture(connection);
             executeFixture(connection);
+            executeReconciliation(connection);
 
             try (Statement statement = connection.createStatement();
                  ResultSet resultSet = statement.executeQuery("""
@@ -69,7 +72,22 @@ class PostgresqlDevelopmentFixturesIT {
                              (SELECT count(*) FROM buyer_profiles
                                  WHERE public_id = '00000000-0000-4000-8000-000000000201') AS buyers,
                              (SELECT count(*) FROM seller_profiles
-                                 WHERE public_id = '00000000-0000-4000-8000-000000000202') AS sellers,
+                                WHERE public_id = '00000000-0000-4000-8000-000000000202') AS sellers,
+                             (SELECT count(*) FROM part_requests
+                                WHERE public_id = '00000000-0000-4000-8000-000000000301') AS part_requests,
+                             (SELECT count(*) FROM part_listings
+                                WHERE public_id = '00000000-0000-4000-8000-000000000302') AS part_listings,
+                             (SELECT count(*) FROM offers
+                                WHERE public_id = '00000000-0000-4000-8000-000000000303') AS offers,
+                             (SELECT count(*) FROM wallets
+                                WHERE public_id = '00000000-0000-4000-8000-000000000304') AS wallets,
+                             (SELECT count(*) FROM wallet_ledger
+                                WHERE public_id = '00000000-0000-4000-8000-000000000305') AS wallet_ledger,
+                             (SELECT count(*) FROM device_tokens
+                                WHERE public_id = '00000000-0000-4000-8000-000000000306') AS device_tokens,
+                             (SELECT count(*) FROM notification_preferences
+                                WHERE public_id = '00000000-0000-4000-8000-000000000307') AS notification_preferences,
+                             (SELECT count(*) FROM files) AS files,
                              (SELECT count(*) FROM audit_records
                                  WHERE entity_type = 'app_users'
                                    AND entity_id IN (
@@ -80,6 +98,14 @@ class PostgresqlDevelopmentFixturesIT {
                 assertThat(resultSet.getLong("users")).isEqualTo(2);
                 assertThat(resultSet.getLong("buyers")).isEqualTo(1);
                 assertThat(resultSet.getLong("sellers")).isEqualTo(1);
+                assertThat(resultSet.getLong("part_requests")).isEqualTo(1);
+                assertThat(resultSet.getLong("part_listings")).isEqualTo(1);
+                assertThat(resultSet.getLong("offers")).isEqualTo(1);
+                assertThat(resultSet.getLong("wallets")).isEqualTo(1);
+                assertThat(resultSet.getLong("wallet_ledger")).isEqualTo(1);
+                assertThat(resultSet.getLong("device_tokens")).isEqualTo(1);
+                assertThat(resultSet.getLong("notification_preferences")).isEqualTo(1);
+                assertThat(resultSet.getLong("files")).isZero();
                 assertThat(resultSet.getLong("user_audits")).isEqualTo(2);
             }
         }
@@ -88,6 +114,12 @@ class PostgresqlDevelopmentFixturesIT {
     private void executeFixture(Connection connection) throws Exception {
         try (Statement statement = connection.createStatement()) {
             statement.execute(fixtureSql);
+        }
+    }
+
+    private void executeReconciliation(Connection connection) throws Exception {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute(reconciliationSql);
         }
     }
 }

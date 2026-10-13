@@ -14,6 +14,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
@@ -57,16 +58,19 @@ public class ResilientPendingNotificationService {
      */
     public Mono<Integer> deliverPendingOnConnect(String userId) {
         return notificationStore.getPendingNotifications(userId)
-                .flatMapSequential(notification -> attemptDeliveryWithRetry(userId, notification))
-                .filter(Boolean::booleanValue)
+                .flatMapSequential(notification -> attemptDeliveryWithRetry(userId, notification)
+                        .filter(Boolean::booleanValue)
+                        .map(success -> notification))
                 .collectList()
                 .zipWhen(successfulDeliveries ->
                         successfulDeliveries.isEmpty() ?
                                 Mono.just(0L) :
-                                notificationStore.clearPendingNotifications(userId)
+                                notificationStore.clearPendingNotifications(userId,
+                                        successfulDeliveries.stream().map(NotificationRequest::id)
+                                                .filter(Objects::nonNull).toList())
                 )
                 .map(tuple -> {
-                    List<Boolean> successfulDeliveries = tuple.getT1();
+                    List<NotificationRequest> successfulDeliveries = tuple.getT1();
                     return successfulDeliveries.size();
                 });
     }

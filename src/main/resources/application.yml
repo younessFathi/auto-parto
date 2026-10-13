@@ -54,10 +54,26 @@ auto:
     persistence:
       postgresql:
         enabled: ${APP_POSTGRES_R2DBC_ENABLED:${APP_POSTGRES_IDENTITY_ENABLED:${APP_POSTGRES_BUYER_IDENTITY_ENABLED:false}}}
+        cutover:
+          enabled: ${APP_POSTGRES_CUTOVER_ENABLED:false}
+          api-contracts-ready: ${APP_POSTGRES_CUTOVER_API_CONTRACTS_READY:false}
+          mongo-disabled: ${APP_POSTGRES_MONGO_DISABLED:false}
         identity:
           enabled: ${APP_POSTGRES_IDENTITY_ENABLED:false}
         buyer-identity:
           enabled: ${APP_POSTGRES_BUYER_IDENTITY_ENABLED:false}
+        marketplace:
+          enabled: ${APP_POSTGRES_MARKETPLACE_ENABLED:false}
+        wallet:
+          enabled: ${APP_POSTGRES_WALLET_ENABLED:false}
+        device-tokens:
+          enabled: ${APP_POSTGRES_DEVICE_TOKENS_ENABLED:false}
+        notifications:
+          enabled: ${APP_POSTGRES_NOTIFICATIONS_ENABLED:false}
+        files:
+          enabled: ${APP_POSTGRES_FILES_ENABLED:false}
+        notification-preferences:
+          enabled: ${APP_POSTGRES_NOTIFICATION_PREFERENCES_ENABLED:false}
     images:
       uploads: ../uploads
     executor:

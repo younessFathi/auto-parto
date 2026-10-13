@@ -165,7 +165,10 @@ public class ResilientFcmService {
 
                     // Handle invalid token
                     if (isInvalidTokenError(throwable)) {
-                        deviceTokenService.markTokenInvalid(token);
+                        Mono<Void> invalidation = deviceTokenService.markTokenInvalid(token);
+                        return (invalidation == null ? Mono.<Void>empty() : invalidation)
+                                .onErrorResume(invalidationError -> Mono.empty())
+                                .thenReturn(FcmDeliveryResult.failed(token, throwable.getMessage()));
                     }
 
                     // FIX: Added .getMessage() to fix the syntax error "throwable."

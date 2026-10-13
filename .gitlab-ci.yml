@@ -3,6 +3,7 @@ image: maven:3.9.10-eclipse-temurin-21
 stages:
   - build
   - test
+  - cutover-gate
   - package
 
 variables:
@@ -59,6 +60,31 @@ integration-test:
       - target/failsafe-reports/
     reports:
       junit: target/failsafe-reports/*.xml
+
+postgresql-migration-gate:
+  stage: cutover-gate
+  image: flyway/flyway:10.20.1
+  rules:
+    - if: '$APP_POSTGRES_CUTOVER_GATE == "true"'
+  script:
+    - test -n "$APP_POSTGRES_MIGRATION_JDBC_URL"
+    - test -n "$APP_POSTGRES_MIGRATION_USER"
+    - test -n "$APP_POSTGRES_MIGRATION_PASSWORD"
+    - FLYWAY_URL="$APP_POSTGRES_MIGRATION_JDBC_URL" FLYWAY_USER="$APP_POSTGRES_MIGRATION_USER" FLYWAY_PASSWORD="$APP_POSTGRES_MIGRATION_PASSWORD" FLYWAY_LOCATIONS=filesystem:./src/main/resources/db/migration flyway migrate
+
+postgresql-reconciliation-gate:
+  stage: cutover-gate
+  image: postgres:16-alpine
+  needs: [postgresql-migration-gate]
+  rules:
+    - if: '$APP_POSTGRES_CUTOVER_GATE == "true"'
+  script:
+    - test -n "$APP_POSTGRES_RUNTIME_HOST"
+    - test -n "$APP_POSTGRES_RUNTIME_DB"
+    - test -n "$APP_POSTGRES_RUNTIME_USER"
+    - test -n "$APP_POSTGRES_RUNTIME_PASSWORD"
+    - PGPASSWORD="$APP_POSTGRES_RUNTIME_PASSWORD" PGHOST="$APP_POSTGRES_RUNTIME_HOST" PGDATABASE="$APP_POSTGRES_RUNTIME_DB" PGUSER="$APP_POSTGRES_RUNTIME_USER" psql --set ON_ERROR_STOP=1 --file deploy/postgres/fixtures/identity-fixtures.sql
+    - PGPASSWORD="$APP_POSTGRES_RUNTIME_PASSWORD" PGHOST="$APP_POSTGRES_RUNTIME_HOST" PGDATABASE="$APP_POSTGRES_RUNTIME_DB" PGUSER="$APP_POSTGRES_RUNTIME_USER" bash deploy/postgres/operations/reconcile-development-fixtures.sh
 
 package:
   stage: package
