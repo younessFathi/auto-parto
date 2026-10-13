@@ -7,12 +7,14 @@ import auto.parto.enums.CarPartType;
 import auto.parto.enums.Currency;
 import auto.parto.exception.InsufficientBalanceException;
 import auto.parto.mapper.SellerDbMapper;
+import auto.parto.mapper.SellerIdentityMapper;
 import auto.parto.persistence.AppUserRecord;
 import auto.parto.persistence.AppUserRepository;
 import auto.parto.persistence.SellerProfileRecord;
 import auto.parto.persistence.SellerProfileRepository;
 import auto.parto.persistence.WalletMutationResult;
 import auto.parto.persistence.WalletRepository;
+import auto.parto.persistence.SellerIdentityOtpRepository;
 import auto.parto.repository.ISellerRepository;
 import auto.parto.service.iservice.ISellerService;
 import lombok.extern.slf4j.Slf4j;
@@ -35,31 +37,47 @@ public class SellerService implements ISellerService {
     private final AppUserRepository postgresqlUserRepository;
     private final SellerProfileRepository postgresqlProfileRepository;
     private final WalletRepository postgresqlWalletRepository;
+    private final SellerIdentityOtpRepository postgresqlOtpRepository;
+    private final SellerIdentityMapper sellerIdentityMapper;
+    @org.springframework.beans.factory.annotation.Value("${otp.expiration.minutes:5}")
+    private long otpExpirationMinutes = 5;
     private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final int LOCKOUT_MINUTES = 15;
 
     public SellerService(ISellerRepository sellerRepository, SellerDbMapper sellerDbMapper) {
         this(sellerRepository, sellerDbMapper, (AppUserRepository) null,
-                (SellerProfileRepository) null, (WalletRepository) null);
+                (SellerProfileRepository) null, (WalletRepository) null, null, null);
     }
 
     @Autowired
     public SellerService(ObjectProvider<ISellerRepository> sellerProvider, SellerDbMapper sellerDbMapper,
                          ObjectProvider<AppUserRepository> userProvider,
                          ObjectProvider<SellerProfileRepository> profileProvider,
-                         ObjectProvider<WalletRepository> walletProvider) {
+                         ObjectProvider<WalletRepository> walletProvider,
+                         ObjectProvider<SellerIdentityOtpRepository> otpProvider,
+                         SellerIdentityMapper sellerIdentityMapper) {
         this(getIfAvailable(sellerProvider), sellerDbMapper,
-                getIfAvailable(userProvider), getIfAvailable(profileProvider), getIfAvailable(walletProvider));
+                getIfAvailable(userProvider), getIfAvailable(profileProvider), getIfAvailable(walletProvider),
+                getIfAvailable(otpProvider), sellerIdentityMapper);
     }
 
     public SellerService(ISellerRepository sellerRepository, SellerDbMapper sellerDbMapper,
                          AppUserRepository userRepository, SellerProfileRepository profileRepository,
-                         WalletRepository walletRepository) {
+                         WalletRepository walletRepository, SellerIdentityOtpRepository otpRepository,
+                         SellerIdentityMapper sellerIdentityMapper) {
         this.sellerRepository = sellerRepository;
         this.sellerDbMapper = sellerDbMapper;
         this.postgresqlUserRepository = userRepository;
         this.postgresqlProfileRepository = profileRepository;
         this.postgresqlWalletRepository = walletRepository;
+        this.postgresqlOtpRepository = otpRepository;
+        this.sellerIdentityMapper = sellerIdentityMapper;
+    }
+
+    public SellerService(ISellerRepository sellerRepository, SellerDbMapper sellerDbMapper,
+                         AppUserRepository userRepository, SellerProfileRepository profileRepository,
+                         WalletRepository walletRepository) {
+        this(sellerRepository, sellerDbMapper, userRepository, profileRepository, walletRepository, null, null);
     }
 
     @Override
@@ -154,6 +172,11 @@ public class SellerService implements ISellerService {
     @Override
     public Mono<SellerDto> updateGeneratedOtpByEmail(String email, String sentOtp) {
         log.info("Updating generated OTP for email: {}", email);
+        if (postgresqlOtpRepository != null) {
+            return postgresqlOtpRepository.replaceOtp(email, sentOtp,
+                            java.time.Instant.now().plusSeconds(otpExpirationMinutes * 60L))
+                    .map(sellerIdentityMapper::toDto);
+        }
         if (sellerRepository == null) return legacyPersistenceUnavailable();
         return sellerRepository.updateGeneratedOtp(
                             email,
@@ -176,7 +199,14 @@ public class SellerService implements ISellerService {
     @Override
     public Mono<SellerDto> activateUser(SellerDto sellerDto) {
         log.info("Activate seller with id {}" , sellerDto.getId());
-        if (postgresqlIdentityReady() && parseUuid(sellerDto.getId()) == null) return canonicalOnboardingRequired();
+        UUID publicId = parseUuid(sellerDto.getId());
+        if (postgresqlIdentityReady() && publicId != null) {
+            return postgresqlUserRepository.updateStatus(publicId, "ACTIVE")
+                    .filter(user -> "SELLER".equals(user.role()))
+                    .zipWhen(user -> postgresqlProfileRepository.findByUserPublicId(publicId))
+                    .map(result -> toDto(result.getT1(), result.getT2(), null));
+        }
+        if (postgresqlIdentityReady() && publicId == null) return canonicalOnboardingRequired();
         if (sellerRepository == null) return legacyPersistenceUnavailable();
         sellerDto.setIsActive(true);
         return sellerRepository.save(sellerDbMapper.toEntity(sellerDto)).map(sellerDbMapper::toDto);
@@ -193,6 +223,11 @@ public class SellerService implements ISellerService {
 
     @Override
     public Mono<SellerDto> recordFailedOtpAttempt(String email) {
+        if (postgresqlOtpRepository != null) {
+            return postgresqlOtpRepository.recordFailedAttempt(email, java.time.Instant.now())
+                    .then(postgresqlOtpRepository.findByEmail(email))
+                    .map(sellerIdentityMapper::toDto);
+        }
         return findSellerByEmail(email)
                 .flatMap(seller -> {
                     var otpDetails = seller.getOtpDetailsDto();

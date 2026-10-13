@@ -4,10 +4,12 @@ import auto.parto.dto.BuyerDto;
 import auto.parto.dto.OtpRequestDto;
 import auto.parto.mapper.BuyerDbMapper;
 import auto.parto.mapper.SellerDbMapper;
+import auto.parto.mapper.BuyerIdentityMapper;
 import auto.parto.persistence.AppUserRecord;
 import auto.parto.persistence.AppUserRepository;
 import auto.parto.persistence.BuyerProfileRecord;
 import auto.parto.persistence.BuyerProfileRepository;
+import auto.parto.persistence.BuyerIdentityOtpRepository;
 import auto.parto.repository.ISellerRepository;
 import auto.parto.repository.mongo_repository.BuyerRepository;
 import auto.parto.service.iservice.IBuyerService;
@@ -30,37 +32,55 @@ public class BuyerService implements IBuyerService {
     private final SellerDbMapper sellerDbMapper;
     private final AppUserRepository postgresqlUserRepository;
     private final BuyerProfileRepository postgresqlProfileRepository;
+    private final BuyerIdentityOtpRepository postgresqlOtpRepository;
+    private final BuyerIdentityMapper buyerIdentityMapper;
+    @org.springframework.beans.factory.annotation.Value("${otp.expiration.minutes:5}")
+    private long otpExpirationMinutes = 5;
     private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final int LOCKOUT_MINUTES = 15;
 
     public BuyerService(BuyerRepository buyerRepository, ISellerRepository sellerRepository,
                         BuyerDbMapper buyerDbMapper, SellerDbMapper sellerDbMapper) {
         this(buyerRepository, sellerRepository, buyerDbMapper, sellerDbMapper,
-                (AppUserRepository) null, (BuyerProfileRepository) null);
+                (AppUserRepository) null, (BuyerProfileRepository) null, null, null);
     }
 
     @Autowired
     public BuyerService(ObjectProvider<BuyerRepository> buyerProvider, ObjectProvider<ISellerRepository> sellerProvider,
                         BuyerDbMapper buyerDbMapper, SellerDbMapper sellerDbMapper,
                         ObjectProvider<AppUserRepository> userProvider,
-                        ObjectProvider<BuyerProfileRepository> profileProvider) {
+                        ObjectProvider<BuyerProfileRepository> profileProvider,
+                        ObjectProvider<BuyerIdentityOtpRepository> otpProvider,
+                        BuyerIdentityMapper buyerIdentityMapper) {
         this(getIfAvailable(buyerProvider), getIfAvailable(sellerProvider), buyerDbMapper, sellerDbMapper,
-                getIfAvailable(userProvider), getIfAvailable(profileProvider));
+                getIfAvailable(userProvider), getIfAvailable(profileProvider), getIfAvailable(otpProvider),
+                buyerIdentityMapper);
     }
 
     public BuyerService(BuyerRepository buyerRepository, ISellerRepository sellerRepository,
                         BuyerDbMapper buyerDbMapper, SellerDbMapper sellerDbMapper,
-                        AppUserRepository userRepository, BuyerProfileRepository profileRepository) {
+                        AppUserRepository userRepository, BuyerProfileRepository profileRepository,
+                        BuyerIdentityOtpRepository otpRepository, BuyerIdentityMapper buyerIdentityMapper) {
         this.buyerRepository = buyerRepository;
         this.sellerRepository = sellerRepository;
         this.buyerDbMapper = buyerDbMapper;
         this.sellerDbMapper = sellerDbMapper;
         this.postgresqlUserRepository = userRepository;
         this.postgresqlProfileRepository = profileRepository;
+        this.postgresqlOtpRepository = otpRepository;
+        this.buyerIdentityMapper = buyerIdentityMapper;
+    }
+
+    public BuyerService(BuyerRepository buyerRepository, ISellerRepository sellerRepository,
+                        BuyerDbMapper buyerDbMapper, SellerDbMapper sellerDbMapper,
+                        AppUserRepository userRepository, BuyerProfileRepository profileRepository) {
+        this(buyerRepository, sellerRepository, buyerDbMapper, sellerDbMapper,
+                userRepository, profileRepository, null, null);
     }
 
     @Override
     public Mono<Boolean> checkIfBuyerExistUsingPhoneNumber(String phoneNumber) {
+        if (postgresqlOtpRepository != null) return postgresqlOtpRepository.findByPhoneNumber(phoneNumber).hasElement();
         if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.exists(phoneNumber, "phoneNumber");
     }
@@ -145,6 +165,9 @@ public class BuyerService implements IBuyerService {
 
     @Override
     public Mono<BuyerDto> findBuyerByPhoneNumber(String phoneNumber) {
+        if (postgresqlOtpRepository != null) {
+            return postgresqlOtpRepository.findByPhoneNumber(phoneNumber).map(buyerIdentityMapper::toDto);
+        }
         if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.findBy(phoneNumber, "phoneNumber").map(buyerDbMapper::toDto);
     }
@@ -152,6 +175,12 @@ public class BuyerService implements IBuyerService {
     @Override
     public Mono<BuyerDto> updateGeneratedOtpByPhoneNumber(String phoneNumber, String sentOtp) {
         log.info("Updating generated OTP for phone number: {}", phoneNumber);
+        if (postgresqlOtpRepository != null) {
+            return postgresqlOtpRepository.findByPhoneNumber(phoneNumber)
+                    .flatMap(identity -> postgresqlOtpRepository.replaceOtp(identity.email(), sentOtp,
+                            java.time.Instant.now().plusSeconds(otpExpirationMinutes * 60L)))
+                    .map(buyerIdentityMapper::toDto);
+        }
         if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.updateGeneratedOtp(
                             phoneNumber, sentOtp ,
@@ -162,6 +191,11 @@ public class BuyerService implements IBuyerService {
     @Override
     public Mono<BuyerDto> updateGeneratedOtpByEmail(String email, String sentOtp) {
         log.info("Updating generated OTP for email: {}", email);
+        if (postgresqlOtpRepository != null) {
+            return postgresqlOtpRepository.replaceOtp(email, sentOtp,
+                            java.time.Instant.now().plusSeconds(otpExpirationMinutes * 60L))
+                    .map(buyerIdentityMapper::toDto);
+        }
         if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.updateGeneratedOtp(
                 email, sentOtp ,
@@ -183,6 +217,11 @@ public class BuyerService implements IBuyerService {
 
     @Override
     public Mono<BuyerDto> recordFailedOtpAttemptByEmail(String email) {
+        if (postgresqlOtpRepository != null) {
+            return postgresqlOtpRepository.recordFailedAttempt(email, java.time.Instant.now())
+                    .then(postgresqlOtpRepository.findByEmail(email))
+                    .map(buyerIdentityMapper::toDto);
+        }
         return findBuyerByEmail(email)
                 .flatMap(buyer -> {
                     var otpDetails = buyer.getOtpDetailsDto();

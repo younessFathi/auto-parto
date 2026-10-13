@@ -50,6 +50,16 @@ public final class R2dbcBuyerIdentityOtpRepository implements BuyerIdentityOtpRe
     }
 
     @Override
+    public Mono<BuyerIdentityRecord> findByPhoneNumber(String phoneNumber) {
+        if (phoneNumber == null || phoneNumber.isBlank()) throw new IllegalArgumentException("phoneNumber is required");
+        return databaseClient.sql(selectSql().replace("LOWER(au.email) = LOWER(:email)",
+                        "bp.phone_number = :phoneNumber"))
+                .bind("phoneNumber", phoneNumber)
+                .map((row, metadata) -> map(row))
+                .one();
+    }
+
+    @Override
     public Mono<BuyerIdentityRecord> create(String email, String firstName, String lastName,
                                             String phoneNumber, String otp, Instant expiresAt) {
         requireEmail(email);

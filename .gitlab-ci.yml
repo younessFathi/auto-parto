@@ -86,6 +86,15 @@ postgresql-reconciliation-gate:
     - PGPASSWORD="$APP_POSTGRES_RUNTIME_PASSWORD" PGHOST="$APP_POSTGRES_RUNTIME_HOST" PGDATABASE="$APP_POSTGRES_RUNTIME_DB" PGUSER="$APP_POSTGRES_RUNTIME_USER" psql --set ON_ERROR_STOP=1 --file deploy/postgres/fixtures/identity-fixtures.sql
     - PGPASSWORD="$APP_POSTGRES_RUNTIME_PASSWORD" PGHOST="$APP_POSTGRES_RUNTIME_HOST" PGDATABASE="$APP_POSTGRES_RUNTIME_DB" PGUSER="$APP_POSTGRES_RUNTIME_USER" bash deploy/postgres/operations/reconcile-development-fixtures.sh
 
+postgresql-cutover-preflight:
+  stage: cutover-gate
+  image: bash:5.2
+  needs: [postgresql-reconciliation-gate]
+  rules:
+    - if: '$APP_POSTGRES_CUTOVER_GATE == "true"'
+  script:
+    - bash deploy/postgres/operations/preflight-cutover.sh
+
 package:
   stage: package
   script:
