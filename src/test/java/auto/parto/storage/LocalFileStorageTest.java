@@ -29,6 +29,7 @@ class LocalFileStorageTest {
                 .isEqualTo("payload");
         storage.delete(stored.objectKey()).block();
         assertThat(Files.exists(root.resolve(stored.objectKey()))).isFalse();
+        assertThat(storage.exists(stored.objectKey()).block()).isFalse();
     }
 
     @Test

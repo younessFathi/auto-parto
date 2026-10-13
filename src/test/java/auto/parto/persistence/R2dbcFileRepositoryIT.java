@@ -105,6 +105,22 @@ class R2dbcFileRepositoryIT {
                 .verifyComplete();
     }
 
+    @Test
+    void listsOnlyActiveFilesWithAStableBound() {
+        UUID owner = UUID.randomUUID();
+        UUID request = UUID.randomUUID();
+        StepVerifier.create(insertRequest(owner, request)
+                        .then(repository.createForRequest(owner, request, "objects/reconcile", "photo.jpg",
+                                "image/jpeg", 12, "sha"))
+                        .flatMap(file -> repository.activate(file.publicId(), owner))
+                        .flatMapMany(ignored -> repository.findActive(100)
+                                .filter(file -> file.objectKey().equals("objects/reconcile"))))
+                .assertNext(file -> {
+                    assertThat(file.status()).isEqualTo("ACTIVE");
+                    assertThat(file.objectKey()).isEqualTo("objects/reconcile");
+                }).verifyComplete();
+    }
+
     private reactor.core.publisher.Mono<Void> insertRequest(UUID owner, UUID request) {
         return databaseClient.sql("INSERT INTO app_users (public_id, email, role, status) VALUES (:owner, :email, 'BUYER', 'ACTIVE')")
                 .bind("owner", owner).bind("email", "file-" + owner + "@example.test").fetch().rowsUpdated().then()

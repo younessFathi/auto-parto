@@ -13,5 +13,7 @@ public interface FileStorage {
 
     Flux<org.springframework.core.io.buffer.DataBuffer> read(String objectKey);
 
+    Mono<Boolean> exists(String objectKey);
+
     Mono<Void> delete(String objectKey);
 }

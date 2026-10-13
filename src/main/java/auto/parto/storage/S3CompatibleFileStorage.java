@@ -16,7 +16,9 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.net.URI;
 import java.nio.file.Path;
@@ -69,6 +71,15 @@ public final class S3CompatibleFileStorage implements FileStorage {
                 client.getObject(request, AsyncResponseTransformer.toPublisher());
         return Mono.fromFuture(future).flatMapMany(publisher -> Flux.from(publisher)
                 .map(bytes -> buffers.wrap(bytes.asReadOnlyBuffer())));
+    }
+
+    @Override
+    public Mono<Boolean> exists(String objectKey) {
+        HeadObjectRequest request = HeadObjectRequest.builder().bucket(bucket)
+                .key(requireText(objectKey, "objectKey")).build();
+        return Mono.fromFuture(client.headObject(request)).thenReturn(true)
+                .onErrorResume(S3Exception.class, error -> error.statusCode() == 404
+                        ? Mono.just(false) : Mono.error(error));
     }
 
     @Override

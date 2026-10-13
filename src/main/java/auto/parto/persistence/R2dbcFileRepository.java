@@ -114,6 +114,14 @@ public final class R2dbcFileRepository implements FileRepository {
         return query.bind("limit", limit).map((row, metadata) -> map(row)).all();
     }
 
+    @Override
+    public Flux<FileRecord> findActive(int limit) {
+        requireLimit(limit);
+        return databaseClient.sql(SELECT
+                        + " WHERE file.status = 'ACTIVE' ORDER BY file.created_at, file.public_id LIMIT :limit")
+                .bind("limit", limit).map((row, metadata) -> map(row)).all();
+    }
+
     private Flux<FileRecord> findForTarget(UUID targetPublicId, String targetColumn, int limit) {
         requirePublicId(targetPublicId, "targetPublicId");
         requireLimit(limit);
@@ -186,5 +194,5 @@ public final class R2dbcFileRepository implements FileRepository {
 
     private static void requirePublicId(UUID value, String name) { if (value == null) throw new IllegalArgumentException(name + " is required"); }
     private static void requireText(String value, String name) { if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " is required"); }
-    private static void requireLimit(int limit) { if (limit < 1 || limit > 100) throw new IllegalArgumentException("limit must be between 1 and 100"); }
+    private static void requireLimit(int limit) { if (limit < 1 || limit > 1000) throw new IllegalArgumentException("limit must be between 1 and 1000"); }
 }

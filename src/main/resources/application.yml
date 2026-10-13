@@ -58,6 +58,10 @@ auto:
           enabled: ${APP_POSTGRES_CUTOVER_ENABLED:false}
           api-contracts-ready: ${APP_POSTGRES_CUTOVER_API_CONTRACTS_READY:false}
           mongo-disabled: ${APP_POSTGRES_MONGO_DISABLED:false}
+          storage-reconciliation:
+            enabled: ${APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_ENABLED:false}
+            max-files: ${APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_MAX_FILES:1000}
+            timeout: ${APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_TIMEOUT:30s}
         identity:
           enabled: ${APP_POSTGRES_IDENTITY_ENABLED:false}
         buyer-identity:

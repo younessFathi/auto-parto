@@ -20,6 +20,8 @@ public interface FileRepository {
 
     Flux<FileRecord> findByPublicIds(List<UUID> filePublicIds, int limit);
 
+    Flux<FileRecord> findActive(int limit);
+
     Mono<FileRecord> findByPublicId(UUID filePublicId);
 
     Mono<FileRecord> activate(UUID filePublicId, UUID ownerUserPublicId);

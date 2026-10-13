@@ -55,6 +55,12 @@ public final class LocalFileStorage implements FileStorage {
     }
 
     @Override
+    public Mono<Boolean> exists(String objectKey) {
+        return Mono.fromCallable(() -> Files.exists(safePath(objectKey)))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    @Override
     public Mono<Void> delete(String objectKey) {
         return Mono.fromCallable(() -> {
             Files.deleteIfExists(safePath(objectKey));

@@ -10,13 +10,13 @@ class PostgresqlCutoverConfigurationTest {
     @Test
     void acceptsCutoverOnlyWhenEveryBoundaryIsEnabled() {
         assertThatCode(() -> new PostgresqlCutoverConfiguration(true, true, true, true,
-                true, true, true, true, true, true, true)).doesNotThrowAnyException();
+                true, true, true, true, true, true, true, true)).doesNotThrowAnyException();
     }
 
     @Test
     void rejectsPartiallyEnabledCutover() {
         assertThatThrownBy(() -> new PostgresqlCutoverConfiguration(true, true, true, true,
-                true, true, true, false, true, true, true))
+                true, true, true, false, true, true, true, true))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("every persistence boundary");
     }
