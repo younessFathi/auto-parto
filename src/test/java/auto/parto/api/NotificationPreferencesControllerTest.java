@@ -10,6 +10,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -17,6 +18,7 @@ import java.util.Collection;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
@@ -113,6 +115,16 @@ class NotificationPreferencesControllerTest {
                 .verifyComplete();
 
         verify(preferencesService).getPreferences("buyer-123", "buyer@test.com");
+    }
+
+    @Test
+    void getPreferences_rejectsNonCanonicalPrincipalWith401() {
+        NotificationPreferencesController controller = new NotificationPreferencesController(preferencesService);
+
+        assertThatThrownBy(() -> controller.getPreferences(new MockAuth(new Object())))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
+                        .isEqualTo(HttpStatus.UNAUTHORIZED));
     }
 
     static class MockAuth implements Authentication {

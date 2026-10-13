@@ -17,12 +17,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
 
@@ -30,7 +27,6 @@ import javax.crypto.SecretKey;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
-import java.util.List;
 import java.util.Date;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -151,18 +147,6 @@ class SecurityAuthorizationIT extends BaseIntegrationTest {
     void protectedRouteRejectsBlankCanonicalRoles() {
         requestPreferences(signedToken(TEST_SIGNING_KEY, builder -> { },
                 Map.of("principal_id", "buyer-1", "email", "buyer@example.test", "roles", " ")))
-                .expectStatus().isUnauthorized();
-    }
-
-    @Test
-    void protectedRouteRejectsNonCanonicalPrincipal() {
-        UsernamePasswordAuthenticationToken nonCanonical = new UsernamePasswordAuthenticationToken(
-                "legacy@example.test", null, List.of(new SimpleGrantedAuthority("ROLE_BUYER")));
-
-        webTestClient.mutateWith(SecurityMockServerConfigurers.mockAuthentication(nonCanonical))
-                .get()
-                .uri("/api/v1/notifications/preferences")
-                .exchange()
                 .expectStatus().isUnauthorized();
     }
 
