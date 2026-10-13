@@ -13,7 +13,7 @@ import java.util.UUID;
 
 @Repository
 @ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql", name = "enabled", havingValue = "true")
-public final class R2dbcAuditOutboxRepository implements AuditOutboxRepository {
+public class R2dbcAuditOutboxRepository implements AuditOutboxRepository {
 
     private static final String EVENT_COLUMNS = """
             od.public_id AS delivery_id, od.lease_owner AS claim_owner, od.attempt_count,

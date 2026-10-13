@@ -15,7 +15,7 @@ import java.util.UUID;
 @Repository
 @ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.marketplace", name = "enabled",
         havingValue = "true")
-public final class R2dbcPartListingRepository implements PartListingRepository {
+public class R2dbcPartListingRepository implements PartListingRepository {
 
     private static final String SELECT = """
             SELECT pl.public_id, au.public_id AS seller_public_id, pl.name, pl.description,

@@ -54,6 +54,19 @@ class JwtTokenAuthenticationFilterTest {
     }
 
     @Test
+    void allowsHealthEndpointWithoutToken() {
+        MockServerHttpRequest request = MockServerHttpRequest.get("/actuator/health").build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        when(chain.filter(exchange)).thenReturn(Mono.empty());
+
+        filter.filter(exchange, chain).block();
+
+        verify(chain).filter(exchange);
+        assertThat(exchange.getResponse().getStatusCode()).isNull();
+    }
+
+    @Test
     void allowsPublicSwaggerEndpointWithoutToken() {
         MockServerHttpRequest request = MockServerHttpRequest.get("/swagger-ui/index.html").build();
         MockServerWebExchange exchange = MockServerWebExchange.from(request);

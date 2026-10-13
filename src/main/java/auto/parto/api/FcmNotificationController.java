@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
@@ -24,6 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
+@ConditionalOnProperty(name = "app.firebase.components-enabled", havingValue = "true", matchIfMissing = true)
 @RequestMapping("/api/v1/notifications/fcm")
 @RequiredArgsConstructor
 @Slf4j

@@ -10,7 +10,7 @@ import java.util.UUID;
 
 @Repository
 @ConditionalOnExpression("'${auto.parto.persistence.postgresql.buyer-identity.enabled:false}' == 'true'")
-public final class R2dbcBuyerProfileRepository implements BuyerProfileRepository {
+public class R2dbcBuyerProfileRepository implements BuyerProfileRepository {
 
     private static final String PROFILE_COLUMNS = """
             bp.public_id, au.public_id AS user_public_id, bp.first_name, bp.last_name,

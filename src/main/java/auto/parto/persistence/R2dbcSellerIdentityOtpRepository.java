@@ -18,7 +18,7 @@ import java.util.Base64;
 
 @Repository
 @ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.identity", name = "enabled", havingValue = "true")
-public final class R2dbcSellerIdentityOtpRepository implements SellerIdentityOtpRepository {
+public class R2dbcSellerIdentityOtpRepository implements SellerIdentityOtpRepository {
 
     private static final String SELLER_COLUMNS = """
             au.public_id, au.email, sp.first_name, sp.last_name, au.status,

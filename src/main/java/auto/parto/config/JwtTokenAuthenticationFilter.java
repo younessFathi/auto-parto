@@ -58,6 +58,7 @@ public class JwtTokenAuthenticationFilter implements WebFilter {
 
     private boolean isPublicEndpoint(String path) {
         return path.startsWith("/auth/")
+                || path.equals("/actuator/health")
                 || path.startsWith("/v3/api-docs")
                 || path.startsWith("/swagger-ui")
                 || path.startsWith("/webjars");

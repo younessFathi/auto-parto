@@ -21,7 +21,7 @@ class DockerComposeConfigurationTest {
         assertThat(compose).contains("SPRING_DATA_MONGODB_URI: ${URI:-mongodb://root:root@mongo:27017/auto-parto?authSource=admin}");
         assertThat(compose).contains("SPRING_DATA_REDIS_HOST: redis");
         assertThat(compose).contains("REDIS_PASSWORD: ${REDIS_PASSWORD:-password}");
-        assertThat(compose).contains("JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-key-that-is-256-bits-long!}");
+        assertThat(compose).contains("JWT_SECRET: ${JWT_SECRET:-MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=}");
         assertThat(compose).contains("command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-password}");
         assertThat(compose).contains("test: redis-cli -a '${REDIS_PASSWORD:-password}' ping");
         assertThat(compose).contains("depends_on:");
@@ -33,6 +33,12 @@ class DockerComposeConfigurationTest {
     void postgresProfileDefinesIndependentApplicationAndAuditResources() throws IOException {
         String compose = Files.readString(Path.of("docker-compose.yml"));
 
+        assertThat(compose).contains("springboot-postgresql-app:");
+        assertThat(compose).contains("SPRING_AUTOCONFIGURE_EXCLUDE:");
+        assertThat(compose).contains("MongoReactiveAutoConfiguration");
+        assertThat(compose).contains("APP_POSTGRES_CUTOVER_ENABLED: \"true\"");
+        assertThat(compose).contains("APP_POSTGRES_MONGO_DISABLED: \"true\"");
+        assertThat(compose).contains("condition: service_completed_successfully");
         assertThat(compose).contains("app-postgresql:");
         String auditCompose = Files.readString(Path.of("docker-compose.audit.yml"));
         assertThat(auditCompose).contains("audit-postgresql:");

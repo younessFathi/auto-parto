@@ -49,6 +49,14 @@ After migration succeeds, run the development identity/profile fixtures:
 docker compose --profile postgres run --rm app-postgresql-fixtures
 ```
 
+Run the application with the completed PostgreSQL-only development cutover profile. This service excludes MongoDB auto-configuration, enables every PostgreSQL boundary and cutover gate, waits for migration and fixtures, and listens on host port `8081`:
+
+```bash
+docker compose --profile postgres up -d springboot-postgresql-app
+```
+
+The default `springboot-app` service remains the legacy compatibility profile and continues to use MongoDB. Do not run both application services on the same host port when testing a traffic switch.
+
 The fixture service is structurally ordered after the Flyway service and connects with the restricted runtime role, not the bootstrap or migration role. It creates deterministic development buyer and seller identities, profiles, marketplace records, a wallet/ledger pair, and one active device token. The script is transactional and idempotent: rerunning it does not duplicate users, profiles, marketplace records, wallet entries, or device tokens. If a deterministic fixture conflicts with existing data, the script exits nonzero and rolls back the run. It intentionally does not seed OTP challenges, files, notifications, or outbox state because those boundaries are either transient or their API/object-storage contracts are not yet migrated from MongoDB.
 
 For an existing PostgreSQL volume, an authorized operator must provision and verify the roles instead of relying on the init hook. Set the protected `PGHOST`, `PGDATABASE`, `PGUSER`, and `PGPASSWORD` connection variables together with the four `APP_POSTGRES_*` role variables, review the output, and run:

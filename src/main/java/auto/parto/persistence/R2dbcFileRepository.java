@@ -14,7 +14,7 @@ import java.util.List;
 
 @Repository
 @ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.files", name = "enabled", havingValue = "true")
-public final class R2dbcFileRepository implements FileRepository {
+public class R2dbcFileRepository implements FileRepository {
 
     private static final String SELECT = """
             SELECT file.public_id, owner.public_id AS owner_public_id,

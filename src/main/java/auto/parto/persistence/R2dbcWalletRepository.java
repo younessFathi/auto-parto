@@ -11,7 +11,7 @@ import java.util.UUID;
 @Repository
 @ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.wallet", name = "enabled",
         havingValue = "true")
-public final class R2dbcWalletRepository implements WalletRepository {
+public class R2dbcWalletRepository implements WalletRepository {
 
     private final DatabaseClient databaseClient;
     private final TransactionalOperator transactions;

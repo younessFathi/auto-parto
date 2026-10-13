@@ -12,7 +12,7 @@ import java.util.UUID;
 @Repository
 @ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.marketplace", name = "enabled",
         havingValue = "true")
-public final class R2dbcOfferRepository implements OfferRepository {
+public class R2dbcOfferRepository implements OfferRepository {
 
     private static final String SELECT = """
             SELECT offer.public_id,

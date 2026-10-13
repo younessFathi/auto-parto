@@ -18,7 +18,7 @@ import java.util.Base64;
 
 @Repository
 @ConditionalOnExpression("'${auto.parto.persistence.postgresql.buyer-identity.enabled:false}' == 'true'")
-public final class R2dbcBuyerIdentityOtpRepository implements BuyerIdentityOtpRepository {
+public class R2dbcBuyerIdentityOtpRepository implements BuyerIdentityOtpRepository {
 
     private static final String COLUMNS = """
             au.public_id, au.email, au.status, bp.first_name, bp.last_name, bp.phone_number,

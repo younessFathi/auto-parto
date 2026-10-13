@@ -5,10 +5,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 
 /** Fails startup when an explicit PostgreSQL cutover is only partially configured. */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.cutover", name = "enabled",
         havingValue = "true")
-public final class PostgresqlCutoverConfiguration {
+public class PostgresqlCutoverConfiguration {
 
     public PostgresqlCutoverConfiguration(
             @Value("${auto.parto.persistence.postgresql.enabled:false}") boolean postgresqlEnabled,

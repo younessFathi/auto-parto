@@ -8,7 +8,7 @@ import reactor.core.publisher.Mono;
 
 @Repository
 @ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql", name = "enabled", havingValue = "true")
-public final class R2dbcSellerProfileRepository implements SellerProfileRepository {
+public class R2dbcSellerProfileRepository implements SellerProfileRepository {
 
     private static final String PROFILE_COLUMNS = """
             sp.public_id, au.public_id AS user_public_id, sp.first_name, sp.last_name,

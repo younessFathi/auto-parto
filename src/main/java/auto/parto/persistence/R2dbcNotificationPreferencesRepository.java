@@ -13,7 +13,7 @@ import java.util.UUID;
 @Repository
 @ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.notification-preferences", name = "enabled",
         havingValue = "true")
-public final class R2dbcNotificationPreferencesRepository implements NotificationPreferencesRepository {
+public class R2dbcNotificationPreferencesRepository implements NotificationPreferencesRepository {
 
     private static final String SELECT = """
             SELECT preferences.public_id, owner.public_id AS user_public_id,

@@ -11,7 +11,7 @@ import java.util.UUID;
 
 @Repository
 @ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql", name = "enabled", havingValue = "true")
-public final class R2dbcAppUserRepository implements AppUserRepository {
+public class R2dbcAppUserRepository implements AppUserRepository {
 
     private static final String USER_COLUMNS = """
             public_id, provider, provider_subject, email, role, status,

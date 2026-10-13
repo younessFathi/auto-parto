@@ -15,7 +15,7 @@ import java.util.UUID;
 @Repository
 @ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.notifications", name = "enabled",
         havingValue = "true")
-public final class R2dbcNotificationRepository implements NotificationRepository {
+public class R2dbcNotificationRepository implements NotificationRepository {
 
     private static final Set<String> STATUSES = Set.of("PENDING", "DISPATCHED", "EXHAUSTED");
     private static final Set<String> CHANNELS = Set.of("SSE", "FCM", "EMAIL");

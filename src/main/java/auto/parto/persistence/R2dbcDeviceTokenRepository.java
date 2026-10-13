@@ -13,7 +13,7 @@ import java.util.UUID;
 @Repository
 @ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.device-tokens", name = "enabled",
         havingValue = "true")
-public final class R2dbcDeviceTokenRepository implements DeviceTokenRepository {
+public class R2dbcDeviceTokenRepository implements DeviceTokenRepository {
 
     private static final String SELECT = """
             SELECT token.public_id, owner.public_id AS owner_public_id, token.provider_token,

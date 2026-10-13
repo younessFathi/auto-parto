@@ -12,7 +12,8 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-password}
-      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-key-that-is-256-bits-long!}
+      JWT_SECRET: ${JWT_SECRET:-MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=}
+      OTP_PEPPER: local-development-pepper
     restart: unless-stopped
     mem_limit: 1g
     cpus: "1.0"
@@ -32,6 +33,66 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  springboot-postgresql-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: auto-parto-springboot-app:postgresql
+    container_name: springboot-postgresql-app
+    profiles: ["postgres"]
+    ports:
+      - "8081:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_AUTOCONFIGURE_EXCLUDE: >-
+        org.springframework.boot.autoconfigure.mongo.MongoReactiveAutoConfiguration,
+        org.springframework.boot.autoconfigure.data.mongo.MongoReactiveRepositoriesAutoConfiguration
+      SPRING_R2DBC_URL: r2dbc:postgresql://app-postgresql:5432/${APP_POSTGRES_DB:-auto_parto}
+      SPRING_R2DBC_USERNAME: ${APP_POSTGRES_RUNTIME_USER:-auto_parto_runtime}
+      SPRING_R2DBC_PASSWORD: ${APP_POSTGRES_RUNTIME_PASSWORD:?set APP_POSTGRES_RUNTIME_PASSWORD for the postgres profile}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-password}
+      JWT_SECRET: ${JWT_SECRET:-MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=}
+      APP_POSTGRES_R2DBC_ENABLED: "true"
+      OTP_PEPPER: local-development-pepper
+      APP_POSTGRES_IDENTITY_ENABLED: "true"
+      APP_POSTGRES_BUYER_IDENTITY_ENABLED: "true"
+      APP_POSTGRES_MARKETPLACE_ENABLED: "true"
+      APP_POSTGRES_WALLET_ENABLED: "true"
+      APP_POSTGRES_DEVICE_TOKENS_ENABLED: "true"
+      APP_POSTGRES_NOTIFICATIONS_ENABLED: "true"
+      APP_POSTGRES_FILES_ENABLED: "true"
+      APP_POSTGRES_NOTIFICATION_PREFERENCES_ENABLED: "true"
+      APP_POSTGRES_CUTOVER_ENABLED: "true"
+      APP_POSTGRES_CUTOVER_API_CONTRACTS_READY: "true"
+      APP_POSTGRES_MONGO_DISABLED: "true"
+      APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_ENABLED: "true"
+      APP_FILE_STORAGE_PROVIDER: local
+      APP_FILE_STORAGE_LOCAL_ROOT: /uploads
+      FIREBASE_ENABLED: "false"
+      APP_FIREBASE_COMPONENTS_ENABLED: "false"
+      RESEND_API_KEY: local-development-disabled
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always
+    volumes:
+      - ./uploads:/uploads
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: "1.0"
+    networks:
+      - app-network
+    healthcheck:
+      test: wget -qO- http://localhost:8080/actuator/health || exit 1
+      interval: 30s
+      timeout: 3s
+      start_period: 40s
+      retries: 3
+    depends_on:
+      app-postgresql-fixtures:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 
