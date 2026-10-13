@@ -54,6 +54,18 @@ public class ImageController {
         return fileManagerService.saveForRequest(image, ownerId, requestId);
     }
 
+    @PostMapping(value = "/listings/{listingId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Mono<String> uploadListingImage(@PathVariable UUID listingId,
+                                            @RequestPart("image") FilePart image,
+                                            Authentication authentication) {
+        CanonicalPrincipal principal = CanonicalSecurity.requireRole(authentication, "ROLE_SELLER");
+        UUID ownerId = UUID.fromString(principal.getId());
+        if (fileManagerService == null) {
+            return Mono.error(new IllegalStateException("File upload service is unavailable"));
+        }
+        return fileManagerService.saveForListing(image, ownerId, listingId);
+    }
+
     @GetMapping("/{folderName}")
     public Flux<Resource> listImages(@PathVariable String folderName , @RequestParam(required = false) FileRequestFlag flag) {
         // Validate the folder name

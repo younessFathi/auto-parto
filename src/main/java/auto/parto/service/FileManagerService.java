@@ -77,17 +77,31 @@ public class FileManagerService implements IFileManagerService {
 
     @Override
     public Mono<String> saveForRequest(FilePart image, UUID ownerUserPublicId, UUID requestPublicId) {
+        return saveForTarget(image, ownerUserPublicId, requestPublicId, true);
+    }
+
+    @Override
+    public Mono<String> saveForListing(FilePart image, UUID ownerUserPublicId, UUID listingPublicId) {
+        return saveForTarget(image, ownerUserPublicId, listingPublicId, false);
+    }
+
+    private Mono<String> saveForTarget(FilePart image, UUID ownerUserPublicId, UUID targetPublicId,
+                                       boolean requestTarget) {
         if (postgresqlFileRepository == null) {
             return Mono.error(new IllegalStateException("PostgreSQL file persistence is not enabled"));
         }
-        if (ownerUserPublicId == null || requestPublicId == null) {
-            return Mono.error(new IllegalArgumentException("owner and request IDs are required"));
+        if (ownerUserPublicId == null || targetPublicId == null) {
+            return Mono.error(new IllegalArgumentException("owner and target IDs are required"));
         }
-        return writeImage(image, requestPublicId.toString())
-                .flatMap(stored -> postgresqlFileRepository.createForRequest(ownerUserPublicId, requestPublicId,
-                                requestPublicId + "/" + stored.generatedFilename(), image.filename(),
+        return writeImage(image, targetPublicId.toString())
+                .flatMap(stored -> (requestTarget
+                                ? postgresqlFileRepository.createForRequest(ownerUserPublicId, targetPublicId,
+                                targetPublicId + "/" + stored.generatedFilename(), image.filename(),
                                 contentType(image), stored.byteSize(), stored.checksum())
-                        .switchIfEmpty(Mono.error(new IllegalArgumentException("request is not owned by the authenticated user")))
+                                : postgresqlFileRepository.createForListing(ownerUserPublicId, targetPublicId,
+                                targetPublicId + "/" + stored.generatedFilename(), image.filename(),
+                                contentType(image), stored.byteSize(), stored.checksum()))
+                        .switchIfEmpty(Mono.error(new IllegalArgumentException("target is not owned by the authenticated user")))
                         .map(record -> record.publicId().toString())
                         .onErrorResume(error -> deleteStagedFile(stored.destinationFile())
                                 .then(Mono.error(error))));

@@ -74,6 +74,23 @@ class FileManagerServicePostgresqlTest {
         }
     }
 
+    @Test
+    void listingUploadUsesListingTargetPersistence() {
+        FileRepository repository = mock(FileRepository.class);
+        UUID owner = UUID.randomUUID();
+        UUID listing = UUID.randomUUID();
+        UUID file = UUID.randomUUID();
+        when(repository.createForListing(any(), any(), anyString(), anyString(), anyString(), anyLong(), anyString()))
+                .thenReturn(reactor.core.publisher.Mono.just(new FileRecord(file, owner, null, listing,
+                        "object", "photo.jpg", "image/jpeg", 5, "checksum", "PENDING", Instant.now(), Instant.now())));
+        FileManagerService service = new FileManagerService(uploadRoot.toString(), mock(IFileService.class), repository);
+
+        assertThat(service.saveForListing(imagePart("photo.jpg", "image/jpeg", "hello"), owner, listing).block())
+                .isEqualTo(file.toString());
+        verify(repository).createForListing(eq(owner), eq(listing), contains(listing.toString()), eq("photo.jpg"),
+                eq("image/jpeg"), eq(5L), anyString());
+    }
+
     private static FilePart imagePart(String filename, String contentType, String content) {
         FilePart image = mock(FilePart.class);
         HttpHeaders headers = new HttpHeaders();

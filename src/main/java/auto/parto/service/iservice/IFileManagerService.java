@@ -9,4 +9,6 @@ public interface IFileManagerService {
     Mono<String> save(FilePart image , String pieceId);
 
     Mono<String> saveForRequest(FilePart image, UUID ownerUserPublicId, UUID requestPublicId);
+
+    Mono<String> saveForListing(FilePart image, UUID ownerUserPublicId, UUID listingPublicId);
 }

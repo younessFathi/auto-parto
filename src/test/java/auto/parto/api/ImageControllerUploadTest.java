@@ -42,6 +42,17 @@ class ImageControllerUploadTest {
         verifyNoInteractions(service);
     }
 
+    @Test
+    void uploadListingImageUsesAuthenticatedSellerIdentity() {
+        Authentication authentication = authentication(owner, "ROLE_SELLER");
+        when(service.saveForListing(image, owner, request)).thenReturn(Mono.just("file-2"));
+
+        String result = controller.uploadListingImage(request, image, authentication).block();
+
+        assertThat(result).isEqualTo("file-2");
+        verify(service).saveForListing(image, owner, request);
+    }
+
     private static Authentication authentication(UUID owner, String role) {
         CanonicalPrincipal principal = new CanonicalPrincipal(owner.toString(), "user@example.test", role);
         return new UsernamePasswordAuthenticationToken(principal, "token", principal.getAuthorities());
