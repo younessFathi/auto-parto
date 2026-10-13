@@ -20,8 +20,13 @@ $compose run --rm --no-deps app-postgresql-fixtures
 $compose run --rm --no-deps app-postgresql-fixtures
 
 $compose run --rm --no-deps \
+    -e PGPASSWORD="$APP_POSTGRES_RUNTIME_PASSWORD" \
     -v "$(pwd)/deploy/postgres/operations:/operations:ro" \
-    app-postgresql psql --set ON_ERROR_STOP=1 --file /operations/reconcile-development-fixtures.sql
+    app-postgresql psql \
+    --host app-postgresql \
+    --username "${APP_POSTGRES_RUNTIME_USER:-auto_parto_runtime}" \
+    --dbname "${APP_POSTGRES_DB:-auto_parto}" \
+    --set ON_ERROR_STOP=1 --file /operations/reconcile-development-fixtures.sql
 
 fixture_counts="$($compose exec -T \
     -e PGPASSWORD="$APP_POSTGRES_RUNTIME_PASSWORD" \
