@@ -1,16 +1,25 @@
 package auto.parto.api;
 
 import auto.parto.enums.FileRequestFlag;
+import auto.parto.security.CanonicalPrincipal;
+import auto.parto.security.CanonicalSecurity;
+import auto.parto.service.iservice.IFileManagerService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.PathResource;
 import org.springframework.core.io.Resource;
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.multipart.FilePart;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/images")
@@ -18,6 +27,32 @@ import java.nio.file.Paths;
 public class ImageController {
     @Value("${auto.parto.images.uploads}")
     private String uploadsDirectory;
+    private final IFileManagerService fileManagerService;
+
+    public ImageController() {
+        this.fileManagerService = null;
+    }
+
+    public ImageController(IFileManagerService fileManagerService) {
+        this.fileManagerService = fileManagerService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ImageController(ObjectProvider<IFileManagerService> provider) {
+        this(provider.getIfAvailable());
+    }
+
+    @PostMapping(value = "/requests/{requestId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Mono<String> uploadRequestImage(@PathVariable UUID requestId,
+                                            @RequestPart("image") FilePart image,
+                                            Authentication authentication) {
+        CanonicalPrincipal principal = CanonicalSecurity.requireRole(authentication, "ROLE_BUYER");
+        UUID ownerId = UUID.fromString(principal.getId());
+        if (fileManagerService == null) {
+            return Mono.error(new IllegalStateException("File upload service is unavailable"));
+        }
+        return fileManagerService.saveForRequest(image, ownerId, requestId);
+    }
 
     @GetMapping("/{folderName}")
     public Flux<Resource> listImages(@PathVariable String folderName , @RequestParam(required = false) FileRequestFlag flag) {
