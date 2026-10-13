@@ -86,7 +86,7 @@ This opt-in check starts the Compose PostgreSQL service, runs the real `flyway/f
 
 ## Cutover gates still open
 
-- Migrate the remaining production business repositories behind their existing service boundaries and add PostgreSQL fixtures only as each boundary becomes authoritative. Identity/profile, marketplace request persistence, seller identity reads and wallet mutations, device-token, notification records, notification attempts, file metadata, notification preferences, canonical request-image reads, and authenticated request-image uploads for both request and listing targets are implemented as boundaries; image relationship writes and remaining API traffic still require contract-level cutover work.
+- Migrate the remaining production business repositories behind their existing service boundaries and add PostgreSQL fixtures only as each boundary becomes authoritative. Identity/profile, marketplace request persistence, seller identity reads and wallet mutations, device-token, notification records, notification attempts, file metadata, notification preferences, authenticated request/listing image uploads, and offer API ownership wiring are implemented as boundaries; image relationship writes, object-storage replacement, and final PostgreSQL-only traffic verification still require cutover work.
 - Decide explicitly whether any local data needs import. If so, implement an idempotent importer and identity, wallet, marketplace, and file reconciliation before enabling cutover.
 - Block cutover when any reconciliation error remains.
 - Verify PostgreSQL-backed application behavior and rollback compatibility before removing MongoDB dependencies or changing the primary database.

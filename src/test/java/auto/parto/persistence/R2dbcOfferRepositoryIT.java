@@ -78,6 +78,38 @@ class R2dbcOfferRepositoryIT {
     }
 
     @Test
+    void requestOfferDerivesBuyerFromRequestOwnership() {
+        UUID buyer = UUID.randomUUID();
+        UUID seller = UUID.randomUUID();
+        UUID request = UUID.randomUUID();
+
+        StepVerifier.create(insertPartiesAndRequest(buyer, seller, request)
+                        .then(repository.createForRequest(seller, request, 5000, "MAD", false, 0, null)))
+                .assertNext(offer -> {
+                    assertThat(offer.buyerUserPublicId()).isEqualTo(buyer);
+                    assertThat(offer.sellerUserPublicId()).isEqualTo(seller);
+                    assertThat(offer.partRequestPublicId()).isEqualTo(request);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void listingOfferDerivesSellerFromListingOwnership() {
+        UUID buyer = UUID.randomUUID();
+        UUID seller = UUID.randomUUID();
+        UUID listing = UUID.randomUUID();
+
+        StepVerifier.create(insertPartiesAndListing(buyer, seller, listing)
+                        .then(repository.createForListing(buyer, listing, 5000, "MAD", false, 0, null)))
+                .assertNext(offer -> {
+                    assertThat(offer.buyerUserPublicId()).isEqualTo(buyer);
+                    assertThat(offer.sellerUserPublicId()).isEqualTo(seller);
+                    assertThat(offer.partListingPublicId()).isEqualTo(listing);
+                })
+                .verifyComplete();
+    }
+
+    @Test
     void statusUpdateRequiresActorAndExpectedVersion() {
         UUID buyer = UUID.randomUUID();
         UUID seller = UUID.randomUUID();

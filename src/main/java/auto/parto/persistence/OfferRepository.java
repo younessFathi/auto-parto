@@ -12,6 +12,14 @@ public interface OfferRepository {
                               long amountMinor, String currency, boolean negotiable,
                               long deliveryAmountMinor, String deliveryMode);
 
+    Mono<OfferRecord> createForRequest(UUID sellerUserPublicId, UUID requestPublicId,
+                                       long amountMinor, String currency, boolean negotiable,
+                                       long deliveryAmountMinor, String deliveryMode);
+
+    Mono<OfferRecord> createForListing(UUID buyerUserPublicId, UUID listingPublicId,
+                                       long amountMinor, String currency, boolean negotiable,
+                                       long deliveryAmountMinor, String deliveryMode);
+
     Mono<OfferRecord> findByPublicId(UUID publicId);
 
     Mono<OfferRecord> updateStatus(UUID publicId, UUID actorUserPublicId, String status,

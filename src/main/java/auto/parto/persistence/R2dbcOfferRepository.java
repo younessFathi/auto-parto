@@ -87,6 +87,69 @@ public final class R2dbcOfferRepository implements OfferRepository {
     }
 
     @Override
+    public Mono<OfferRecord> createForRequest(UUID sellerUserPublicId, UUID requestPublicId,
+                                              long amountMinor, String currency, boolean negotiable,
+                                              long deliveryAmountMinor, String deliveryMode) {
+        requirePublicId(sellerUserPublicId, "sellerUserPublicId");
+        requirePublicId(requestPublicId, "requestPublicId");
+        validateAmounts(amountMinor, deliveryAmountMinor);
+        requireText(currency, "currency");
+        return createFromTarget("part_request_id", "part_requests", requestPublicId, sellerUserPublicId,
+                null, amountMinor, currency, negotiable, deliveryAmountMinor, deliveryMode);
+    }
+
+    @Override
+    public Mono<OfferRecord> createForListing(UUID buyerUserPublicId, UUID listingPublicId,
+                                              long amountMinor, String currency, boolean negotiable,
+                                              long deliveryAmountMinor, String deliveryMode) {
+        requirePublicId(buyerUserPublicId, "buyerUserPublicId");
+        requirePublicId(listingPublicId, "listingPublicId");
+        validateAmounts(amountMinor, deliveryAmountMinor);
+        requireText(currency, "currency");
+        return createFromTarget("part_listing_id", "part_listings", listingPublicId, buyerUserPublicId,
+                buyerUserPublicId, amountMinor, currency, negotiable, deliveryAmountMinor, deliveryMode);
+    }
+
+    private Mono<OfferRecord> createFromTarget(String targetColumn, String targetTable, UUID targetPublicId,
+                                                UUID actorPublicId, UUID buyerPublicId, long amountMinor,
+                                                String currency, boolean negotiable, long deliveryAmountMinor,
+                                                String deliveryMode) {
+        boolean requestTarget = "part_request_id".equals(targetColumn);
+        String targetAlias = requestTarget ? "request" : "listing";
+        String buyerJoin = requestTarget ? "buyer.id = request.buyer_user_id" : "buyer.public_id = :buyerPublicId";
+        String sellerJoin = requestTarget ? "seller.public_id = :actorPublicId" : "seller.id = listing.seller_user_id";
+        String sql = """
+                INSERT INTO offers (public_id, %s, buyer_user_id, seller_user_id, amount_minor, currency,
+                                    negotiable, delivery_amount_minor, delivery_mode)
+                SELECT gen_random_uuid(), %s.id, buyer.id, seller.id, :amountMinor, :currency,
+                       :negotiable, :deliveryAmountMinor, :deliveryMode
+                FROM %s %s
+                JOIN app_users buyer ON %s
+                JOIN app_users seller ON %s
+                WHERE %s.public_id = :targetPublicId
+                  AND buyer.role = 'BUYER' AND buyer.status = 'ACTIVE'
+                  AND seller.role = 'SELLER' AND seller.status = 'ACTIVE'
+                RETURNING public_id
+                """.formatted(targetColumn, targetAlias, targetTable, targetAlias, buyerJoin, sellerJoin, targetAlias);
+        DatabaseClient.GenericExecuteSpec insert = databaseClient.sql(sql)
+                .bind("targetPublicId", targetPublicId)
+                .bind("amountMinor", amountMinor)
+                .bind("currency", currency)
+                .bind("negotiable", negotiable)
+                .bind("deliveryAmountMinor", deliveryAmountMinor);
+        if (requestTarget) {
+            insert = insert.bind("actorPublicId", actorPublicId);
+        } else {
+            insert = insert.bind("buyerPublicId", buyerPublicId);
+        }
+        insert = bindNullable(insert, "deliveryMode", deliveryMode, String.class);
+        return transactions.transactional(insert
+                        .map((row, metadata) -> row.get("public_id", UUID.class))
+                        .one())
+                .flatMap(this::findByPublicId);
+    }
+
+    @Override
     public Mono<OfferRecord> findByPublicId(UUID publicId) {
         requirePublicId(publicId, "publicId");
         return databaseClient.sql(SELECT + " WHERE offer.public_id = :publicId")
@@ -152,5 +215,10 @@ public final class R2dbcOfferRepository implements OfferRepository {
 
     private static void requireText(String value, String name) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " is required");
+    }
+
+    private static void validateAmounts(long amountMinor, long deliveryAmountMinor) {
+        if (amountMinor < 0) throw new IllegalArgumentException("amountMinor must be >= 0");
+        if (deliveryAmountMinor < 0) throw new IllegalArgumentException("deliveryAmountMinor must be >= 0");
     }
 }
