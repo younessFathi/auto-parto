@@ -39,7 +39,9 @@ class PieceControllerValidationIT {
                 .expectStatus().isBadRequest()
                 .expectHeader().exists("X-Request-Id")
                 .expectBody()
-                .jsonPath("$.message").isEqualTo("page must be >= 0")
+                .jsonPath("$.code").isEqualTo("INVALID_REQUEST")
+                .jsonPath("$.message").isEqualTo("Invalid request")
+                .jsonPath("$.requestId").isNotEmpty()
                 .jsonPath("$.path").isEqualTo("/pieces/customer1");
     }
 
@@ -53,7 +55,8 @@ class PieceControllerValidationIT {
                 .expectStatus().isBadRequest()
                 .expectHeader().exists("X-Request-Id")
                 .expectBody()
-                .jsonPath("$.message").isEqualTo("size must be between 1 and 100")
+                .jsonPath("$.code").isEqualTo("INVALID_REQUEST")
+                .jsonPath("$.message").isEqualTo("Invalid request")
                 .jsonPath("$.path").isEqualTo("/pieces/customer1");
     }
 
@@ -85,7 +88,8 @@ class PieceControllerValidationIT {
                 .expectStatus().isNotFound()
                 .expectHeader().exists("X-Request-Id")
                 .expectBody()
-                .jsonPath("$.message").isEqualTo("Piece not found with id: piece-404")
+                .jsonPath("$.code").isEqualTo("RESOURCE_NOT_FOUND")
+                .jsonPath("$.message").isEqualTo("Resource not found")
                 .jsonPath("$.path").isEqualTo("/pieces/piece-404/detail");
     }
 }
