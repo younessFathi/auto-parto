@@ -118,6 +118,20 @@ class JwtTokenAuthenticationFilterTest {
     }
 
     @Test
+    void allowsPublicHealthEndpointWithoutToken() {
+        MockServerHttpRequest request = MockServerHttpRequest.get("/actuator/health").build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        when(chain.filter(exchange)).thenReturn(Mono.empty());
+
+        filter.filter(exchange, chain).block();
+
+        verify(chain).filter(exchange);
+        verify(errorResponseWriter, never()).write(any(), any(), anyString(), anyString());
+        assertThat(exchange.getResponse().getStatusCode()).isNull();
+    }
+
+    @Test
     void returns401WhenNoAuthorizationHeader() {
         MockServerHttpRequest request = MockServerHttpRequest.get("/api/pieces").build();
         MockServerWebExchange exchange = MockServerWebExchange.from(request);

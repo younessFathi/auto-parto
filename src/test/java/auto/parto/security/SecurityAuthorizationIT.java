@@ -86,6 +86,14 @@ class SecurityAuthorizationIT extends BaseIntegrationTest {
     }
 
     @Test
+    void actuatorHealthAllowsUnauthenticatedAccess() {
+        webTestClient.get()
+                .uri("/actuator/health")
+                .exchange()
+                .expectStatus().value(status -> assertThat(status).isNotEqualTo(401));
+    }
+
+    @Test
     void protectedRouteRejectsMalformedToken() {
         requestPreferences("not-a-jwt")
                 .expectStatus().isUnauthorized()

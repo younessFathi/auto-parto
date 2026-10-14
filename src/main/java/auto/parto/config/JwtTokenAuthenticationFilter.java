@@ -63,7 +63,8 @@ public class JwtTokenAuthenticationFilter implements WebFilter {
                 || path.equals("/actuator/health")
                 || path.startsWith("/v3/api-docs")
                 || path.startsWith("/swagger-ui")
-                || path.startsWith("/webjars");
+                || path.startsWith("/webjars")
+                || path.equals("/actuator/health");
     }
 
     private String resolveToken(ServerHttpRequest request) {
