@@ -1,6 +1,7 @@
 package auto.parto.security;
 
 import auto.parto.config.BaseIntegrationTest;
+import auto.parto.config.FirebaseHealthIndicator;
 import auto.parto.model.NotificationPreferences;
 import auto.parto.repository.NotificationPreferencesRepository;
 import auto.parto.service.SellerService;
@@ -19,8 +20,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.boot.actuate.health.Health;
 import reactor.core.publisher.Mono;
 
 import javax.crypto.SecretKey;
@@ -38,6 +41,12 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 @AutoConfigureWebTestClient
+@TestPropertySource(properties = {
+        "management.health.defaults.enabled=false",
+        "management.health.db.enabled=false",
+        "management.health.r2dbc.enabled=false",
+        "management.health.firebase.enabled=false"
+})
 class SecurityAuthorizationIT extends BaseIntegrationTest {
 
     private static final byte[] TEST_SECRET_BYTES = generatedKey();
@@ -62,6 +71,9 @@ class SecurityAuthorizationIT extends BaseIntegrationTest {
     @MockitoBean
     private SecurityHelper securityHelper;
 
+    @MockitoBean
+    private FirebaseHealthIndicator firebaseHealthIndicator;
+
     @DynamicPropertySource
     static void jwtProperties(DynamicPropertyRegistry registry) {
         registry.add("JWT_SECRET", () -> TEST_SECRET);
@@ -71,6 +83,7 @@ class SecurityAuthorizationIT extends BaseIntegrationTest {
     @BeforeEach
     void clearPreferences() {
         preferencesRepository.deleteAll().block();
+        when(firebaseHealthIndicator.health()).thenReturn(Mono.just(Health.up().build()));
     }
 
     @Test
@@ -90,7 +103,9 @@ class SecurityAuthorizationIT extends BaseIntegrationTest {
         webTestClient.get()
                 .uri("/actuator/health")
                 .exchange()
-                .expectStatus().value(status -> assertThat(status).isNotEqualTo(401));
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo("UP");
     }
 
     @Test
