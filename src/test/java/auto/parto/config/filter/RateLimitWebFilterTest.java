@@ -1,5 +1,6 @@
 package auto.parto.config.filter;
 
+import auto.parto.config.ApiErrorResponseWriter;
 import auto.parto.service.RateLimitService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +19,7 @@ import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -27,10 +29,12 @@ class RateLimitWebFilterTest {
     private RateLimitService rateLimitService;
     @Mock
     private WebFilterChain chain;
+    @Mock
+    private ApiErrorResponseWriter errorResponseWriter;
 
     @Test
     void filter_allowsNonAuthPaths() {
-        RateLimitWebFilter filter = new RateLimitWebFilter(rateLimitService);
+        RateLimitWebFilter filter = new RateLimitWebFilter(rateLimitService, errorResponseWriter);
         MockServerHttpRequest request = MockServerHttpRequest.get("/api/pieces").build();
         MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
@@ -41,7 +45,7 @@ class RateLimitWebFilterTest {
 
     @Test
     void filter_allowsRequest_whenUnderLimit() {
-        RateLimitWebFilter filter = new RateLimitWebFilter(rateLimitService);
+        RateLimitWebFilter filter = new RateLimitWebFilter(rateLimitService, errorResponseWriter);
         MockServerHttpRequest request = MockServerHttpRequest.get("/auth/login")
                 .remoteAddress(new InetSocketAddress("192.168.1.1", 8080))
                 .build();
@@ -55,22 +59,24 @@ class RateLimitWebFilterTest {
 
     @Test
     void filter_blocksRequest_whenOverLimit() {
-        RateLimitWebFilter filter = new RateLimitWebFilter(rateLimitService);
+        RateLimitWebFilter filter = new RateLimitWebFilter(rateLimitService, errorResponseWriter);
         MockServerHttpRequest request = MockServerHttpRequest.get("/auth/validate-otp")
                 .remoteAddress(new InetSocketAddress("192.168.1.1", 8080))
                 .build();
         MockServerWebExchange exchange = MockServerWebExchange.from(request);
 
         when(rateLimitService.isAllowed(anyString(), anyInt(), any(Duration.class))).thenReturn(Mono.just(false));
+        when(errorResponseWriter.write(any(), any(), anyString(), anyString())).thenReturn(Mono.empty());
 
         filter.filter(exchange, chain).block();
 
-        assertThat(exchange.getResponse().getStatusCode().value()).isEqualTo(429);
+        verify(errorResponseWriter).write(exchange, org.springframework.http.HttpStatus.TOO_MANY_REQUESTS,
+                "RATE_LIMITED", "Too many requests");
     }
 
     @Test
     void filter_extractsClientIp_fromXForwardedFor() {
-        RateLimitWebFilter filter = new RateLimitWebFilter(rateLimitService);
+        RateLimitWebFilter filter = new RateLimitWebFilter(rateLimitService, errorResponseWriter);
         MockServerHttpRequest request = MockServerHttpRequest.get("/auth/login")
                 .header("X-Forwarded-For", "10.0.0.1, 192.168.1.1")
                 .build();
@@ -84,7 +90,7 @@ class RateLimitWebFilterTest {
 
     @Test
     void filter_allowsAuthPaths() {
-        RateLimitWebFilter filter = new RateLimitWebFilter(rateLimitService);
+        RateLimitWebFilter filter = new RateLimitWebFilter(rateLimitService, errorResponseWriter);
         
         String[] authPaths = {"/auth/login", "/auth/register", "/auth/validate-otp"};
         
@@ -103,7 +109,7 @@ class RateLimitWebFilterTest {
 
     @Test
     void filter_usesRemoteAddress_whenNoXForwardedFor() {
-        RateLimitWebFilter filter = new RateLimitWebFilter(rateLimitService);
+        RateLimitWebFilter filter = new RateLimitWebFilter(rateLimitService, errorResponseWriter);
         MockServerHttpRequest request = MockServerHttpRequest.get("/auth/validate")
                 .remoteAddress(new InetSocketAddress("192.168.1.1", 8080))
                 .build();

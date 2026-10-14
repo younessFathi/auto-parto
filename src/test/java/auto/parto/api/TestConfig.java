@@ -1,5 +1,8 @@
 package auto.parto.api;
 
+import auto.parto.config.ApiErrorResponseWriter;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import auto.parto.service.RateLimitService;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -14,6 +17,11 @@ import java.time.Duration;
 @TestConfiguration
 @EnableWebFluxSecurity
 class TestConfig {
+
+    @Bean
+    public ApiErrorResponseWriter apiErrorResponseWriter() {
+        return new ApiErrorResponseWriter(new ObjectMapper().registerModule(new JavaTimeModule()));
+    }
 
     @Bean
     @Primary

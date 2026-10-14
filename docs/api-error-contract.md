@@ -17,7 +17,7 @@ All handled API failures return the same JSON shape:
 }
 ```
 
-`code` is stable for client handling. `message` is safe for display and never contains exception details, credentials, tokens, OTPs, or provider payloads. `requestId` is returned when the request correlation filter is active and can be supplied to support for diagnosis.
+`code` is stable for client handling. `message` is safe for display and never contains exception details, credentials, tokens, OTPs, or provider payloads. `requestId` is generated or propagated for every handled response and can be supplied to support for diagnosis.
 
 | Category | HTTP status | Example codes |
 | --- | ---: | --- |

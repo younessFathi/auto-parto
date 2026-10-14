@@ -18,9 +18,11 @@ import reactor.core.publisher.Mono;
 public class JwtTokenAuthenticationFilter implements WebFilter {
     public static final String HEADER_PREFIX = "Bearer ";
     private final JwtTokenGenerator jwtTokenGenerator;
+    private final ApiErrorResponseWriter errorResponseWriter;
 
-    public JwtTokenAuthenticationFilter(JwtTokenGenerator jwtTokenGenerator){
+    public JwtTokenAuthenticationFilter(JwtTokenGenerator jwtTokenGenerator, ApiErrorResponseWriter errorResponseWriter){
         this.jwtTokenGenerator = jwtTokenGenerator;
+        this.errorResponseWriter = errorResponseWriter;
     }
 
     @NotNull
@@ -35,8 +37,8 @@ public class JwtTokenAuthenticationFilter implements WebFilter {
         String token = resolveToken(exchange.getRequest());
         if (token == null) {
             log.warn("Missing authentication token for protected endpoint: {}", path);
-            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-            return exchange.getResponse().setComplete();
+            return errorResponseWriter.write(exchange, HttpStatus.UNAUTHORIZED,
+                    "AUTHENTICATION_REQUIRED", "Authentication required");
         }
 
         try {
@@ -52,8 +54,8 @@ public class JwtTokenAuthenticationFilter implements WebFilter {
         }
 
         log.warn("Invalid or expired token for path: {}", path);
-        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-        return exchange.getResponse().setComplete();
+        return errorResponseWriter.write(exchange, HttpStatus.UNAUTHORIZED,
+                "AUTHENTICATION_FAILED", "Authentication failed");
     }
 
     private boolean isPublicEndpoint(String path) {

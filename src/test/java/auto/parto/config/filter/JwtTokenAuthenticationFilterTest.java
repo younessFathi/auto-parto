@@ -1,10 +1,12 @@
 package auto.parto.config.filter;
 
 import auto.parto.config.JwtTokenAuthenticationFilter;
+import auto.parto.config.ApiErrorResponseWriter;
 import auto.parto.utils.JwtTokenGenerator;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -24,7 +26,9 @@ import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,6 +37,14 @@ class JwtTokenAuthenticationFilterTest {
 
     @Mock
     private JwtTokenGenerator jwtTokenGenerator;
+
+    @Mock
+    private ApiErrorResponseWriter errorResponseWriter;
+
+    @BeforeEach
+    void stubErrorWriter() {
+        lenient().when(errorResponseWriter.write(any(), any(), anyString(), anyString())).thenReturn(Mono.empty());
+    }
 
     @Mock
     private WebFilterChain chain;
@@ -113,7 +125,8 @@ class JwtTokenAuthenticationFilterTest {
         filter.filter(exchange, chain).block();
 
         verify(chain, never()).filter(any());
-        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        verify(errorResponseWriter).write(exchange, HttpStatus.UNAUTHORIZED,
+                "AUTHENTICATION_REQUIRED", "Authentication required");
     }
 
     @Test
@@ -128,7 +141,8 @@ class JwtTokenAuthenticationFilterTest {
         filter.filter(exchange, chain).block();
 
         verify(chain, never()).filter(any());
-        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        verify(errorResponseWriter).write(exchange, HttpStatus.UNAUTHORIZED,
+                "AUTHENTICATION_FAILED", "Authentication failed");
     }
 
     @Test
@@ -143,7 +157,8 @@ class JwtTokenAuthenticationFilterTest {
         filter.filter(exchange, chain).block();
 
         verify(chain, never()).filter(any());
-        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        verify(errorResponseWriter).write(exchange, HttpStatus.UNAUTHORIZED,
+                "AUTHENTICATION_FAILED", "Authentication failed");
     }
 
     @Test
@@ -161,7 +176,7 @@ class JwtTokenAuthenticationFilterTest {
                 .expiration(new Date(now.getTime() + 3600000L))
                 .signWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(secret)))
                 .compact();
-        JwtTokenAuthenticationFilter realFilter = new JwtTokenAuthenticationFilter(realGenerator);
+        JwtTokenAuthenticationFilter realFilter = new JwtTokenAuthenticationFilter(realGenerator, errorResponseWriter);
         MockServerHttpRequest request = MockServerHttpRequest.get("/api/pieces")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .build();
@@ -170,7 +185,8 @@ class JwtTokenAuthenticationFilterTest {
         realFilter.filter(exchange, chain).block();
 
         verify(chain, never()).filter(any());
-        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        verify(errorResponseWriter).write(exchange, HttpStatus.UNAUTHORIZED,
+                "AUTHENTICATION_FAILED", "Authentication failed");
     }
 
     @Test

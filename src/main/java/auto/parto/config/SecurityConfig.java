@@ -25,7 +25,8 @@ public class SecurityConfig {
 
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http,
-                                                         JwtTokenGenerator jwtTokenGenerator) {
+                                                         JwtTokenGenerator jwtTokenGenerator,
+                                                         ApiErrorResponseWriter errorResponseWriter) {
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
@@ -36,7 +37,7 @@ public class SecurityConfig {
                         .pathMatchers("/actuator/health").permitAll()
                         .anyExchange().authenticated()
                 )
-                .addFilterAt(new JwtTokenAuthenticationFilter(jwtTokenGenerator), SecurityWebFiltersOrder.HTTP_BASIC)
+                .addFilterAt(new JwtTokenAuthenticationFilter(jwtTokenGenerator, errorResponseWriter), SecurityWebFiltersOrder.HTTP_BASIC)
                 .build();
     }
 

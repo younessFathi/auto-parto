@@ -76,13 +76,23 @@ class SecurityAuthorizationIT extends BaseIntegrationTest {
     @Test
     void protectedRouteRejectsMissingToken() {
         requestPreferences(null)
-                .expectStatus().isUnauthorized();
+                .expectStatus().isUnauthorized()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("AUTHENTICATION_REQUIRED")
+                .jsonPath("$.message").isEqualTo("Authentication required")
+                .jsonPath("$.status").isEqualTo(401)
+                .jsonPath("$.requestId").isNotEmpty()
+                .jsonPath("$.path").isEqualTo("/api/v1/notifications/preferences");
     }
 
     @Test
     void protectedRouteRejectsMalformedToken() {
         requestPreferences("not-a-jwt")
-                .expectStatus().isUnauthorized();
+                .expectStatus().isUnauthorized()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("AUTHENTICATION_FAILED")
+                .jsonPath("$.message").isEqualTo("Authentication failed")
+                .jsonPath("$.requestId").isNotEmpty();
     }
 
     @Test
@@ -91,7 +101,10 @@ class SecurityAuthorizationIT extends BaseIntegrationTest {
                 Map.of("principal_id", "buyer-1", "email", "buyer@example.test", "roles", "ROLE_BUYER"));
 
         requestPreferences(token)
-                .expectStatus().isUnauthorized();
+                .expectStatus().isUnauthorized()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("AUTHENTICATION_FAILED")
+                .jsonPath("$.message").isEqualTo("Authentication failed");
     }
 
     @Test
@@ -101,7 +114,10 @@ class SecurityAuthorizationIT extends BaseIntegrationTest {
                 Map.of("principal_id", "buyer-1", "email", "buyer@example.test", "roles", "ROLE_BUYER"));
 
         requestPreferences(token)
-                .expectStatus().isUnauthorized();
+                .expectStatus().isUnauthorized()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("AUTHENTICATION_FAILED")
+                .jsonPath("$.message").isEqualTo("Authentication failed");
     }
 
     @Test

@@ -1,5 +1,6 @@
 package auto.parto.config.filter;
 
+import auto.parto.config.ApiErrorResponseWriter;
 import auto.parto.service.RateLimitService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,11 +18,11 @@ import java.time.Duration;
 @Slf4j
 public class RateLimitWebFilter implements WebFilter {
 
-    private static final String RATE_LIMIT_EXCEEDED = "Rate limit exceeded. Try again later.";
     private static final int AUTH_MAX_REQUESTS = 5;
     private static final Duration AUTH_WINDOW = Duration.ofMinutes(1);
 
     private final RateLimitService rateLimitService;
+    private final ApiErrorResponseWriter errorResponseWriter;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
@@ -39,11 +40,8 @@ public class RateLimitWebFilter implements WebFilter {
                         return chain.filter(exchange);
                     } else {
                         log.warn("Rate limit exceeded for IP: {}", clientIp);
-                        exchange.getResponse().setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
-                        exchange.getResponse().getHeaders().add("Content-Type", "application/json");
-                        String body = "{\"error\":\"" + RATE_LIMIT_EXCEEDED + "\"}";
-                        return exchange.getResponse()
-                                .writeWith(Mono.just(exchange.getResponse().bufferFactory().wrap(body.getBytes())));
+                        return errorResponseWriter.write(exchange, HttpStatus.TOO_MANY_REQUESTS,
+                                "RATE_LIMITED", "Too many requests");
                     }
                 });
     }

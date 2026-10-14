@@ -9,6 +9,7 @@ import auto.parto.exception.InvalidGCPToken;
 import auto.parto.exception.OtpInvalidException;
 import auto.parto.exception.OtpLockedException;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
@@ -147,6 +148,18 @@ class OtpExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().getCode()).isEqualTo("INVALID_FILE_UPLOAD");
         assertThat(response.getBody().getMessage()).doesNotContain("storage provider response");
+    }
+
+    @Test
+    void mapsPersistenceDuplicateToConflictContract() {
+        OtpExceptionHandler handler = new OtpExceptionHandler();
+
+        ResponseEntity<ApiErrorResponse> response = handler.handlePersistenceConflict(
+                new DuplicateKeyException("database constraint details"), exchange("/auth/send-otp-email"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().getCode()).isEqualTo("CONFLICT");
+        assertThat(response.getBody().getMessage()).doesNotContain("database constraint details");
     }
 
     private MockServerWebExchange exchange(String path) {

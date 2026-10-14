@@ -13,6 +13,8 @@ import auto.parto.exception.OtpLockedException;
 import auto.parto.exception.OtpTooManyRequestsException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -92,6 +94,11 @@ public class OtpExceptionHandler {
 
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ApiErrorResponse> handleConflictException(ConflictException ex, ServerWebExchange exchange) {
+        return buildErrorResponse(HttpStatus.CONFLICT, "CONFLICT", "Request conflicts with the current state", exchange, null);
+    }
+
+    @ExceptionHandler({DuplicateKeyException.class, DataIntegrityViolationException.class})
+    public ResponseEntity<ApiErrorResponse> handlePersistenceConflict(Exception ex, ServerWebExchange exchange) {
         return buildErrorResponse(HttpStatus.CONFLICT, "CONFLICT", "Request conflicts with the current state", exchange, null);
     }
 
