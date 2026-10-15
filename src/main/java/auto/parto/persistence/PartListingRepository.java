@@ -11,6 +11,10 @@ public interface PartListingRepository {
     Mono<PartListingRecord> create(UUID sellerUserPublicId, String name, String description,
                                     String condition, String category, long amountMinor, String currency);
 
+    Mono<PartListingRecord> create(UUID sellerUserPublicId, String name, String description,
+                                   String condition, String category, String vehicleMake,
+                                   String vehicleModel, Integer vehicleYear, long amountMinor, String currency);
+
     Mono<PartListingRecord> findByPublicId(UUID publicId);
 
     Flux<PartListingRecord> findBySellerPublicId(UUID sellerUserPublicId, int page, int size);

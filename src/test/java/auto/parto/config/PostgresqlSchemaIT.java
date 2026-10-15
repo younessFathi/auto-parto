@@ -33,7 +33,7 @@ class PostgresqlSchemaIT {
                 .locations("classpath:db/migration")
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(5);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(6);
         assertThat(flyway.migrate().migrationsExecuted).isZero();
 
         try (Connection connection = POSTGRES.createConnection("")) {
@@ -65,6 +65,7 @@ class PostgresqlSchemaIT {
             assertThat(indexExists(connection, "wallet_ledger", "wallet_ledger_idempotency_uidx")).isTrue();
             assertThat(indexExists(connection, "otp_challenges", "otp_challenges_active_login_user_uidx")).isTrue();
             assertThat(indexExists(connection, "part_listings", "part_listings_vehicle_search_idx")).isTrue();
+            assertThat(indexExists(connection, "part_listings", "part_listings_seller_business_created_idx")).isTrue();
 
             assertThat(constraintExists(connection, "offers", "offers_target_chk")).isTrue();
             assertThat(constraintExists(connection, "offers", "offers_request_owner_fk")).isTrue();
@@ -77,6 +78,9 @@ class PostgresqlSchemaIT {
             assertThat(constraintExists(connection, "outbox_deliveries", "outbox_deliveries_event_destination_uidx")).isTrue();
             assertThat(constraintExists(connection, "notification_attempts", "notification_attempts_status_chk")).isTrue();
             assertThat(constraintExists(connection, "device_tokens", "device_tokens_invalidated_at_chk")).isTrue();
+            assertThat(constraintExists(connection, "part_listings", "part_listings_business_status_chk")).isTrue();
+            assertThat(constraintExists(connection, "part_listings", "part_listings_delivery_status_chk")).isTrue();
+            assertThat(constraintExists(connection, "part_listings", "part_listings_storage_status_chk")).isTrue();
             assertThat(triggerExists(connection, "wallet_ledger_immutable_trigger")).isTrue();
             assertThat(triggerExists(connection, "audit_records_immutable_trigger")).isTrue();
             assertThat(triggerExists(connection, "app_users_audit_trigger")).isTrue();

@@ -2,6 +2,7 @@ package auto.parto.persistence;
 
 import auto.parto.enums.Category;
 import auto.parto.enums.Condition;
+import auto.parto.enums.Currency;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
@@ -19,8 +20,10 @@ public class R2dbcPartListingRepository implements PartListingRepository {
 
     private static final String SELECT = """
             SELECT pl.public_id, au.public_id AS seller_public_id, pl.name, pl.description,
+                   pl.vehicle_make, pl.vehicle_model, pl.vehicle_year,
                    pl.condition, pl.category, pl.amount_minor, pl.currency, pl.status,
-                   pl.view_count, pl.created_at, pl.updated_at
+                   pl.business_status, pl.delivery_status, pl.storage_status,
+                   pl.view_count, pl.created_at, pl.updated_at, pl.version
             FROM part_listings pl
             JOIN app_users au ON au.id = pl.seller_user_id
             """;
@@ -36,15 +39,26 @@ public class R2dbcPartListingRepository implements PartListingRepository {
     @Override
     public Mono<PartListingRecord> create(UUID sellerUserPublicId, String name, String description,
                                           String condition, String category, long amountMinor, String currency) {
+        return create(sellerUserPublicId, name, description, condition, category, null, null, null,
+                amountMinor, currency);
+    }
+
+    @Override
+    public Mono<PartListingRecord> create(UUID sellerUserPublicId, String name, String description,
+                                          String condition, String category, String vehicleMake,
+                                          String vehicleModel, Integer vehicleYear, long amountMinor, String currency) {
         requirePublicId(sellerUserPublicId, "sellerUserPublicId");
         requireText(name, "name");
         if (amountMinor < 0) throw new IllegalArgumentException("amountMinor must be >= 0");
-        requireText(currency, "currency");
+        requireCurrency(currency);
         DatabaseClient.GenericExecuteSpec insert = databaseClient.sql("""
                         INSERT INTO part_listings (public_id, seller_user_id, name, description, condition,
-                                                   category, amount_minor, currency)
-                        SELECT gen_random_uuid(), id, :name, :description, :condition, :category,
-                               :amountMinor, :currency
+                                                   vehicle_make, vehicle_model, vehicle_year,
+                                                   category, amount_minor, currency, business_status,
+                                                   delivery_status, storage_status)
+                        SELECT gen_random_uuid(), id, :name, :description, :condition,
+                               :vehicleMake, :vehicleModel, :vehicleYear, :category,
+                               :amountMinor, :currency, 'DRAFT', 'NOT_READY', 'NOT_STORED'
                         FROM app_users
                         WHERE public_id = :sellerPublicId AND role = 'SELLER' AND status = 'ACTIVE'
                         RETURNING public_id
@@ -55,6 +69,9 @@ public class R2dbcPartListingRepository implements PartListingRepository {
                 .bind("currency", currency);
         insert = bindNullable(insert, "description", description);
         insert = bindNullable(insert, "condition", condition);
+        insert = bindNullable(insert, "vehicleMake", vehicleMake);
+        insert = bindNullable(insert, "vehicleModel", vehicleModel);
+        insert = vehicleYear == null ? insert.bindNull("vehicleYear", Integer.class) : insert.bind("vehicleYear", vehicleYear);
         insert = bindNullable(insert, "category", category);
         return transactions.transactional(insert
                         .map((row, metadata) -> row.get("public_id", UUID.class))
@@ -111,7 +128,8 @@ public class R2dbcPartListingRepository implements PartListingRepository {
         if (updatedAt == null) throw new IllegalArgumentException("updatedAt is required");
         return transactions.transactional(databaseClient.sql("""
                         UPDATE part_listings pl
-                        SET status = :status, version = pl.version + 1, updated_at = :updatedAt
+                        SET status = :status, business_status = :status,
+                            version = pl.version + 1, updated_at = :updatedAt
                         FROM app_users au
                         WHERE pl.public_id = :publicId
                           AND au.id = pl.seller_user_id
@@ -135,14 +153,21 @@ public class R2dbcPartListingRepository implements PartListingRepository {
                 row.get("seller_public_id", UUID.class),
                 row.get("name", String.class),
                 row.get("description", String.class),
+                row.get("vehicle_make", String.class),
+                row.get("vehicle_model", String.class),
+                row.get("vehicle_year", Integer.class),
                 enumValue(row.get("condition", String.class), Condition.class),
                 enumValue(row.get("category", String.class), Category.class),
                 row.get("amount_minor", Long.class),
                 row.get("currency", String.class),
                 row.get("status", String.class),
+                row.get("business_status", String.class),
+                row.get("delivery_status", String.class),
+                row.get("storage_status", String.class),
                 row.get("view_count", Long.class),
                 row.get("created_at", Instant.class),
-                row.get("updated_at", Instant.class));
+                row.get("updated_at", Instant.class),
+                row.get("version", Long.class));
     }
 
     private static <E extends Enum<E>> E enumValue(String value, Class<E> type) {
@@ -160,6 +185,15 @@ public class R2dbcPartListingRepository implements PartListingRepository {
 
     private static void requireText(String value, String name) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " is required");
+    }
+
+    private static void requireCurrency(String value) {
+        requireText(value, "currency");
+        try {
+            Currency.valueOf(value);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("currency is not supported", exception);
+        }
     }
 
     private static void requirePage(int page, int size) {

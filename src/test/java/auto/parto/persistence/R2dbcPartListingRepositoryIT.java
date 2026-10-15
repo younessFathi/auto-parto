@@ -71,6 +71,9 @@ class R2dbcPartListingRepositoryIT {
                     assertThat(listing.amountMinor()).isEqualTo(12500);
                     assertThat(listing.currency()).isEqualTo("MAD");
                     assertThat(listing.status()).isEqualTo("DRAFT");
+                    assertThat(listing.businessStatus()).isEqualTo("DRAFT");
+                    assertThat(listing.deliveryStatus()).isEqualTo("NOT_READY");
+                    assertThat(listing.storageStatus()).isEqualTo("NOT_STORED");
                 })
                 .verifyComplete();
     }
@@ -104,7 +107,11 @@ class R2dbcPartListingRepositoryIT {
                                 Condition.USED.name(), Category.CAR.name(), 3000, "MAD"))
                         .flatMap(listing -> repository.updateStatus(listing.publicId(), seller,
                                 "PUBLISHED", 0, Instant.now())))
-                .assertNext(listing -> assertThat(listing.status()).isEqualTo("PUBLISHED"))
+                .assertNext(listing -> {
+                    assertThat(listing.status()).isEqualTo("PUBLISHED");
+                    assertThat(listing.businessStatus()).isEqualTo("PUBLISHED");
+                    assertThat(listing.version()).isEqualTo(1);
+                })
                 .verifyComplete();
     }
 

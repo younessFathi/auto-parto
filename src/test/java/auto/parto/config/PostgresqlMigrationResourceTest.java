@@ -79,6 +79,19 @@ class PostgresqlMigrationResourceTest {
     }
 
     @Test
+    void partListingStatusMigrationSeparatesLifecycleStates() throws IOException {
+        String sql = readResource("/db/migration/V6__separate_part_listing_statuses.sql");
+
+        assertThat(sql).contains("ADD COLUMN business_status VARCHAR(32)");
+        assertThat(sql).contains("ADD COLUMN delivery_status VARCHAR(32)");
+        assertThat(sql).contains("ADD COLUMN storage_status VARCHAR(32)");
+        assertThat(sql).contains("part_listings_business_status_chk");
+        assertThat(sql).contains("part_listings_delivery_status_chk");
+        assertThat(sql).contains("part_listings_storage_status_chk");
+        assertThat(sql).contains("part_listings_seller_business_created_idx");
+    }
+
+    @Test
     void auditDatabaseMigrationIsAppendOnlyAndIdempotentByEventId() throws IOException {
         String sql = readResource("/db/audit-migration/V1__create_audit_event_schema.sql");
 

@@ -179,7 +179,7 @@ Every human or AI prompt or contribution session must record a concise trace in 
 - Before editing, state the intended scope when the task is non-trivial.
 - Prefer the smallest correct change.
 - Do not modify unrelated files.
-- Do not create commits unless the user explicitly asks for one.
+- After completing any implementation, bug fix, or technical enhancement, create a Git commit unless the user explicitly asks to leave the work uncommitted.
 - Do not run destructive Git commands such as `git reset --hard` or `git checkout --`.
 - Report files changed, tests run, test limitations, and any unresolved risks.
 - If a requirement conflicts with security, data integrity, or an existing user change, stop and ask for clarification.
