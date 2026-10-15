@@ -28,7 +28,6 @@ public class SearchNotification {
     private String category; // Engine, Brakes, Electrical, etc.
 
     // Search criteria
-    private Long maxPriceMinor;
     private Integer quantity;
     private String urgency; // IMMEDIATE, WITHIN_DAY, FLEXIBLE
     private String searchType; // IMAGE, TEXT, VIN, PART_NUMBER
@@ -79,7 +78,6 @@ public class SearchNotification {
                 .buyerLocation(location)
                 .searchType("TEXT")
                 .urgency("IMMEDIATE")
-                .maxPriceMinor(0L) // No price limit for urgent searches
                 .createdAt(LocalDateTime.now())
                 .expiresAt(LocalDateTime.now().plusHours(6))
                 .build();
@@ -92,10 +90,6 @@ public class SearchNotification {
 
     public boolean isExpired() {
         return expiresAt != null && LocalDateTime.now().isAfter(expiresAt);
-    }
-
-    public boolean hasPriceLimit() {
-        return maxPriceMinor != null && maxPriceMinor > 0;
     }
 
     public String getSearchDescription() {

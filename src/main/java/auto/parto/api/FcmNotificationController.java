@@ -177,7 +177,6 @@ public class FcmNotificationController {
                 .carMake(request.getCarMake())
                 .carModel(request.getCarModel())
                 .buyerLocation(request.getBuyerLocation())
-                .maxPriceMinor(request.getMaxPriceMinor())
                 .urgency(request.getUrgency())
                 .searchTime(LocalDateTime.now())
                 .imageUrl(request.getImageUrl())

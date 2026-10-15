@@ -66,6 +66,9 @@ public class SellerRepository implements ISellerRepository {
 
     @Override
     public Mono<Seller> addFunds(String id, long amountMinor) {
+        if (amountMinor == Long.MIN_VALUE) {
+            return Mono.error(new IllegalArgumentException("amountMinor is outside the supported debit range"));
+        }
         Query query = new Query(Criteria.where("_id").is(id).and("isActive").is(true));
         if (amountMinor < 0) {
             query.addCriteria(Criteria.where("wallet.balanceMinor").gte(Math.abs(amountMinor)));
