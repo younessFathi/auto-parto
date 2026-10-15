@@ -107,6 +107,24 @@ class PartListingControllerTest {
                 .expectStatus().isEqualTo(HttpStatus.CONFLICT);
     }
 
+    @Test
+    void mapsDifferentSellerTransitionToForbidden() {
+        UUID authenticatedSellerId = UUID.randomUUID();
+        UUID listingId = UUID.randomUUID();
+        when(service.transition(authenticatedSellerId, listingId, "CLOSED")).thenReturn(Mono.error(
+                new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "The authenticated seller does not own this listing")));
+
+        webTestClient.mutateWith(SecurityMockServerConfigurers.mockAuthentication(
+                        CanonicalTestAuthentication.seller(authenticatedSellerId.toString())))
+                .post().uri(uriBuilder -> uriBuilder.path("/api/v1/part-listings/{id}/transition")
+                        .queryParam("status", "CLOSED").build(listingId))
+                .exchange()
+                .expectStatus().isForbidden();
+
+        verify(service).transition(authenticatedSellerId, listingId, "CLOSED");
+    }
+
     private static PartListingResponse response(UUID sellerId, String status) {
         Instant now = Instant.now();
         return new PartListingResponse(UUID.randomUUID(), sellerId, "Brake pad", "Front axle", "Toyota",
