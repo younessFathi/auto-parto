@@ -1,6 +1,7 @@
 package auto.parto.service;
 
 import auto.parto.dto.PartRequestCreateRequest;
+import auto.parto.dto.PartRequestPageResponse;
 import auto.parto.persistence.PartRequestRecord;
 import auto.parto.persistence.PartRequestRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,7 +10,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -19,6 +19,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -49,6 +50,36 @@ class PartRequestServiceTest {
                     assertThat(response.publicId()).isEqualTo(created.publicId());
                     assertThat(response.buyerUserPublicId()).isEqualTo(buyerId);
                     assertThat(response.status()).isEqualTo("OPEN");
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void mapsMissingBuyerDuringCreateToNotFound() {
+        UUID buyerId = UUID.randomUUID();
+        when(repository.create(eq(buyerId), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(Mono.empty());
+
+        StepVerifier.create(service.create(buyerId,
+                        new PartRequestCreateRequest("Brake pads", null, null, null, null, null, null)))
+                .expectErrorSatisfies(error -> assertThat(error).isInstanceOf(auto.parto.exception.EntityNotFoundException.class))
+                .verify();
+    }
+
+    @Test
+    void fetchesOneExtraRecordAndReturnsNextCursor() {
+        UUID buyerId = UUID.randomUUID();
+        PartRequestRecord first = request(buyerId, "OPEN");
+        PartRequestRecord second = request(buyerId, "OPEN");
+        PartRequestRecord extra = request(buyerId, "OPEN");
+        when(repository.findByBuyerUserPublicId(eq(buyerId), isNull(), isNull(), eq(3)))
+                .thenReturn(reactor.core.publisher.Flux.just(first, second, extra));
+
+        StepVerifier.create(service.findMine(buyerId, null, 2))
+                .assertNext(page -> {
+                    assertThat(page.items()).hasSize(2);
+                    assertThat(page.items().get(0).publicId()).isEqualTo(first.publicId());
+                    assertThat(page.nextCursor()).isNotBlank();
                 })
                 .verifyComplete();
     }
