@@ -1,5 +1,6 @@
 package auto.parto.persistence;
 
+import auto.parto.enums.Currency;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
@@ -24,7 +25,7 @@ public class R2dbcWalletRepository implements WalletRepository {
     @Override
     public Mono<WalletRecord> findByOwnerPublicId(UUID ownerUserPublicId, String currency) {
         requirePublicId(ownerUserPublicId, "ownerUserPublicId");
-        requireText(currency, "currency");
+        requireCurrency(currency);
         return databaseClient.sql(selectWalletSql() + " WHERE owner.public_id = :ownerPublicId AND wallet.currency = :currency")
                 .bind("ownerPublicId", ownerUserPublicId)
                 .bind("currency", currency)
@@ -36,7 +37,7 @@ public class R2dbcWalletRepository implements WalletRepository {
     public Mono<WalletMutationResult> mutate(UUID ownerUserPublicId, String currency, long amountMinor,
                                              String operation, String idempotencyKey, String externalReference) {
         requirePublicId(ownerUserPublicId, "ownerUserPublicId");
-        requireText(currency, "currency");
+        requireCurrency(currency);
         requireOperation(operation, amountMinor);
         return transactions.transactional(ensureWallet(ownerUserPublicId, currency)
                 .then(lockWallet(ownerUserPublicId, currency))
@@ -188,6 +189,10 @@ public class R2dbcWalletRepository implements WalletRepository {
 
     private static void requireText(String value, String name) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " is required");
+    }
+
+    private static void requireCurrency(String value) {
+        Currency.requireSupportedCode(value);
     }
 
     private static void requireOperation(String operation, long amountMinor) {

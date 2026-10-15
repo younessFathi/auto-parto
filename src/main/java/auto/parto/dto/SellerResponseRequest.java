@@ -12,5 +12,5 @@ public class SellerResponseRequest {
     private String sellerId;
     private String sellerName;
     private String partName;
-    private Double price;
+    private Long priceMinor;
 }

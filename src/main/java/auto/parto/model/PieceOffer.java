@@ -10,7 +10,6 @@ import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -30,7 +29,7 @@ public class PieceOffer {
     private String customerId;
     private String name;
     private String description;
-    private BigDecimal price;
+    private long priceMinor;
     private Currency currency;
     private LocalDateTime createAt;
     private LocalDateTime modifiedAt;
@@ -42,7 +41,7 @@ public class PieceOffer {
     private Integer seeNumber;
     private DeliveryMode deliveryMode;
     private Boolean isFreeDelivery;
-    private BigDecimal deliveryPrice;
+    private long deliveryPriceMinor;
     private Integer warranty;
     private Duration duration;
 }

@@ -1,5 +1,6 @@
 package auto.parto.persistence;
 
+import auto.parto.enums.Currency;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
@@ -53,7 +54,7 @@ public class R2dbcOfferRepository implements OfferRepository {
         }
         if (amountMinor < 0) throw new IllegalArgumentException("amountMinor must be >= 0");
         if (deliveryAmountMinor < 0) throw new IllegalArgumentException("deliveryAmountMinor must be >= 0");
-        requireText(currency, "currency");
+        requireCurrency(currency);
         DatabaseClient.GenericExecuteSpec insert = databaseClient.sql("""
                         INSERT INTO offers (public_id, part_request_id, part_listing_id, buyer_user_id,
                                             seller_user_id, amount_minor, currency, negotiable,
@@ -93,7 +94,7 @@ public class R2dbcOfferRepository implements OfferRepository {
         requirePublicId(sellerUserPublicId, "sellerUserPublicId");
         requirePublicId(requestPublicId, "requestPublicId");
         validateAmounts(amountMinor, deliveryAmountMinor);
-        requireText(currency, "currency");
+        requireCurrency(currency);
         return createFromTarget("part_request_id", "part_requests", requestPublicId, sellerUserPublicId,
                 null, amountMinor, currency, negotiable, deliveryAmountMinor, deliveryMode);
     }
@@ -105,7 +106,7 @@ public class R2dbcOfferRepository implements OfferRepository {
         requirePublicId(buyerUserPublicId, "buyerUserPublicId");
         requirePublicId(listingPublicId, "listingPublicId");
         validateAmounts(amountMinor, deliveryAmountMinor);
-        requireText(currency, "currency");
+        requireCurrency(currency);
         return createFromTarget("part_listing_id", "part_listings", listingPublicId, buyerUserPublicId,
                 buyerUserPublicId, amountMinor, currency, negotiable, deliveryAmountMinor, deliveryMode);
     }
@@ -215,6 +216,10 @@ public class R2dbcOfferRepository implements OfferRepository {
 
     private static void requireText(String value, String name) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " is required");
+    }
+
+    private static void requireCurrency(String value) {
+        Currency.requireSupportedCode(value);
     }
 
     private static void validateAmounts(long amountMinor, long deliveryAmountMinor) {

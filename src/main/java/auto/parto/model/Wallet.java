@@ -8,22 +8,20 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.math.BigDecimal;
-
 @Data
 @NoArgsConstructor
 @Builder
 public class Wallet {
     @Id
     private String id;
-    private BigDecimal balance;
+    private long balanceMinor;
     private Currency currency;
-    public Wallet(String id, BigDecimal balance, Currency currency) {
+    public Wallet(String id, long balanceMinor, Currency currency) {
         this.id = id;
-        this.balance = balance;
+        this.balanceMinor = balanceMinor;
         this.currency = currency;
     }
-    public void addFunds(BigDecimal amount) {
-        this.balance = this.balance.add(amount);
+    public void addFunds(long amountMinor) {
+        this.balanceMinor = Math.addExact(this.balanceMinor, amountMinor);
     }
 }

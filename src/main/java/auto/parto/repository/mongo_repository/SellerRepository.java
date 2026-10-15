@@ -13,7 +13,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -66,12 +65,12 @@ public class SellerRepository implements ISellerRepository {
     }
 
     @Override
-    public Mono<Seller> addFunds(String id, BigDecimal amount) {
+    public Mono<Seller> addFunds(String id, long amountMinor) {
         Query query = new Query(Criteria.where("_id").is(id).and("isActive").is(true));
-        if (amount.compareTo(BigDecimal.ZERO) < 0) {
-            query.addCriteria(Criteria.where("wallet.balance").gte(amount.abs()));
+        if (amountMinor < 0) {
+            query.addCriteria(Criteria.where("wallet.balanceMinor").gte(Math.abs(amountMinor)));
         }
-        Update update = new Update().inc("wallet.balance", amount);
+        Update update = new Update().inc("wallet.balanceMinor", amountMinor);
         return reactiveMongoTemplate.findAndModify(
                 query,
                 update,

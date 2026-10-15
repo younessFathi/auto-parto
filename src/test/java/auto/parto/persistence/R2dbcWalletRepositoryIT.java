@@ -22,6 +22,7 @@ import static io.r2dbc.spi.ConnectionFactoryOptions.PASSWORD;
 import static io.r2dbc.spi.ConnectionFactoryOptions.PORT;
 import static io.r2dbc.spi.ConnectionFactoryOptions.USER;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -105,6 +106,14 @@ class R2dbcWalletRepositoryIT {
 
         StepVerifier.create(repository.mutate(missingOwner, "MAD", 100, "CREDIT", "missing", null))
                 .verifyComplete();
+    }
+
+    @Test
+    void unsupportedCurrencyIsRejectedBeforePersistence() {
+        assertThatThrownBy(() -> repository.mutate(UUID.randomUUID(), "XXX", 100,
+                "CREDIT", "unsupported", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("unsupported currency");
     }
 
     private reactor.core.publisher.Mono<Void> insertUser(UUID publicId) {

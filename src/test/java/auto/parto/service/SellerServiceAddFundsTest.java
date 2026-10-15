@@ -18,6 +18,7 @@ import reactor.test.StepVerifier;
 import java.math.BigDecimal;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
@@ -32,16 +33,16 @@ class SellerServiceAddFundsTest {
     @InjectMocks
     private SellerService sellerService;
 
-    private SellerDto createSellerDto(BigDecimal balance) {
+    private SellerDto createSellerDto(long balanceMinor) {
         return SellerDto.builder()
                 .id("seller-1")
-                .walletDto(WalletDto.builder().balance(balance).build())
+                .walletDto(WalletDto.builder().balanceMinor(balanceMinor).build())
                 .build();
     }
 
     @Test
     void addFunds_negativeAmount_throwsInsufficientBalance_whenResultIsNegative() {
-        when(sellerRepository.addFunds("seller-1", new BigDecimal("-100.00")))
+        when(sellerRepository.addFunds("seller-1", -10000L))
                 .thenReturn(Mono.empty());
 
         StepVerifier.create(sellerService.addFunds("seller-1", new BigDecimal("-100.00")))
@@ -53,12 +54,12 @@ class SellerServiceAddFundsTest {
     void addFunds_negativeAmount_succeeds_whenResultIsZero() {
         Seller seller = Seller.builder()
                 .id("seller-1")
-                .wallet(Wallet.builder().balance(BigDecimal.ZERO).build())
+                .wallet(Wallet.builder().balanceMinor(0L).build())
                 .build();
 
-        when(sellerRepository.addFunds(eq("seller-1"), any(BigDecimal.class)))
+        when(sellerRepository.addFunds(eq("seller-1"), anyLong()))
                 .thenReturn(Mono.just(seller));
-        when(sellerDbMapper.toDto(any(Seller.class))).thenReturn(createSellerDto(BigDecimal.ZERO));
+        when(sellerDbMapper.toDto(any(Seller.class))).thenReturn(createSellerDto(0L));
 
         StepVerifier.create(sellerService.addFunds("seller-1", new BigDecimal("-100.00")))
                 .expectNextCount(1)
@@ -69,12 +70,12 @@ class SellerServiceAddFundsTest {
     void addFunds_negativeAmount_succeeds_whenResultIsPositive() {
         Seller seller = Seller.builder()
                 .id("seller-1")
-                .wallet(Wallet.builder().balance(new BigDecimal("50.00")).build())
+                .wallet(Wallet.builder().balanceMinor(5000L).build())
                 .build();
 
-        when(sellerRepository.addFunds(eq("seller-1"), any(BigDecimal.class)))
+        when(sellerRepository.addFunds(eq("seller-1"), anyLong()))
                 .thenReturn(Mono.just(seller));
-        when(sellerDbMapper.toDto(any(Seller.class))).thenReturn(createSellerDto(new BigDecimal("50.00")));
+        when(sellerDbMapper.toDto(any(Seller.class))).thenReturn(createSellerDto(5000L));
 
         StepVerifier.create(sellerService.addFunds("seller-1", new BigDecimal("-50.00")))
                 .expectNextCount(1)
@@ -85,12 +86,12 @@ class SellerServiceAddFundsTest {
     void addFunds_positiveAmount_succeeds() {
         Seller seller = Seller.builder()
                 .id("seller-1")
-                .wallet(Wallet.builder().balance(new BigDecimal("150.00")).build())
+                .wallet(Wallet.builder().balanceMinor(15000L).build())
                 .build();
 
-        when(sellerRepository.addFunds(eq("seller-1"), any(BigDecimal.class)))
+        when(sellerRepository.addFunds(eq("seller-1"), anyLong()))
                 .thenReturn(Mono.just(seller));
-        when(sellerDbMapper.toDto(any(Seller.class))).thenReturn(createSellerDto(new BigDecimal("150.00")));
+        when(sellerDbMapper.toDto(any(Seller.class))).thenReturn(createSellerDto(15000L));
 
         StepVerifier.create(sellerService.addFunds("seller-1", new BigDecimal("50.00")))
                 .expectNextCount(1)
@@ -101,12 +102,12 @@ class SellerServiceAddFundsTest {
     void addFunds_zeroAmount_succeeds() {
         Seller seller = Seller.builder()
                 .id("seller-1")
-                .wallet(Wallet.builder().balance(new BigDecimal("100.00")).build())
+                .wallet(Wallet.builder().balanceMinor(10000L).build())
                 .build();
 
-        when(sellerRepository.addFunds(eq("seller-1"), any(BigDecimal.class)))
+        when(sellerRepository.addFunds(eq("seller-1"), anyLong()))
                 .thenReturn(Mono.just(seller));
-        when(sellerDbMapper.toDto(any(Seller.class))).thenReturn(createSellerDto(new BigDecimal("100.00")));
+        when(sellerDbMapper.toDto(any(Seller.class))).thenReturn(createSellerDto(10000L));
 
         StepVerifier.create(sellerService.addFunds("seller-1", BigDecimal.ZERO))
                 .expectNextCount(1)

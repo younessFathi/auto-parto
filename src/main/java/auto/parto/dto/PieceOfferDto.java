@@ -3,7 +3,6 @@ package auto.parto.dto;
 import auto.parto.enums.*;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -11,7 +10,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -32,8 +30,8 @@ public class PieceOfferDto {
     @NotBlank(message = "Description is required")
     private String description;
     @NotNull(message = "Price is required")
-    @DecimalMin(value = "0.0", inclusive = false, message = "Price must be greater than zero")
-    private BigDecimal price;
+    @jakarta.validation.constraints.Positive(message = "Price must be greater than zero")
+    private Long priceMinor;
     @NotNull(message = "Currency is required")
     private Currency currency;
     @NotNull(message = "Condition is required")
@@ -54,7 +52,8 @@ public class PieceOfferDto {
     private DeliveryMode deliveryMode;
     @NotNull(message = "Free delivery status is required")
     private Boolean isFreeDelivery;
-    private BigDecimal deliveryPrice;
+    @jakarta.validation.constraints.PositiveOrZero
+    private Long deliveryPriceMinor;
     private Integer warranty;
     private Duration duration;
 }

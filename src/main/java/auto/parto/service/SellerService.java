@@ -15,6 +15,7 @@ import auto.parto.persistence.SellerProfileRepository;
 import auto.parto.persistence.WalletMutationResult;
 import auto.parto.persistence.WalletRepository;
 import auto.parto.persistence.SellerIdentityOtpRepository;
+import auto.parto.money.Money;
 import auto.parto.repository.ISellerRepository;
 import auto.parto.service.iservice.ISellerService;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +25,6 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -136,7 +136,7 @@ public class SellerService implements ISellerService {
                             ? new InsufficientBalanceException("Insufficient balance") : error);
         }
         if (sellerRepository == null) return legacyPersistenceUnavailable();
-        return sellerRepository.addFunds(id, amount)
+        return sellerRepository.addFunds(id, toMinorUnits(amount, currency))
                 .switchIfEmpty(Mono.error(new InsufficientBalanceException("Insufficient balance")))
                 .map(sellerDbMapper::toDto);
     }
@@ -266,7 +266,7 @@ public class SellerService implements ISellerService {
         Currency currency = mutation == null ? null : Currency.valueOf(mutation.wallet().currency());
         WalletDto wallet = mutation == null ? null : WalletDto.builder()
                 .id(mutation.wallet().publicId().toString())
-                .balance(fromMinorUnits(mutation.wallet().balanceMinor(), currency))
+                .balanceMinor(mutation.wallet().balanceMinor())
                 .currency(currency)
                 .build();
         return SellerDto.builder()
@@ -295,20 +295,11 @@ public class SellerService implements ISellerService {
     }
 
     private static long toMinorUnits(BigDecimal amount, Currency currency) {
-        if (amount == null) throw new IllegalArgumentException("amount is required");
-        int scale = minorScale(currency);
-        return amount.movePointRight(scale).setScale(0, RoundingMode.UNNECESSARY).longValueExact();
+        return Money.fromMajor(amount, currency).minorUnits();
     }
 
     private static BigDecimal fromMinorUnits(long amount, Currency currency) {
-        return BigDecimal.valueOf(amount, minorScale(currency));
-    }
-
-    private static int minorScale(Currency currency) {
-        return switch (currency) {
-            case JPY, KRW, VND, CLP -> 0;
-            default -> 2;
-        };
+        return Money.ofMinor(amount, currency).toMajor();
     }
 
     private static UUID parseUuid(String value) {

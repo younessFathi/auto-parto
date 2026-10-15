@@ -6,7 +6,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import java.math.BigDecimal;
 
 @Data
 @NoArgsConstructor
@@ -15,10 +14,11 @@ import java.math.BigDecimal;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class WalletDto {
     private String id;
-    private BigDecimal balance;
+    private Long balanceMinor;
     private Currency currency;
 
-    public void addFunds(BigDecimal amount) {
-        this.balance = this.balance.add(amount);
+    public void addFunds(long amountMinor) {
+        if (balanceMinor == null) balanceMinor = 0L;
+        balanceMinor = Math.addExact(balanceMinor, amountMinor);
     }
 }

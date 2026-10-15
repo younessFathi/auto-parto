@@ -9,7 +9,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
 import reactor.test.StepVerifier;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,7 +32,7 @@ class PieceOfferRepositoryIT extends BaseIntegrationTest {
                 .pieceId("piece-001")
                 .customerId("cust-001")
                 .name("Alternator")
-                .price(new BigDecimal("120.00"))
+                .priceMinor(12000L)
                 .isAvailable(true)
                 .status(Status.PENDING)
                 .imagesId(List.of("img-1", "img-2"))
@@ -43,7 +42,7 @@ class PieceOfferRepositoryIT extends BaseIntegrationTest {
                 .assertNext(saved -> {
                     assertThat(saved.getId()).isNotNull();
                     assertThat(saved.getName()).isEqualTo("Alternator");
-                    assertThat(saved.getPrice()).isEqualByComparingTo("120.00");
+                    assertThat(saved.getPriceMinor()).isEqualTo(12000L);
                     assertThat(saved.getImagesId()).containsExactly("img-1", "img-2");
                 })
                 .verifyComplete();

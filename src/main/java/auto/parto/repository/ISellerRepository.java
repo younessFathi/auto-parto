@@ -4,7 +4,6 @@ import auto.parto.model.Buyer;
 import auto.parto.model.Seller;
 import reactor.core.publisher.Mono;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 public interface ISellerRepository {
@@ -14,5 +13,5 @@ public interface ISellerRepository {
     Mono<Boolean> exists(String email, String field);
     Mono<Seller> updateGeneratedOtp(String email, String sentOtp, String field);
     Mono<List<String>> findMatchingSellers();
-    Mono<Seller> addFunds(String id, BigDecimal amount);
+    Mono<Seller> addFunds(String id, long amountMinor);
 }

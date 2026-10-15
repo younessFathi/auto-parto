@@ -22,6 +22,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -56,9 +57,9 @@ class SellerServicePostgresqlRoutingTest {
                 auto.parto.enums.Currency.MAD, "wallet-test-1").block();
 
         assertThat(result.getId()).isEqualTo(SELLER_ID.toString());
-        assertThat(result.getWalletDto().getBalance()).isEqualByComparingTo("12.34");
+        assertThat(result.getWalletDto().getBalanceMinor()).isEqualTo(1234L);
         assertThat(result.getWalletDto().getCurrency()).isEqualTo(auto.parto.enums.Currency.MAD);
-        verify(mongoRepository, never()).addFunds(any(), any());
+        verify(mongoRepository, never()).addFunds(any(), anyLong());
     }
 
     @Test
