@@ -10,4 +10,5 @@ public enum Category {
     ELECTRIC_CAR,
     HYBRID_CAR,
     TRACTOR,
+    BRAKES,
 }
