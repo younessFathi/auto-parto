@@ -45,6 +45,7 @@ class PostgresqlOtpInvariantMigrationIT {
         assertThat(Flyway.configure()
                 .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
                 .locations("classpath:db/migration")
+                .target("3")
                 .load()
                 .migrate()
                 .migrationsExecuted).isEqualTo(1);
