@@ -357,7 +357,7 @@ public class R2dbcWalletRepository implements WalletRepository {
     static String requestFingerprint(String currency, long amountMinor, String operation,
                                      String externalReference) {
         String canonical = field(currency) + field(Long.toString(amountMinor))
-                + field(operation) + field(externalReference == null ? "<null>" : externalReference);
+                + field(operation) + nullableField(externalReference);
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(canonical.getBytes(StandardCharsets.UTF_8)));
@@ -368,6 +368,10 @@ public class R2dbcWalletRepository implements WalletRepository {
 
     private static String field(String value) {
         return value.length() + ":" + value + "|";
+    }
+
+    private static String nullableField(String value) {
+        return value == null ? "N|" : "V" + field(value);
     }
 
     private record IdempotencyDecision(boolean replayed, WalletMutationResult result) {

@@ -103,6 +103,24 @@ class R2dbcWalletRepositoryIT {
     }
 
     @Test
+    void nullAndLiteralNullExternalReferencesAreDifferentRequests() {
+        UUID owner = UUID.randomUUID();
+
+        StepVerifier.create(insertUser(owner)
+                        .then(repository.mutate(owner, "MAD", 1000, "CREDIT", "nullable-key", null))
+                        .then(repository.mutate(owner, "MAD", 1000, "CREDIT", "nullable-key", "<null>")))
+                .expectError(ConflictException.class)
+                .verify();
+
+        StepVerifier.create(repository.findByOwnerPublicId(owner, "MAD"))
+                .assertNext(wallet -> assertThat(wallet.balanceMinor()).isEqualTo(1000))
+                .verifyComplete();
+        StepVerifier.create(countLedger(owner))
+                .expectNext(1L)
+                .verifyComplete();
+    }
+
+    @Test
     void concurrentWithdrawalsCannotOverdrawLockedWallet() {
         UUID owner = UUID.randomUUID();
 
