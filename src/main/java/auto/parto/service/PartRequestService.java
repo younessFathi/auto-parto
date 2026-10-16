@@ -7,6 +7,7 @@ import auto.parto.enums.PartRequestStatus;
 import auto.parto.exception.EntityNotFoundException;
 import auto.parto.persistence.PartRequestRecord;
 import auto.parto.persistence.PartRequestRepository;
+import auto.parto.validation.PartRequestMatchingShape;
 import org.springframework.http.HttpStatus;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -31,8 +32,12 @@ public class PartRequestService {
     }
 
     public Mono<PartRequestResponse> create(UUID buyerUserPublicId, PartRequestCreateRequest request) {
-        return repository.create(buyerUserPublicId, request.name(), request.description(), request.condition(),
-                        request.category(), request.vehicleMake(), request.vehicleModel(), request.vehicleYear())
+        return Mono.defer(() -> {
+                    PartRequestMatchingShape.requireSupported(request.condition(), request.category(),
+                            request.vehicleMake(), request.vehicleModel(), request.vehicleYear());
+                    return repository.create(buyerUserPublicId, request.name(), request.description(), request.condition(),
+                            request.category(), request.vehicleMake(), request.vehicleModel(), request.vehicleYear());
+                })
                 .switchIfEmpty(Mono.error(new EntityNotFoundException("Buyer account not found")))
                 .map(PartRequestService::toResponse);
     }

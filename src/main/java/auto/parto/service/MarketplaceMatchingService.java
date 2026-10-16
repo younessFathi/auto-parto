@@ -6,6 +6,7 @@ import auto.parto.exception.EntityNotFoundException;
 import auto.parto.persistence.PartListingRecord;
 import auto.parto.persistence.PartListingRepository;
 import auto.parto.persistence.PartRequestRepository;
+import auto.parto.validation.PartRequestMatchingShape;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -42,6 +43,9 @@ public class MarketplaceMatchingService {
                         return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT,
                                 "Only open part requests can be matched"));
                     }
+                    PartRequestMatchingShape.requireSupported(
+                            name(request.condition()), name(request.category()), request.vehicleMake(),
+                            request.vehicleModel(), request.vehicleYear());
                     return listings.findMatches(request, limit)
                             .map(MarketplaceMatchingService::toResponse)
                             .collectList()

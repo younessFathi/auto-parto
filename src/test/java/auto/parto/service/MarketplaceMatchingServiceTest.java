@@ -7,6 +7,8 @@ import auto.parto.persistence.PartListingRepository;
 import auto.parto.persistence.PartRequestRecord;
 import auto.parto.persistence.PartRequestRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
@@ -58,6 +60,21 @@ class MarketplaceMatchingServiceTest {
 
         StepVerifier.create(service.findMatches(buyer, requestId, 20))
                 .expectErrorMatches(error -> error.getMessage().contains("Only open"))
+                .verify();
+        verifyNoInteractions(listings);
+    }
+
+    @Test
+    void rejectsPersistedRequestWithUnsupportedFilterShape() {
+        PartRequestRecord request = new PartRequestRecord(requestId, buyer, "Brake pads", "Front",
+                null, Category.CAR, "OPEN", 0, Instant.now(), Instant.now(), null, null, null, 0);
+        when(requests.findByPublicId(requestId)).thenReturn(reactor.core.publisher.Mono.just(request));
+
+        StepVerifier.create(service.findMatches(buyer, requestId, 20))
+                .expectErrorSatisfies(error -> {
+                    assertThat(error).isInstanceOf(ResponseStatusException.class);
+                    assertThat(((ResponseStatusException) error).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                })
                 .verify();
         verifyNoInteractions(listings);
     }

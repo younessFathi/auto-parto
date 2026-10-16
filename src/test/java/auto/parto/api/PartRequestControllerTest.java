@@ -76,6 +76,21 @@ class PartRequestControllerTest {
     }
 
     @Test
+    void rejectsUnsupportedMatchingFilterShape() {
+        UUID buyerId = UUID.randomUUID();
+
+        webTestClient.mutateWith(SecurityMockServerConfigurers.mockAuthentication(
+                        CanonicalTestAuthentication.buyer(buyerId.toString())))
+                .post().uri("/api/v1/part-requests")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"name":"Brake pads","category":"BRAKES"}
+                        """)
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    @Test
     void rejectsSellerFromBuyerRequestEndpoint() {
         webTestClient.mutateWith(SecurityMockServerConfigurers.mockAuthentication(
                         CanonicalTestAuthentication.seller(UUID.randomUUID().toString())))

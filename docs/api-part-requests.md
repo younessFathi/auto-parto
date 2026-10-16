@@ -17,10 +17,10 @@ Base path: `/api/v1/part-requests`
 | `POST` | `/api/v1/part-requests/{publicId}/cancel` | Cancel an owned open request |
 | `GET` | `/api/v1/part-requests/{publicId}/matches?limit=20` | Find bounded published listing matches for an owned open request |
 
-Matching returns at most 50 published listings. When supplied on the request, category, condition, and vehicle attributes are exact filters; results are ordered by creation time and public ID. PostgreSQL uses partial indexes for the unfiltered, condition-only, vehicle-only, category-plus-condition, and full-attribute query shapes. The authenticated buyer must own the request; the request must be open. Matching is a bounded read operation; notification delivery remains owned by the notification delivery boundary.
+Matching returns at most 50 published listings. The supported matching filter groups are: no filters; condition only; category with condition; all vehicle attributes together; or category, condition, and all vehicle attributes together. Vehicle make, model, and year must be supplied as a complete tuple, and category cannot be supplied without condition. Other combinations return `400`. Supplied fields are exact filters; results are ordered by creation time and public ID. PostgreSQL uses partial indexes for each supported query shape. The authenticated buyer must own the request; the request must be open. Matching is a bounded read operation; notification delivery remains owned by the notification delivery boundary.
 
-Creation accepts a required `name` and optional description, condition, category,
-vehicle make, vehicle model, and vehicle year. The response contains the request's
+Creation accepts a required `name` and optional description plus one of the supported
+matching filter groups described above. The response contains the request's
 public UUID, the buyer's public UUID, searchable fields, lifecycle status, timestamps,
 and optimistic version. Internal database identifiers are not exposed.
 
