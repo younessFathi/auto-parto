@@ -33,7 +33,7 @@ class PostgresqlSchemaIT {
                 .locations("classpath:db/migration")
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(7);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(8);
         assertThat(flyway.migrate().migrationsExecuted).isZero();
 
         try (Connection connection = POSTGRES.createConnection("")) {
@@ -66,6 +66,11 @@ class PostgresqlSchemaIT {
             assertThat(indexExists(connection, "otp_challenges", "otp_challenges_active_login_user_uidx")).isTrue();
             assertThat(indexExists(connection, "part_listings", "part_listings_vehicle_search_idx")).isTrue();
             assertThat(indexExists(connection, "part_listings", "part_listings_seller_business_created_idx")).isTrue();
+            assertThat(indexExists(connection, "part_listings", "part_listings_matching_order_idx")).isTrue();
+            assertThat(indexExists(connection, "part_listings", "part_listings_matching_condition_idx")).isTrue();
+            assertThat(indexExists(connection, "part_listings", "part_listings_matching_vehicle_idx")).isTrue();
+            assertThat(indexExists(connection, "part_listings", "part_listings_matching_category_condition_idx")).isTrue();
+            assertThat(indexExists(connection, "part_listings", "part_listings_matching_full_idx")).isTrue();
 
             assertThat(constraintExists(connection, "offers", "offers_target_chk")).isTrue();
             assertThat(constraintExists(connection, "offers", "offers_request_owner_fk")).isTrue();

@@ -79,11 +79,15 @@ class PostgresqlMigrationResourceTest {
     }
 
     @Test
-    void matchingMigrationAddsPredicateAndOrderIndexes() throws IOException {
-        String sql = readResource("/db/migration/V7__add_part_listing_matching_indexes.sql");
+    void matchingMigrationSupportsEveryAllowedFilterShape() throws IOException {
+        String sql = readResource("/db/migration/V8__align_part_listing_matching_indexes.sql");
 
-        assertThat(sql).contains("part_listings_matching_category_idx")
+        assertThat(sql).contains("part_listings_matching_order_idx")
+                .contains("part_listings_matching_condition_idx")
                 .contains("part_listings_matching_vehicle_idx")
+                .contains("part_listings_matching_category_condition_idx")
+                .contains("part_listings_matching_full_idx")
+                .contains("WHERE status = 'PUBLISHED'")
                 .contains("LOWER(vehicle_make)")
                 .contains("created_at DESC, public_id DESC");
     }

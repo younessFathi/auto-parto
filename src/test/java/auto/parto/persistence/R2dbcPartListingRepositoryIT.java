@@ -13,6 +13,7 @@ import org.springframework.transaction.reactive.TransactionalOperator;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
 import java.time.Instant;
@@ -142,27 +143,77 @@ class R2dbcPartListingRepositoryIT {
                                 Category.CAR.name(), "Toyota", "Corolla", 2020, 1000, "MAD"))
                         .flatMap(listing -> repository.updateStatus(listing.publicId(), seller, "PUBLISHED", 0, Instant.now()))
                         .thenMany(repository.findMatches(request, 1))
-                        .collectList()
-                        .zipWith(explainMatching(request))
-                        .map(reactor.util.function.Tuple2::getT1))
+                        .collectList())
                 .assertNext(matches -> assertThat(matches).hasSize(1)
                         .allSatisfy(match -> assertThat(match.status()).isEqualTo("PUBLISHED")))
                 .verifyComplete();
     }
 
-    private reactor.core.publisher.Mono<java.util.List<String>> explainMatching(PartRequestRecord request) {
+    @Test
+    void matchingUsesIndexBackedPlansForEverySupportedFilterShape() {
+        UUID seller = UUID.randomUUID();
+
+        StepVerifier.create(insertSeller(seller)
+                        .then(seedMatchingListings(seller))
+                        .then(analyzeListings())
+                        .thenMany(Flux.just(
+                                new MatchingPlanCase(matchingRequest(null, null, null, null, null),
+                                        "part_listings_matching_order_idx"),
+                                new MatchingPlanCase(matchingRequest(Condition.NEW, null, null, null, null),
+                                        "part_listings_matching_condition_idx"),
+                                new MatchingPlanCase(matchingRequest(null, null, "Toyota", "Corolla", 2020),
+                                        "part_listings_matching_vehicle_idx"),
+                                new MatchingPlanCase(matchingRequest(Condition.NEW, Category.CAR, null, null, null),
+                                        "part_listings_matching_category_condition_idx"),
+                                new MatchingPlanCase(matchingRequest(Condition.NEW, Category.CAR,
+                                        "Toyota", "Corolla", 2020), "part_listings_matching_full_idx"))
+                                .concatMap(testCase -> explainMatching(testCase.request(), testCase.expectedIndex())))
+                        .then())
+                .verifyComplete();
+    }
+
+    private reactor.core.publisher.Mono<Void> seedMatchingListings(UUID seller) {
+        return databaseClient.sql("""
+                        INSERT INTO part_listings (public_id, seller_user_id, name, condition, category,
+                                                   vehicle_make, vehicle_model, vehicle_year, amount_minor,
+                                                   currency, status, business_status)
+                        SELECT gen_random_uuid(), au.id, 'Indexed listing ' || series,
+                               CASE WHEN series % 10 = 0 THEN 'NEW' ELSE 'USED' END,
+                               CASE WHEN series % 10 = 0 THEN 'CAR' ELSE 'TRUCK' END,
+                               CASE WHEN series % 100 = 0 THEN 'Toyota' ELSE 'Honda' END,
+                               CASE WHEN series % 100 = 0 THEN 'Corolla' ELSE 'Civic' END,
+                               CASE WHEN series % 100 = 0 THEN 2020 ELSE 2021 END,
+                               1000, 'MAD', 'PUBLISHED', 'PUBLISHED'
+                        FROM app_users au CROSS JOIN generate_series(1, 5000) AS series
+                        WHERE au.public_id = :seller
+                        """)
+                .bind("seller", seller).fetch().rowsUpdated().then();
+    }
+
+    private reactor.core.publisher.Mono<Void> analyzeListings() {
+        return databaseClient.sql("ANALYZE part_listings").fetch().rowsUpdated().then();
+    }
+
+    private reactor.core.publisher.Mono<java.util.List<String>> explainMatching(PartRequestRecord request,
+                                                                                   String expectedIndex) {
         DatabaseClient.GenericExecuteSpec query = databaseClient.sql(
-                        "EXPLAIN (COSTS OFF) " + R2dbcPartListingRepository.matchingSql(request))
-                .bind("limit", 1)
-                .bind("category", request.category().name())
-                .bind("condition", request.condition().name())
-                .bind("vehicleMake", request.vehicleMake())
-                .bind("vehicleModel", request.vehicleModel())
-                .bind("vehicleYear", request.vehicleYear());
-        return databaseClient.sql("SET enable_seqscan = off").fetch().rowsUpdated()
-                .thenMany(query.map((row, metadata) -> row.get("QUERY PLAN", String.class)).all())
+                "EXPLAIN (COSTS OFF) " + R2dbcPartListingRepository.matchingSql(request))
+                .bind("limit", 1);
+        if (request.category() != null) query = query.bind("category", request.category().name());
+        if (request.condition() != null) query = query.bind("condition", request.condition().name());
+        if (request.vehicleMake() != null) query = query.bind("vehicleMake", request.vehicleMake());
+        if (request.vehicleModel() != null) query = query.bind("vehicleModel", request.vehicleModel());
+        if (request.vehicleYear() != null) query = query.bind("vehicleYear", request.vehicleYear());
+        return query.map((row, metadata) -> row.get("QUERY PLAN", String.class)).all()
                 .collectList()
-                .doOnNext(plan -> assertThat(plan).anyMatch(line -> line.contains("part_listings_matching_")));
+                .doOnNext(plan -> assertThat(plan).anyMatch(line -> line.contains(expectedIndex)));
+    }
+
+    private PartRequestRecord matchingRequest(Condition condition, Category category,
+                                              String vehicleMake, String vehicleModel, Integer vehicleYear) {
+        return new PartRequestRecord(UUID.randomUUID(), UUID.randomUUID(), "Request", null,
+                condition, category, "OPEN", 0, Instant.now(), Instant.now(),
+                vehicleMake, vehicleModel, vehicleYear, 0);
     }
 
     private reactor.core.publisher.Mono<Void> insertSeller(UUID publicId) {
@@ -186,5 +237,8 @@ class R2dbcPartListingRepositoryIT {
     }
 
     private record ListingEvidence(java.util.List<PartListingRecord> listings, long count) {
+    }
+
+    private record MatchingPlanCase(PartRequestRecord request, String expectedIndex) {
     }
 }
