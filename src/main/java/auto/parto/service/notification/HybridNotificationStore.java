@@ -174,4 +174,26 @@ public class HybridNotificationStore {
         return redisStore.getPendingStats();
     }
 
+    public Flux<String> getPendingRecipientIds(UUID afterRecipientPublicId, int limit) {
+        if (postgresqlRepository != null) {
+            return postgresqlRepository.findPendingRecipientIds(afterRecipientPublicId, limit)
+                    .map(UUID::toString);
+        }
+        return redisStore.getPendingStats()
+                .flatMapMany(stats -> {
+                    Object value = stats.get("usersWithPending");
+                    if (!(value instanceof Collection<?> users)) {
+                        return Flux.empty();
+                    }
+                    return Flux.fromIterable(users)
+                            .map(Object::toString)
+                            .flatMap(this::parseUserId)
+                            .filter(id -> afterRecipientPublicId == null
+                                    || id.compareTo(afterRecipientPublicId) > 0)
+                            .sort()
+                            .take(limit)
+                            .map(UUID::toString);
+                });
+    }
+
 }

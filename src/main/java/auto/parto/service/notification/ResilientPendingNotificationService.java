@@ -16,11 +16,14 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class ResilientPendingNotificationService {
+
+    private static final int RECOVERY_BATCH_SIZE = 100;
 
     private final HybridNotificationStore notificationStore;
     private final SSENotificationService sseService;
@@ -93,16 +96,25 @@ public class ResilientPendingNotificationService {
                         return Mono.<Void>empty();
                     }
 
-                    @SuppressWarnings("unchecked")
-                    List<String> users = (List<String>) stats.get("usersWithPending");
-
-                    return Flux.fromIterable(users)
-                            .flatMapSequential(this::deliverPendingOnConnect)
-                            .then();
+                    return recoverRecipientPage(null);
                 })
                 .doOnSuccess(v -> log.info("Notification recovery completed"))
                 .doOnError(e -> log.error("Recovery failed: {}", e.getMessage()))
                 .subscribe();
+    }
+
+    private Mono<Void> recoverRecipientPage(UUID afterRecipientPublicId) {
+        return notificationStore.getPendingRecipientIds(afterRecipientPublicId, RECOVERY_BATCH_SIZE)
+                .collectList()
+                .flatMap(users -> {
+                    if (users.isEmpty()) {
+                        return Mono.empty();
+                    }
+                    UUID nextCursor = UUID.fromString(users.getLast());
+                    return Flux.fromIterable(users)
+                            .flatMapSequential(this::deliverPendingOnConnect)
+                            .then(recoverRecipientPage(nextCursor));
+                });
     }
 
     // Private helper methods

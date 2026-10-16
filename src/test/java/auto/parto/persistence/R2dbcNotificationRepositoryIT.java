@@ -17,6 +17,7 @@ import java.util.UUID;
 
 import static io.r2dbc.spi.ConnectionFactoryOptions.*;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -106,6 +107,34 @@ class R2dbcNotificationRepositoryIT {
     }
 
     @Test
+    void rejectsPayloadsLargerThanTheNotificationBoundary() {
+        String oversizedPayload = "{\"message\":\"" + "x".repeat(NotificationPayloadLimits.MAX_SERIALIZED_BYTES)
+                + "\"}";
+
+        assertThatThrownBy(() -> repository.enqueue(UUID.randomUUID(), "TEST", oversizedPayload))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("notification payload exceeds the bounded size");
+    }
+
+    @Test
+    void outboxFailureRollsBackNotificationAndEvent() {
+        UUID owner = UUID.randomUUID();
+        insertUser(owner).block();
+        createFailingOutboxTrigger().block();
+        try {
+            StepVerifier.create(repository.enqueue(owner, "ROLLBACK_TEST", "{}"))
+                .expectErrorMatches(error -> error.getMessage() != null
+                        && error.getMessage().contains("forced notification outbox failure"))
+                    .verify();
+        } finally {
+            dropFailingOutboxTrigger().block();
+        }
+
+        assertThat(countNotifications(owner, "ROLLBACK_TEST")).isZero();
+        assertThat(countOutboxEvents("notification.requested", "ROLLBACK_TEST")).isZero();
+    }
+
+    @Test
     void recordsDeliveryAttemptForExistingNotification() {
         UUID owner = UUID.randomUUID();
         StepVerifier.create(insertUser(owner)
@@ -174,6 +203,58 @@ class R2dbcNotificationRepositoryIT {
                         """)
                 .bind("publicId", publicId).bind("email", "notification-" + publicId + "@example.test")
                 .fetch().rowsUpdated().then();
+    }
+
+    private reactor.core.publisher.Mono<Void> createFailingOutboxTrigger() {
+        return databaseClient.sql("""
+                        CREATE FUNCTION test_fail_notification_outbox() RETURNS trigger
+                        LANGUAGE plpgsql AS $$
+                        BEGIN
+                            RAISE EXCEPTION 'forced notification outbox failure';
+                        END;
+                        $$;
+                        """).fetch().rowsUpdated().then(databaseClient.sql("""
+                        CREATE TRIGGER test_fail_notification_outbox_trigger
+                        BEFORE INSERT ON outbox_events
+                        FOR EACH ROW WHEN (NEW.event_type = 'notification.requested')
+                        EXECUTE FUNCTION test_fail_notification_outbox();
+                        """).fetch().rowsUpdated().then()).then();
+    }
+
+    private reactor.core.publisher.Mono<Void> dropFailingOutboxTrigger() {
+        return databaseClient.sql("DROP TRIGGER test_fail_notification_outbox_trigger ON outbox_events")
+                .fetch().rowsUpdated()
+                .then(databaseClient.sql("DROP FUNCTION test_fail_notification_outbox()")
+                        .fetch().rowsUpdated())
+                .then();
+    }
+
+    private long countNotifications(UUID owner, String eventType) {
+        return databaseClient.sql("""
+                        SELECT count(*) AS total
+                        FROM notifications notification
+                        JOIN app_users owner ON owner.id = notification.recipient_user_id
+                        WHERE owner.public_id = :owner AND notification.event_type = :eventType
+                        """)
+                .bind("owner", owner)
+                .bind("eventType", eventType)
+                .map((row, metadata) -> row.get("total", Long.class))
+                .one()
+                .block();
+    }
+
+    private long countOutboxEvents(String eventType, String notificationEventType) {
+        return databaseClient.sql("""
+                        SELECT count(*) AS total
+                        FROM outbox_events event
+                        WHERE event.event_type = :eventType
+                          AND event.payload ->> 'notificationType' = :notificationEventType
+                        """)
+                .bind("eventType", eventType)
+                .bind("notificationEventType", notificationEventType)
+                .map((row, metadata) -> row.get("total", Long.class))
+                .one()
+                .block();
     }
 
     private record OutboxSnapshot(String eventType, Integer schemaVersion, UUID aggregatePublicId,

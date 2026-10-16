@@ -42,6 +42,7 @@ public class R2dbcNotificationRepository implements NotificationRepository {
         requirePublicId(recipientUserPublicId);
         requireText(eventType, "eventType");
         requireText(payloadJson, "payloadJson");
+        NotificationPayloadLimits.requireSize(payloadJson);
         return databaseClient.sql("""
                         WITH inserted_notification AS (
                             INSERT INTO notifications (public_id, recipient_user_id, event_type, payload)
@@ -96,17 +97,27 @@ public class R2dbcNotificationRepository implements NotificationRepository {
 
     @Override
     public Flux<UUID> findPendingRecipientIds(int limit) {
+        return findPendingRecipientIds(null, limit);
+    }
+
+    @Override
+    public Flux<UUID> findPendingRecipientIds(UUID afterRecipientPublicId, int limit) {
         if (limit < 1 || limit > 100) throw new IllegalArgumentException("limit must be between 1 and 100");
-        return databaseClient.sql("""
+        DatabaseClient.GenericExecuteSpec query = databaseClient.sql("""
                         SELECT owner.public_id
                         FROM notifications notification
                         JOIN app_users owner ON owner.id = notification.recipient_user_id
                         WHERE notification.status = 'PENDING'
+                          AND (:afterRecipientPublicId IS NULL OR owner.public_id > :afterRecipientPublicId)
                         GROUP BY owner.public_id
-                        ORDER BY min(notification.created_at)
+                        ORDER BY owner.public_id
                         LIMIT :limit
                         """)
-                .bind("limit", limit)
+                .bind("limit", limit);
+        query = afterRecipientPublicId == null
+                ? query.bindNull("afterRecipientPublicId", UUID.class)
+                : query.bind("afterRecipientPublicId", afterRecipientPublicId);
+        return query
                 .map((row, metadata) -> row.get("public_id", UUID.class))
                 .all();
     }
