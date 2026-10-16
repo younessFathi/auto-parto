@@ -43,16 +43,29 @@ class PostgresqlOfferServiceTest {
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service
                         .findForActor(offer, UUID.randomUUID()).block())
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("does not own");
     }
 
     @Test
     void updatesStatusWithOptimisticVersion() {
+        when(repository.findByPublicId(offer)).thenReturn(Mono.just(record));
         when(repository.updateStatus(eq(offer), eq(seller), eq("ACCEPTED"), eq(0L), any(Instant.class)))
                 .thenReturn(Mono.just(record));
 
         assertThat(service.updateStatus(offer, seller,
                 new UpdateOfferStatusRequest("ACCEPTED", 0L)).block().status()).isEqualTo("PENDING");
+    }
+
+    @Test
+    void rejectsBuyerTryingToAcceptOffer() {
+        when(repository.findByPublicId(offer)).thenReturn(Mono.just(record));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.updateStatus(offer, buyer,
+                        new UpdateOfferStatusRequest("ACCEPTED", 0L)).block())
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("cannot transition");
+        verify(repository, never()).updateStatus(any(), any(), any(), anyLong(), any());
     }
 
     private static ObjectProvider<OfferRepository> provider(OfferRepository repository) {

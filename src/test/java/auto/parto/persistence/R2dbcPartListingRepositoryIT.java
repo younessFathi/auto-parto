@@ -121,6 +121,33 @@ class R2dbcPartListingRepositoryIT {
                 .verifyComplete();
     }
 
+    @Test
+    void matchingUsesPublishedListingsAndCapsResults() {
+        UUID buyer = UUID.randomUUID();
+        UUID seller = UUID.randomUUID();
+        UUID requestId = UUID.randomUUID();
+        PartRequestRecord request = new PartRequestRecord(requestId, buyer, "Brake pads", "Front",
+                Condition.NEW, Category.CAR, "OPEN", 0, Instant.now(), Instant.now(),
+                "Toyota", "Corolla", 2020, 0);
+
+        StepVerifier.create(insertBuyer(buyer)
+                        .then(insertSeller(seller))
+                        .then(databaseClient.sql("""
+                                INSERT INTO part_requests (public_id, buyer_user_id, name, condition, category,
+                                                           vehicle_make, vehicle_model, vehicle_year)
+                                SELECT :request, id, 'Brake pads', 'NEW', 'CAR', 'Toyota', 'Corolla', 2020
+                                FROM app_users WHERE public_id = :buyer
+                                """).bind("request", requestId).bind("buyer", buyer).fetch().rowsUpdated().then())
+                        .then(repository.create(seller, "Matching listing", null, Condition.NEW.name(),
+                                Category.CAR.name(), "Toyota", "Corolla", 2020, 1000, "MAD"))
+                        .flatMap(listing -> repository.updateStatus(listing.publicId(), seller, "PUBLISHED", 0, Instant.now()))
+                        .thenMany(repository.findMatches(request, 1))
+                        .collectList())
+                .assertNext(matches -> assertThat(matches).hasSize(1)
+                        .allSatisfy(match -> assertThat(match.status()).isEqualTo("PUBLISHED")))
+                .verifyComplete();
+    }
+
     private reactor.core.publisher.Mono<Void> insertSeller(UUID publicId) {
         return databaseClient.sql("""
                         INSERT INTO app_users (public_id, email, role, status)
@@ -128,6 +155,16 @@ class R2dbcPartListingRepositoryIT {
                         """)
                 .bind("publicId", publicId)
                 .bind("email", "seller-" + publicId + "@example.test")
+                .fetch().rowsUpdated().then();
+    }
+
+    private reactor.core.publisher.Mono<Void> insertBuyer(UUID publicId) {
+        return databaseClient.sql("""
+                        INSERT INTO app_users (public_id, email, role, status)
+                        VALUES (:publicId, :email, 'BUYER', 'ACTIVE')
+                        """)
+                .bind("publicId", publicId)
+                .bind("email", "buyer-" + publicId + "@example.test")
                 .fetch().rowsUpdated().then();
     }
 

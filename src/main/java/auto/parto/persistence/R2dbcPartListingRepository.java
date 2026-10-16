@@ -89,6 +89,34 @@ public class R2dbcPartListingRepository implements PartListingRepository {
     }
 
     @Override
+    public Flux<PartListingRecord> findMatches(PartRequestRecord request, int limit) {
+        if (request == null) throw new IllegalArgumentException("request is required");
+        if (limit < 1 || limit > 50) throw new IllegalArgumentException("limit must be between 1 and 50");
+        DatabaseClient.GenericExecuteSpec query = databaseClient.sql(SELECT + """
+                        WHERE pl.status = 'PUBLISHED'
+                          AND (:category IS NULL OR pl.category = :category)
+                          AND (:condition IS NULL OR pl.condition = :condition)
+                          AND (:vehicleMake IS NULL OR LOWER(pl.vehicle_make) = LOWER(:vehicleMake))
+                          AND (:vehicleModel IS NULL OR LOWER(pl.vehicle_model) = LOWER(:vehicleModel))
+                          AND (:vehicleYear IS NULL OR pl.vehicle_year = :vehicleYear)
+                        ORDER BY
+                          (CASE WHEN :condition IS NOT NULL AND pl.condition = :condition THEN 1 ELSE 0 END
+                           + CASE WHEN :vehicleMake IS NOT NULL AND LOWER(pl.vehicle_make) = LOWER(:vehicleMake) THEN 1 ELSE 0 END
+                           + CASE WHEN :vehicleModel IS NOT NULL AND LOWER(pl.vehicle_model) = LOWER(:vehicleModel) THEN 1 ELSE 0 END
+                           + CASE WHEN :vehicleYear IS NOT NULL AND pl.vehicle_year = :vehicleYear THEN 1 ELSE 0 END) DESC,
+                          pl.created_at DESC, pl.public_id DESC
+                        LIMIT :limit
+                        """)
+                .bind("limit", limit);
+        query = bindNullable(query, "category", request.category() == null ? null : request.category().name(), String.class);
+        query = bindNullable(query, "condition", request.condition() == null ? null : request.condition().name(), String.class);
+        query = bindNullable(query, "vehicleMake", request.vehicleMake(), String.class);
+        query = bindNullable(query, "vehicleModel", request.vehicleModel(), String.class);
+        query = bindNullable(query, "vehicleYear", request.vehicleYear(), Integer.class);
+        return query.map((row, metadata) -> map(row)).all();
+    }
+
+    @Override
     public Flux<PartListingRecord> findBySellerPublicId(UUID sellerUserPublicId, int page, int size) {
         requirePublicId(sellerUserPublicId, "sellerUserPublicId");
         requirePage(page, size);
@@ -174,9 +202,14 @@ public class R2dbcPartListingRepository implements PartListingRepository {
         return value == null ? null : Enum.valueOf(type, value);
     }
 
+    private static <T> DatabaseClient.GenericExecuteSpec bindNullable(DatabaseClient.GenericExecuteSpec spec,
+                                                                       String name, T value, Class<T> type) {
+        return value == null ? spec.bindNull(name, type) : spec.bind(name, value);
+    }
+
     private static DatabaseClient.GenericExecuteSpec bindNullable(DatabaseClient.GenericExecuteSpec spec,
                                                                   String name, String value) {
-        return value == null ? spec.bindNull(name, String.class) : spec.bind(name, value);
+        return bindNullable(spec, name, value, String.class);
     }
 
     private static void requirePublicId(UUID value, String name) {

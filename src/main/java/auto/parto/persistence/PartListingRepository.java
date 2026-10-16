@@ -17,6 +17,8 @@ public interface PartListingRepository {
 
     Mono<PartListingRecord> findByPublicId(UUID publicId);
 
+    Flux<PartListingRecord> findMatches(PartRequestRecord request, int limit);
+
     Flux<PartListingRecord> findBySellerPublicId(UUID sellerUserPublicId, int page, int size);
 
     Mono<Long> countBySellerPublicId(UUID sellerUserPublicId);
