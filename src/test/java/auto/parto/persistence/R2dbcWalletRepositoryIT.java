@@ -1,5 +1,6 @@
 package auto.parto.persistence;
 
+import auto.parto.exception.ConflictException;
 import io.r2dbc.spi.ConnectionFactoryOptions;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
@@ -12,7 +13,9 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.test.StepVerifier;
+import reactor.core.publisher.Flux;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import static io.r2dbc.spi.ConnectionFactoryOptions.DATABASE;
@@ -85,6 +88,72 @@ class R2dbcWalletRepositoryIT {
     }
 
     @Test
+    void conflictingIdempotencyReuseDoesNotApplyAnotherMutation() {
+        UUID owner = UUID.randomUUID();
+
+        StepVerifier.create(insertUser(owner)
+                        .then(repository.mutate(owner, "MAD", 1000, "CREDIT", "same-key", null))
+                        .then(repository.mutate(owner, "MAD", 2000, "CREDIT", "same-key", null)))
+                .expectError(ConflictException.class)
+                .verify();
+
+        StepVerifier.create(repository.findByOwnerPublicId(owner, "MAD"))
+                .assertNext(wallet -> assertThat(wallet.balanceMinor()).isEqualTo(1000))
+                .verifyComplete();
+    }
+
+    @Test
+    void concurrentWithdrawalsCannotOverdrawLockedWallet() {
+        UUID owner = UUID.randomUUID();
+
+        StepVerifier.create(insertUser(owner)
+                        .then(repository.mutate(owner, "MAD", 500, "CREDIT", "seed-concurrent", null))
+                        .then(Flux.mergeDelayError(2,
+                                        repository.mutate(owner, "MAD", -400, "DEBIT", "withdraw-a", null).materialize(),
+                                        repository.mutate(owner, "MAD", -400, "DEBIT", "withdraw-b", null).materialize())
+                                .collectList()))
+                .assertNext(signals -> {
+                    assertThat(signals).hasSize(2);
+                    assertThat(signals.stream().filter(signal -> signal.isOnNext())).hasSize(1);
+                    assertThat(signals.stream().filter(signal -> signal.isOnError())).hasSize(1);
+                })
+                .verifyComplete();
+
+        StepVerifier.create(repository.findByOwnerPublicId(owner, "MAD"))
+                .assertNext(wallet -> assertThat(wallet.balanceMinor()).isEqualTo(100))
+                .verifyComplete();
+        StepVerifier.create(countLedger(owner))
+                .expectNext(2L)
+                .verifyComplete();
+    }
+
+    @Test
+    void expiredIdempotencyRecordsCanBePurgedBeforeKeyReuse() {
+        UUID owner = UUID.randomUUID();
+
+        StepVerifier.create(insertUser(owner)
+                        .then(repository.mutate(owner, "MAD", 100, "CREDIT", "retained-key", null))
+                        .then(expireIdempotencyRecord(owner, "retained-key"))
+                        .then(repository.purgeExpiredIdempotencyRecords(Instant.now(), 100)
+                                .doOnNext(deleted -> assertThat(deleted).isEqualTo(1L))
+                                .then())
+                        .then(repository.mutate(owner, "MAD", 200, "CREDIT", "retained-key", null)))
+                .assertNext(result -> {
+                    assertThat(result.applied()).isTrue();
+                    assertThat(result.wallet().balanceMinor()).isEqualTo(300);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void walletMutationRequiresAnIdempotencyKey() {
+        assertThatThrownBy(() -> repository.mutate(UUID.randomUUID(), "MAD", 100,
+                "CREDIT", " ", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("idempotencyKey");
+    }
+
+    @Test
     void insufficientDebitDoesNotChangeWalletOrLedger() {
         UUID owner = UUID.randomUUID();
 
@@ -124,5 +193,29 @@ class R2dbcWalletRepositoryIT {
                 .bind("publicId", publicId)
                 .bind("email", "wallet-" + publicId + "@example.test")
                 .fetch().rowsUpdated().then();
+    }
+
+    private reactor.core.publisher.Mono<Void> expireIdempotencyRecord(UUID owner, String key) {
+        return databaseClient.sql("""
+                        UPDATE idempotency_records SET expires_at = CURRENT_TIMESTAMP - INTERVAL '1 minute'
+                        WHERE owner_user_id = (SELECT id FROM app_users WHERE public_id = :ownerPublicId)
+                          AND idempotency_key = :idempotencyKey
+                        """)
+                .bind("ownerPublicId", owner)
+                .bind("idempotencyKey", key)
+                .fetch().rowsUpdated().then();
+    }
+
+    private reactor.core.publisher.Mono<Long> countLedger(UUID owner) {
+        return databaseClient.sql("""
+                        SELECT count(*) AS ledger_count
+                        FROM wallet_ledger ledger
+                        JOIN wallets wallet ON wallet.id = ledger.wallet_id
+                        JOIN app_users owner ON owner.id = wallet.owner_user_id
+                        WHERE owner.public_id = :ownerPublicId
+                        """)
+                .bind("ownerPublicId", owner)
+                .map((row, metadata) -> row.get("ledger_count", Long.class))
+                .one();
     }
 }

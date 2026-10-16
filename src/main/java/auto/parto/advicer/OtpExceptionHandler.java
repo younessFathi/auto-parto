@@ -68,7 +68,7 @@ public class OtpExceptionHandler {
 
     @ExceptionHandler(InsufficientBalanceException.class)
     public ResponseEntity<ApiErrorResponse> handleInsufficientBalanceException(InsufficientBalanceException ex, ServerWebExchange exchange) {
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, "INSUFFICIENT_BALANCE", "Insufficient balance", exchange, null);
+        return buildErrorResponse(HttpStatus.CONFLICT, "INSUFFICIENT_BALANCE", "Insufficient balance", exchange, null);
     }
 
     @ExceptionHandler(WebExchangeBindException.class)

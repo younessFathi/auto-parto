@@ -1,18 +1,28 @@
 package auto.parto.persistence;
 
 import auto.parto.enums.Currency;
+import auto.parto.exception.ConflictException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.HexFormat;
 import java.util.UUID;
 
 @Repository
 @ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.wallet", name = "enabled",
         havingValue = "true")
 public class R2dbcWalletRepository implements WalletRepository {
+
+    static final Duration IDEMPOTENCY_RETENTION = Duration.ofDays(7);
+    private static final int MAX_PURGE_LIMIT = 1_000;
 
     private final DatabaseClient databaseClient;
     private final TransactionalOperator transactions;
@@ -39,11 +49,60 @@ public class R2dbcWalletRepository implements WalletRepository {
         requirePublicId(ownerUserPublicId, "ownerUserPublicId");
         requireCurrency(currency);
         requireOperation(operation, amountMinor);
-        return transactions.transactional(ensureWallet(ownerUserPublicId, currency)
+        requireIdempotencyKey(idempotencyKey);
+        requireOptionalText(externalReference, "externalReference");
+
+        String fingerprint = requestFingerprint(currency, amountMinor, operation, externalReference);
+        Instant now = Instant.now();
+        Instant expiresAt = now.plus(IDEMPOTENCY_RETENTION);
+        return transactions.transactional(deleteExpiredKey(ownerUserPublicId, operation, idempotencyKey, now)
+                .then(ensureWallet(ownerUserPublicId, currency))
                 .then(lockWallet(ownerUserPublicId, currency))
-                .flatMap(wallet -> existingMutation(wallet, idempotencyKey)
-                        .switchIfEmpty(Mono.defer(() -> applyMutation(
-                                wallet, amountMinor, operation, idempotencyKey, externalReference)))));
+                .flatMap(wallet -> reserveOrReplay(ownerUserPublicId, operation, idempotencyKey,
+                                fingerprint, now, expiresAt)
+                        .flatMap(decision -> decision.replayed()
+                                ? Mono.just(decision.result())
+                                : applyMutation(wallet, amountMinor, operation, idempotencyKey, externalReference)
+                                .flatMap(result -> completeIdempotency(ownerUserPublicId, operation,
+                                        idempotencyKey, fingerprint, result).thenReturn(result)))));
+    }
+
+    @Override
+    public Mono<Long> purgeExpiredIdempotencyRecords(Instant now, int limit) {
+        if (now == null) throw new IllegalArgumentException("now is required");
+        if (limit < 1 || limit > MAX_PURGE_LIMIT) {
+            throw new IllegalArgumentException("purge limit must be between 1 and 1000");
+        }
+        return databaseClient.sql("""
+                        DELETE FROM idempotency_records
+                        WHERE id IN (
+                            SELECT id FROM idempotency_records
+                            WHERE expires_at <= :now
+                            ORDER BY expires_at, id
+                            LIMIT :limit
+                        )
+                        """)
+                .bind("now", now)
+                .bind("limit", limit)
+                .fetch().rowsUpdated().map(rows -> rows);
+    }
+
+    private Mono<Void> deleteExpiredKey(UUID ownerUserPublicId, String operation, String idempotencyKey,
+                                         Instant now) {
+        return databaseClient.sql("""
+                        DELETE FROM idempotency_records record
+                        USING app_users owner
+                        WHERE record.owner_user_id = owner.id
+                          AND owner.public_id = :ownerPublicId
+                          AND record.operation = :operation
+                          AND record.idempotency_key = :idempotencyKey
+                          AND record.expires_at <= :now
+                        """)
+                .bind("ownerPublicId", ownerUserPublicId)
+                .bind("operation", operation)
+                .bind("idempotencyKey", idempotencyKey)
+                .bind("now", now)
+                .fetch().rowsUpdated().then();
     }
 
     private Mono<Void> ensureWallet(UUID ownerUserPublicId, String currency) {
@@ -68,29 +127,109 @@ public class R2dbcWalletRepository implements WalletRepository {
                 .one();
     }
 
-    private Mono<WalletMutationResult> existingMutation(WalletRecord wallet, String idempotencyKey) {
-        if (idempotencyKey == null || idempotencyKey.isBlank()) return Mono.empty();
+    private Mono<IdempotencyDecision> reserveOrReplay(UUID ownerUserPublicId, String operation,
+                                                       String idempotencyKey, String fingerprint,
+                                                       Instant now, Instant expiresAt) {
+        return findIdempotency(ownerUserPublicId, operation, idempotencyKey, fingerprint, now)
+                .switchIfEmpty(Mono.defer(() -> insertIdempotency(ownerUserPublicId, operation,
+                                idempotencyKey, fingerprint, now, expiresAt)
+                        .flatMap(inserted -> inserted
+                                ? Mono.just(IdempotencyDecision.newReservation())
+                                : findIdempotency(ownerUserPublicId, operation, idempotencyKey, fingerprint, now)
+                                .switchIfEmpty(Mono.error(new ConflictException("Idempotency key is unavailable"))))));
+    }
+
+    private Mono<IdempotencyDecision> findIdempotency(UUID ownerUserPublicId, String operation,
+                                                       String idempotencyKey, String fingerprint, Instant now) {
         return databaseClient.sql("""
-                        SELECT ledger.public_id AS ledger_public_id,
-                               wallet.public_id, owner.public_id AS owner_public_id,
-                               wallet.balance_minor, wallet.currency, wallet.version
-                        FROM wallet_ledger ledger
-                        JOIN wallets wallet ON wallet.id = ledger.wallet_id
-                        JOIN app_users owner ON owner.id = wallet.owner_user_id
-                        WHERE ledger.wallet_id = (
-                            SELECT id FROM wallets WHERE public_id = :walletPublicId
-                        ) AND ledger.idempotency_key = :idempotencyKey
+                        SELECT record.request_fingerprint, record.wallet_public_id, record.ledger_public_id,
+                               record.wallet_balance_after_minor, record.wallet_currency, record.wallet_version
+                        FROM idempotency_records record
+                        JOIN app_users owner ON owner.id = record.owner_user_id
+                        WHERE owner.public_id = :ownerPublicId
+                          AND record.operation = :operation
+                          AND record.idempotency_key = :idempotencyKey
+                          AND record.expires_at > :now
                         """)
-                .bind("walletPublicId", wallet.publicId())
+                .bind("ownerPublicId", ownerUserPublicId)
+                .bind("operation", operation)
                 .bind("idempotencyKey", idempotencyKey)
-                .map((row, metadata) -> new WalletMutationResult(
-                        mapWallet(row), row.get("ledger_public_id", UUID.class), false))
-                .one();
+                .bind("now", now)
+                .map((row, metadata) -> new StoredIdempotency(
+                        row.get("request_fingerprint", String.class),
+                        row.get("wallet_public_id", UUID.class),
+                        row.get("ledger_public_id", UUID.class),
+                        row.get("wallet_balance_after_minor", Long.class),
+                        row.get("wallet_currency", String.class),
+                        row.get("wallet_version", Long.class)))
+                .one()
+                .flatMap(stored -> {
+                    if (!stored.requestFingerprint().equals(fingerprint)) {
+                        return Mono.error(new ConflictException("Idempotency key was reused for a different request"));
+                    }
+                    if (stored.walletPublicId() == null || stored.ledgerPublicId() == null) {
+                        return Mono.error(new ConflictException("Idempotency request is still in progress"));
+                    }
+                    WalletRecord wallet = new WalletRecord(stored.walletPublicId(), ownerUserPublicId,
+                            stored.walletBalanceAfterMinor(), stored.walletCurrency(), stored.walletVersion());
+                    return Mono.just(new IdempotencyDecision(true,
+                            new WalletMutationResult(wallet, stored.ledgerPublicId(), false)));
+                });
+    }
+
+    private Mono<Boolean> insertIdempotency(UUID ownerUserPublicId, String operation, String idempotencyKey,
+                                            String fingerprint, Instant now, Instant expiresAt) {
+        return databaseClient.sql("""
+                        INSERT INTO idempotency_records (owner_user_id, operation, idempotency_key,
+                                                         request_fingerprint, created_at, expires_at)
+                        SELECT id, :operation, :idempotencyKey, :fingerprint, :now, :expiresAt
+                        FROM app_users
+                        WHERE public_id = :ownerPublicId
+                        ON CONFLICT (owner_user_id, operation, idempotency_key) DO NOTHING
+                        """)
+                .bind("ownerPublicId", ownerUserPublicId)
+                .bind("operation", operation)
+                .bind("idempotencyKey", idempotencyKey)
+                .bind("fingerprint", fingerprint)
+                .bind("now", now)
+                .bind("expiresAt", expiresAt)
+                .fetch().rowsUpdated().map(rows -> rows == 1);
+    }
+
+    private Mono<Void> completeIdempotency(UUID ownerUserPublicId, String operation, String idempotencyKey,
+                                            String fingerprint, WalletMutationResult result) {
+        return databaseClient.sql("""
+                        UPDATE idempotency_records record
+                        SET response_status = 200,
+                            wallet_public_id = :walletPublicId,
+                            ledger_public_id = :ledgerPublicId,
+                            wallet_balance_after_minor = :balanceAfterMinor,
+                            wallet_currency = :currency,
+                            wallet_version = :version
+                        FROM app_users owner
+                        WHERE record.owner_user_id = owner.id
+                          AND owner.public_id = :ownerPublicId
+                          AND record.operation = :operation
+                          AND record.idempotency_key = :idempotencyKey
+                          AND record.request_fingerprint = :fingerprint
+                        """)
+                .bind("ownerPublicId", ownerUserPublicId)
+                .bind("operation", operation)
+                .bind("idempotencyKey", idempotencyKey)
+                .bind("fingerprint", fingerprint)
+                .bind("walletPublicId", result.wallet().publicId())
+                .bind("ledgerPublicId", result.ledgerPublicId())
+                .bind("balanceAfterMinor", result.wallet().balanceMinor())
+                .bind("currency", result.wallet().currency())
+                .bind("version", result.wallet().version())
+                .fetch().rowsUpdated()
+                .flatMap(rows -> rows == 1 ? Mono.empty()
+                        : Mono.error(new IllegalStateException("wallet idempotency record was not completed")));
     }
 
     private Mono<WalletMutationResult> applyMutation(WalletRecord wallet, long amountMinor,
-                                                     String operation, String idempotencyKey,
-                                                     String externalReference) {
+                                                      String operation, String idempotencyKey,
+                                                      String externalReference) {
         final long newBalance;
         try {
             newBalance = Math.addExact(wallet.balanceMinor(), amountMinor);
@@ -191,6 +330,15 @@ public class R2dbcWalletRepository implements WalletRepository {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " is required");
     }
 
+    private static void requireOptionalText(String value, String name) {
+        if (value != null && value.length() > 255) throw new IllegalArgumentException(name + " is too long");
+    }
+
+    private static void requireIdempotencyKey(String value) {
+        requireText(value, "idempotencyKey");
+        if (value.length() > 255) throw new IllegalArgumentException("idempotencyKey is too long");
+    }
+
     private static void requireCurrency(String value) {
         Currency.requireSupportedCode(value);
     }
@@ -204,5 +352,31 @@ public class R2dbcWalletRepository implements WalletRepository {
             default -> false;
         };
         if (!valid) throw new IllegalArgumentException("operation and amount sign are inconsistent");
+    }
+
+    static String requestFingerprint(String currency, long amountMinor, String operation,
+                                     String externalReference) {
+        String canonical = field(currency) + field(Long.toString(amountMinor))
+                + field(operation) + field(externalReference == null ? "<null>" : externalReference);
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(canonical.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is unavailable", impossible);
+        }
+    }
+
+    private static String field(String value) {
+        return value.length() + ":" + value + "|";
+    }
+
+    private record IdempotencyDecision(boolean replayed, WalletMutationResult result) {
+        private static IdempotencyDecision newReservation() {
+            return new IdempotencyDecision(false, null);
+        }
+    }
+
+    private record StoredIdempotency(String requestFingerprint, UUID walletPublicId, UUID ledgerPublicId,
+                                     Long walletBalanceAfterMinor, String walletCurrency, Long walletVersion) {
     }
 }

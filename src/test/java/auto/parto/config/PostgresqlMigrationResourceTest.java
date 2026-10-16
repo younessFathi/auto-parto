@@ -93,6 +93,19 @@ class PostgresqlMigrationResourceTest {
     }
 
     @Test
+    void walletMigrationStoresReplayStateAndReleasesExpiredLedgerKeyUniqueness() throws IOException {
+        String sql = readResource("/db/migration/V9__make_wallet_idempotency_replayable.sql");
+
+        assertThat(sql).contains("ADD COLUMN wallet_public_id UUID")
+                .contains("ADD COLUMN ledger_public_id UUID")
+                .contains("wallet_balance_after_minor BIGINT")
+                .contains("wallet_currency VARCHAR(3)")
+                .contains("wallet_version BIGINT")
+                .contains("DROP INDEX IF EXISTS wallet_ledger_idempotency_uidx")
+                .contains("expired rows may be purged");
+    }
+
+    @Test
     void partListingStatusMigrationSeparatesLifecycleStates() throws IOException {
         String sql = readResource("/db/migration/V6__separate_part_listing_statuses.sql");
 

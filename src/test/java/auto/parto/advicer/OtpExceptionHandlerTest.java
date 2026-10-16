@@ -6,6 +6,7 @@ import auto.parto.exception.ConflictException;
 import auto.parto.exception.EntityNotFoundException;
 import auto.parto.exception.FileUploadException;
 import auto.parto.exception.InvalidGCPToken;
+import auto.parto.exception.InsufficientBalanceException;
 import auto.parto.exception.OtpInvalidException;
 import auto.parto.exception.OtpLockedException;
 import org.junit.jupiter.api.Test;
@@ -136,6 +137,18 @@ class OtpExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody().getCode()).isEqualTo("CONFLICT");
         assertThat(response.getBody().getMessage()).isEqualTo("Request conflicts with the current state");
+    }
+
+    @Test
+    void mapsInsufficientBalanceToConflictContract() {
+        OtpExceptionHandler handler = new OtpExceptionHandler();
+
+        ResponseEntity<ApiErrorResponse> response = handler.handleInsufficientBalanceException(
+                new InsufficientBalanceException("database details"), exchange("/seller/wallet/deduct"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().getCode()).isEqualTo("INSUFFICIENT_BALANCE");
+        assertThat(response.getBody().getMessage()).isEqualTo("Insufficient balance");
     }
 
     @Test
