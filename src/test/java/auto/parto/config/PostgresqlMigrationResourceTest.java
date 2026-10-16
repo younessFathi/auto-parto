@@ -79,6 +79,16 @@ class PostgresqlMigrationResourceTest {
     }
 
     @Test
+    void matchingMigrationAddsPredicateAndOrderIndexes() throws IOException {
+        String sql = readResource("/db/migration/V7__add_part_listing_matching_indexes.sql");
+
+        assertThat(sql).contains("part_listings_matching_category_idx")
+                .contains("part_listings_matching_vehicle_idx")
+                .contains("LOWER(vehicle_make)")
+                .contains("created_at DESC, public_id DESC");
+    }
+
+    @Test
     void partListingStatusMigrationSeparatesLifecycleStates() throws IOException {
         String sql = readResource("/db/migration/V6__separate_part_listing_statuses.sql");
 

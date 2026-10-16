@@ -142,10 +142,27 @@ class R2dbcPartListingRepositoryIT {
                                 Category.CAR.name(), "Toyota", "Corolla", 2020, 1000, "MAD"))
                         .flatMap(listing -> repository.updateStatus(listing.publicId(), seller, "PUBLISHED", 0, Instant.now()))
                         .thenMany(repository.findMatches(request, 1))
-                        .collectList())
+                        .collectList()
+                        .zipWith(explainMatching(request))
+                        .map(reactor.util.function.Tuple2::getT1))
                 .assertNext(matches -> assertThat(matches).hasSize(1)
                         .allSatisfy(match -> assertThat(match.status()).isEqualTo("PUBLISHED")))
                 .verifyComplete();
+    }
+
+    private reactor.core.publisher.Mono<java.util.List<String>> explainMatching(PartRequestRecord request) {
+        DatabaseClient.GenericExecuteSpec query = databaseClient.sql(
+                        "EXPLAIN (COSTS OFF) " + R2dbcPartListingRepository.matchingSql(request))
+                .bind("limit", 1)
+                .bind("category", request.category().name())
+                .bind("condition", request.condition().name())
+                .bind("vehicleMake", request.vehicleMake())
+                .bind("vehicleModel", request.vehicleModel())
+                .bind("vehicleYear", request.vehicleYear());
+        return databaseClient.sql("SET enable_seqscan = off").fetch().rowsUpdated()
+                .thenMany(query.map((row, metadata) -> row.get("QUERY PLAN", String.class)).all())
+                .collectList()
+                .doOnNext(plan -> assertThat(plan).anyMatch(line -> line.contains("part_listings_matching_")));
     }
 
     private reactor.core.publisher.Mono<Void> insertSeller(UUID publicId) {

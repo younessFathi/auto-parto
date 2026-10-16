@@ -92,28 +92,24 @@ public class R2dbcPartListingRepository implements PartListingRepository {
     public Flux<PartListingRecord> findMatches(PartRequestRecord request, int limit) {
         if (request == null) throw new IllegalArgumentException("request is required");
         if (limit < 1 || limit > 50) throw new IllegalArgumentException("limit must be between 1 and 50");
-        DatabaseClient.GenericExecuteSpec query = databaseClient.sql(SELECT + """
-                        WHERE pl.status = 'PUBLISHED'
-                          AND (:category IS NULL OR pl.category = :category)
-                          AND (:condition IS NULL OR pl.condition = :condition)
-                          AND (:vehicleMake IS NULL OR LOWER(pl.vehicle_make) = LOWER(:vehicleMake))
-                          AND (:vehicleModel IS NULL OR LOWER(pl.vehicle_model) = LOWER(:vehicleModel))
-                          AND (:vehicleYear IS NULL OR pl.vehicle_year = :vehicleYear)
-                        ORDER BY
-                          (CASE WHEN :condition IS NOT NULL AND pl.condition = :condition THEN 1 ELSE 0 END
-                           + CASE WHEN :vehicleMake IS NOT NULL AND LOWER(pl.vehicle_make) = LOWER(:vehicleMake) THEN 1 ELSE 0 END
-                           + CASE WHEN :vehicleModel IS NOT NULL AND LOWER(pl.vehicle_model) = LOWER(:vehicleModel) THEN 1 ELSE 0 END
-                           + CASE WHEN :vehicleYear IS NOT NULL AND pl.vehicle_year = :vehicleYear THEN 1 ELSE 0 END) DESC,
-                          pl.created_at DESC, pl.public_id DESC
-                        LIMIT :limit
-                        """)
+        DatabaseClient.GenericExecuteSpec query = databaseClient.sql(matchingSql(request))
                 .bind("limit", limit);
-        query = bindNullable(query, "category", request.category() == null ? null : request.category().name(), String.class);
-        query = bindNullable(query, "condition", request.condition() == null ? null : request.condition().name(), String.class);
-        query = bindNullable(query, "vehicleMake", request.vehicleMake(), String.class);
-        query = bindNullable(query, "vehicleModel", request.vehicleModel(), String.class);
-        query = bindNullable(query, "vehicleYear", request.vehicleYear(), Integer.class);
+        if (request.category() != null) query = query.bind("category", request.category().name());
+        if (request.condition() != null) query = query.bind("condition", request.condition().name());
+        if (request.vehicleMake() != null) query = query.bind("vehicleMake", request.vehicleMake());
+        if (request.vehicleModel() != null) query = query.bind("vehicleModel", request.vehicleModel());
+        if (request.vehicleYear() != null) query = query.bind("vehicleYear", request.vehicleYear());
         return query.map((row, metadata) -> map(row)).all();
+    }
+
+    static String matchingSql(PartRequestRecord request) {
+        StringBuilder sql = new StringBuilder(SELECT).append(" WHERE pl.status = 'PUBLISHED'");
+        if (request.category() != null) sql.append(" AND pl.category = :category");
+        if (request.condition() != null) sql.append(" AND pl.condition = :condition");
+        if (request.vehicleMake() != null) sql.append(" AND LOWER(pl.vehicle_make) = LOWER(:vehicleMake)");
+        if (request.vehicleModel() != null) sql.append(" AND LOWER(pl.vehicle_model) = LOWER(:vehicleModel)");
+        if (request.vehicleYear() != null) sql.append(" AND pl.vehicle_year = :vehicleYear");
+        return sql.append(" ORDER BY pl.created_at DESC, pl.public_id DESC LIMIT :limit").toString();
     }
 
     @Override

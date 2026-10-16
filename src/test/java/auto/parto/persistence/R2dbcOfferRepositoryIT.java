@@ -1,6 +1,9 @@
 package auto.parto.persistence;
 
+import auto.parto.dto.UpdateOfferStatusRequest;
+import auto.parto.service.PostgresqlOfferService;
 import io.r2dbc.spi.ConnectionFactoryOptions;
+import org.springframework.beans.factory.ObjectProvider;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -12,6 +15,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.test.StepVerifier;
+import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -33,6 +37,7 @@ class R2dbcOfferRepositoryIT {
 
     private DatabaseClient databaseClient;
     private OfferRepository repository;
+    private PostgresqlOfferService service;
 
     @BeforeAll
     void migrateAndCreateRepository() {
@@ -53,6 +58,7 @@ class R2dbcOfferRepositoryIT {
         databaseClient = DatabaseClient.create(connectionFactory);
         repository = new R2dbcOfferRepository(databaseClient,
                 TransactionalOperator.create(new R2dbcTransactionManager(connectionFactory)));
+        service = new PostgresqlOfferService(provider(repository));
     }
 
     @Test
@@ -133,6 +139,30 @@ class R2dbcOfferRepositoryIT {
                 .verifyComplete();
     }
 
+    @Test
+    void competingTransitionsWithSameVersionHaveOneWinner() {
+        UUID buyer = UUID.randomUUID();
+        UUID seller = UUID.randomUUID();
+        UUID listing = UUID.randomUUID();
+
+        StepVerifier.create(insertPartiesAndListing(buyer, seller, listing)
+                        .then(repository.create(buyer, seller, null, listing,
+                                9000, "MAD", false, 0, null))
+                        .flatMap(offer -> Mono.when(
+                                        service.updateStatus(offer.publicId(), seller,
+                                                new UpdateOfferStatusRequest("ACCEPTED", 0L)).then(),
+                                        service.updateStatus(offer.publicId(), seller,
+                                                new UpdateOfferStatusRequest("REJECTED", 0L)).then())
+                                .thenReturn(offer)
+                                .onErrorResume(error -> repository.findByPublicId(offer.publicId())
+                                        .doOnNext(finalOffer -> assertThat(finalOffer.status())
+                                                .isIn("ACCEPTED", "REJECTED"))
+                                        .then(Mono.error(error)))))
+                .expectErrorMatches(error -> error instanceof org.springframework.web.server.ResponseStatusException
+                        && ((org.springframework.web.server.ResponseStatusException) error).getStatusCode().value() == 409)
+                .verify();
+    }
+
     private reactor.core.publisher.Mono<Void> insertPartiesAndRequest(UUID buyer, UUID seller, UUID request) {
         return insertUser(buyer, "BUYER")
                 .then(insertUser(seller, "SELLER"))
@@ -165,5 +195,13 @@ class R2dbcOfferRepositoryIT {
                 .bind("email", role.toLowerCase() + "-" + publicId + "@example.test")
                 .bind("role", role)
                 .fetch().rowsUpdated().then();
+    }
+
+    private static ObjectProvider<OfferRepository> provider(OfferRepository repository) {
+        return new ObjectProvider<>() {
+            @Override public OfferRepository getObject(Object... args) { return repository; }
+            @Override public OfferRepository getIfAvailable() { return repository; }
+            @Override public OfferRepository getIfUnique() { return repository; }
+        };
     }
 }
