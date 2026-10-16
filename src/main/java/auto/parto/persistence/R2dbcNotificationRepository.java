@@ -17,6 +17,8 @@ import java.util.UUID;
         havingValue = "true")
 public class R2dbcNotificationRepository implements NotificationRepository {
 
+    private static final String NOTIFICATION_REQUESTED_EVENT = "notification.requested";
+    private static final int NOTIFICATION_EVENT_SCHEMA_VERSION = 1;
     private static final Set<String> STATUSES = Set.of("PENDING", "DISPATCHED", "EXHAUSTED");
     private static final Set<String> CHANNELS = Set.of("SSE", "FCM", "EMAIL");
     private static final String SELECT = """
@@ -41,15 +43,36 @@ public class R2dbcNotificationRepository implements NotificationRepository {
         requireText(eventType, "eventType");
         requireText(payloadJson, "payloadJson");
         return databaseClient.sql("""
-                        INSERT INTO notifications (public_id, recipient_user_id, event_type, payload)
-                        SELECT gen_random_uuid(), id, :eventType, CAST(:payloadJson AS jsonb)
-                        FROM app_users
-                        WHERE public_id = :recipientPublicId AND status = 'ACTIVE'
-                        RETURNING public_id
+                        WITH inserted_notification AS (
+                            INSERT INTO notifications (public_id, recipient_user_id, event_type, payload)
+                            SELECT gen_random_uuid(), id, :eventType, CAST(:payloadJson AS jsonb)
+                            FROM app_users
+                            WHERE public_id = :recipientPublicId AND status = 'ACTIVE'
+                            RETURNING id, public_id, event_type, payload
+                        ), inserted_event AS (
+                            INSERT INTO outbox_events
+                                (event_id, event_type, schema_version, aggregate_type, aggregate_id,
+                                 aggregate_public_id, payload)
+                            SELECT gen_random_uuid(), :outboxEventType, :schemaVersion, 'notification',
+                                   notification.id, notification.public_id,
+                                   jsonb_build_object(
+                                       'notificationId', notification.public_id,
+                                       'recipientUserPublicId', :recipientPublicId,
+                                       'notificationType', notification.event_type,
+                                       'notificationPayload', notification.payload
+                                   )
+                            FROM inserted_notification notification
+                            RETURNING id
+                        )
+                        SELECT notification.public_id
+                        FROM inserted_notification notification
+                        CROSS JOIN inserted_event
                         """)
                 .bind("eventType", eventType)
                 .bind("payloadJson", payloadJson)
                 .bind("recipientPublicId", recipientUserPublicId)
+                .bind("outboxEventType", NOTIFICATION_REQUESTED_EVENT)
+                .bind("schemaVersion", NOTIFICATION_EVENT_SCHEMA_VERSION)
                 .map((row, metadata) -> row.get("public_id", UUID.class))
                 .one()
                 .flatMap(this::findByPublicId)

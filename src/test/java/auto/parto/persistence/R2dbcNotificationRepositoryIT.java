@@ -55,6 +55,37 @@ class R2dbcNotificationRepositoryIT {
     }
 
     @Test
+    void enqueueCommitsNotificationAndVersionedOutboxEventTogether() {
+        UUID owner = UUID.randomUUID();
+        StepVerifier.create(insertUser(owner)
+                        .then(repository.enqueue(owner, "OFFER_CREATED", "{\"offerId\":\"abc\"}"))
+                        .flatMap(notification -> databaseClient.sql("""
+                                        SELECT event_type, schema_version, aggregate_public_id,
+                                               payload::text AS payload, count(delivery.id) AS delivery_count
+                                        FROM outbox_events event
+                                        JOIN outbox_deliveries delivery ON delivery.outbox_event_id = event.id
+                                        WHERE event.aggregate_public_id = :notificationId
+                                        GROUP BY event.event_type, event.schema_version,
+                                                 event.aggregate_public_id, event.payload
+                                        """)
+                                .bind("notificationId", notification.publicId())
+                                .map((row, metadata) -> new OutboxSnapshot(
+                                        row.get("event_type", String.class),
+                                        row.get("schema_version", Integer.class),
+                                        row.get("aggregate_public_id", UUID.class),
+                                        row.get("payload", String.class),
+                                        row.get("delivery_count", Long.class)))
+                                .one()))
+                .assertNext(snapshot -> {
+                    assertThat(snapshot.eventType()).isEqualTo("notification.requested");
+                    assertThat(snapshot.schemaVersion()).isEqualTo(1);
+                    assertThat(snapshot.aggregatePublicId()).isNotNull();
+                    assertThat(snapshot.payload()).contains("notificationPayload", "offerId");
+                    assertThat(snapshot.deliveryCount()).isEqualTo(1L);
+                }).verifyComplete();
+    }
+
+    @Test
     void statusUpdateIsIdempotentAndPendingReadsAreBounded() {
         UUID owner = UUID.randomUUID();
         StepVerifier.create(insertUser(owner)
@@ -143,5 +174,9 @@ class R2dbcNotificationRepositoryIT {
                         """)
                 .bind("publicId", publicId).bind("email", "notification-" + publicId + "@example.test")
                 .fetch().rowsUpdated().then();
+    }
+
+    private record OutboxSnapshot(String eventType, Integer schemaVersion, UUID aggregatePublicId,
+                                  String payload, Long deliveryCount) {
     }
 }
