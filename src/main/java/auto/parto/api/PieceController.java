@@ -16,6 +16,7 @@ import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
@@ -43,6 +44,7 @@ public class PieceController {
             )
     })
     @GetMapping("/{customerId}")
+    @PreAuthorize("hasRole('BUYER')")
     public Mono<ResponseEntity<PagedResponse<PieceDto>>> getAllPiecesByCustomerId(
             @Parameter(description = "ID of the customer", required = true, example = "customer1")
             @PathVariable String customerId,
@@ -84,6 +86,7 @@ public class PieceController {
             )
     })
     @GetMapping("/{pieceId}/detail")
+    @PreAuthorize("isAuthenticated()")
     public Mono<ResponseEntity<PieceDto>> getPieceDetailByPieceId(
             @Parameter(description = "ID of the piece", required = true, example = "piece1")
             @PathVariable String pieceId){

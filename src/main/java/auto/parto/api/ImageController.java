@@ -17,6 +17,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -61,6 +62,7 @@ public class ImageController {
     }
 
     @PostMapping(value = "/requests/{requestId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('BUYER')")
     public Mono<String> uploadRequestImage(@PathVariable UUID requestId,
                                             @RequestPart("image") FilePart image,
                                             Authentication authentication) {
@@ -73,6 +75,7 @@ public class ImageController {
     }
 
     @PostMapping(value = "/listings/{listingId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('SELLER')")
     public Mono<String> uploadListingImage(@PathVariable UUID listingId,
                                             @RequestPart("image") FilePart image,
                                             Authentication authentication) {
@@ -85,6 +88,7 @@ public class ImageController {
     }
 
     @GetMapping("/files/{fileId}")
+    @PreAuthorize("isAuthenticated()")
     public Mono<ResponseEntity<Flux<DataBuffer>>> getFile(@PathVariable UUID fileId) {
         if (fileRepository == null || fileStorage == null) {
             return Mono.just(ResponseEntity.status(503).build());
@@ -106,6 +110,7 @@ public class ImageController {
     }
 
     @GetMapping("/{folderName}")
+    @PreAuthorize("isAuthenticated()")
     public Flux<Resource> listImages(@PathVariable String folderName , @RequestParam(required = false) FileRequestFlag flag) {
         if (postgresqlFilesEnabled) {
             return Flux.error(new IllegalStateException(

@@ -8,6 +8,7 @@ import auto.parto.security.CanonicalSecurity;
 import auto.parto.service.PostgresqlOfferService;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
@@ -23,6 +24,7 @@ public class OfferController {
     }
 
     @PostMapping("/requests/{requestId}")
+    @PreAuthorize("hasRole('SELLER')")
     public Mono<OfferResponse> createForRequest(@PathVariable UUID requestId,
                                                 @Valid @RequestBody CreateOfferRequest request,
                                                 Authentication authentication) {
@@ -31,6 +33,7 @@ public class OfferController {
     }
 
     @PostMapping("/listings/{listingId}")
+    @PreAuthorize("hasRole('BUYER')")
     public Mono<OfferResponse> createForListing(@PathVariable UUID listingId,
                                                 @Valid @RequestBody CreateOfferRequest request,
                                                 Authentication authentication) {
@@ -39,12 +42,14 @@ public class OfferController {
     }
 
     @GetMapping("/{offerId}")
+    @PreAuthorize("isAuthenticated()")
     public Mono<OfferResponse> get(@PathVariable UUID offerId, Authentication authentication) {
         CanonicalPrincipal principal = CanonicalSecurity.requirePrincipal(authentication);
         return service.findForActor(offerId, UUID.fromString(principal.getId()));
     }
 
     @PatchMapping("/{offerId}/status")
+    @PreAuthorize("isAuthenticated()")
     public Mono<OfferResponse> updateStatus(@PathVariable UUID offerId,
                                              @Valid @RequestBody UpdateOfferStatusRequest request,
                                              Authentication authentication) {

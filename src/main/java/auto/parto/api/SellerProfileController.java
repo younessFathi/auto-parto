@@ -4,12 +4,14 @@ import auto.parto.dto.SellerProfileResponse;
 import auto.parto.dto.SellerProfileUpdateRequest;
 import auto.parto.persistence.SellerProfileRecord;
 import auto.parto.security.CanonicalPrincipal;
+import auto.parto.security.CanonicalSecurity;
 import auto.parto.service.iservice.ISellerProfileService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,10 +31,11 @@ public class SellerProfileController {
     private final ISellerProfileService profileService;
 
     @PutMapping
+    @PreAuthorize("hasRole('SELLER')")
     public Mono<SellerProfileResponse> updateProfile(
             Authentication authentication,
             @Valid @RequestBody SellerProfileUpdateRequest request) {
-        CanonicalPrincipal principal = canonicalSeller(authentication);
+        CanonicalPrincipal principal = CanonicalSecurity.requirePrincipal(authentication);
         UUID userPublicId;
         try {
             userPublicId = UUID.fromString(principal.getId());
@@ -46,17 +49,6 @@ public class SellerProfileController {
                 .map(SellerProfileController::toResponse)
                 .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Seller profile not found")));
-    }
-
-    private static CanonicalPrincipal canonicalSeller(Authentication authentication) {
-        if (authentication == null || !(authentication.getPrincipal() instanceof CanonicalPrincipal principal)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
-                    "Canonical authentication is required");
-        }
-        if (!"ROLE_SELLER".equals(principal.getRole())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Seller role is required");
-        }
-        return principal;
     }
 
     private static SellerProfileResponse toResponse(SellerProfileRecord profile) {

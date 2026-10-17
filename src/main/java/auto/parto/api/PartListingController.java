@@ -9,6 +9,7 @@ import auto.parto.service.PartListingService;
 import jakarta.validation.Valid;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -25,6 +26,7 @@ public class PartListingController {
     public PartListingController(PartListingService service) { this.service = service; }
 
     @PostMapping
+    @PreAuthorize("hasRole('SELLER')")
     public Mono<ResponseEntity<PartListingResponse>> create(@Valid @RequestBody PartListingCreateRequest request,
                                                               Authentication authentication) {
         return service.create(id(CanonicalSecurity.requireRole(authentication, "ROLE_SELLER")), request)
@@ -32,6 +34,7 @@ public class PartListingController {
     }
 
     @GetMapping
+    @PreAuthorize("hasRole('SELLER')")
     public Mono<PartListingPageResponse> findMine(@RequestParam(defaultValue = "0") int page,
                                                    @RequestParam(defaultValue = "50") int size,
                                                    Authentication authentication) {
@@ -42,6 +45,7 @@ public class PartListingController {
     }
 
     @PostMapping("/{publicId}/transition")
+    @PreAuthorize("hasRole('SELLER')")
     public Mono<PartListingResponse> transition(@PathVariable UUID publicId, @RequestParam String status,
                                                  Authentication authentication) {
         return service.transition(id(CanonicalSecurity.requireRole(authentication, "ROLE_SELLER")), publicId, status);

@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
@@ -19,6 +20,7 @@ public class NotificationPreferencesController {
     private final NotificationPreferencesService preferencesService;
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public Mono<ResponseEntity<NotificationPreferencesDto>> getPreferences(Authentication authentication) {
         CanonicalPrincipal principal = CanonicalSecurity.requirePrincipal(authentication);
         return preferencesService.getPreferences(principal.getId(), principal.getEmail())
@@ -26,6 +28,7 @@ public class NotificationPreferencesController {
     }
 
     @PutMapping
+    @PreAuthorize("isAuthenticated()")
     public Mono<ResponseEntity<NotificationPreferencesDto>> updatePreferences(
             Authentication authentication,
             @Valid @RequestBody NotificationPreferencesDto dto) {
@@ -37,6 +40,7 @@ public class NotificationPreferencesController {
     }
 
     @GetMapping("/channel/{channel}")
+    @PreAuthorize("isAuthenticated()")
     public Mono<ResponseEntity<Boolean>> isChannelEnabled(
             Authentication authentication,
             @PathVariable String channel) {
@@ -46,6 +50,7 @@ public class NotificationPreferencesController {
     }
 
     @GetMapping("/type/{type}")
+    @PreAuthorize("isAuthenticated()")
     public Mono<ResponseEntity<Boolean>> isNotificationTypeEnabled(
             Authentication authentication,
             @PathVariable String type) {

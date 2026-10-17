@@ -9,6 +9,7 @@ import auto.parto.service.PartRequestService;
 import jakarta.validation.Valid;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,6 +37,7 @@ public class PartRequestController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('BUYER')")
     public Mono<ResponseEntity<PartRequestResponse>> create(
             @Valid @RequestBody PartRequestCreateRequest request,
             Authentication authentication) {
@@ -45,6 +47,7 @@ public class PartRequestController {
     }
 
     @GetMapping
+    @PreAuthorize("hasRole('BUYER')")
     public Mono<PartRequestPageResponse> findMine(
             @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "50") int limit,
@@ -56,12 +59,14 @@ public class PartRequestController {
     }
 
     @PostMapping("/{publicId}/close")
+    @PreAuthorize("hasRole('BUYER')")
     public Mono<PartRequestResponse> close(@PathVariable UUID publicId, Authentication authentication) {
         CanonicalPrincipal principal = CanonicalSecurity.requireRole(authentication, "ROLE_BUYER");
         return service.close(parsePrincipalId(principal), publicId);
     }
 
     @PostMapping("/{publicId}/cancel")
+    @PreAuthorize("hasRole('BUYER')")
     public Mono<PartRequestResponse> cancel(@PathVariable UUID publicId, Authentication authentication) {
         CanonicalPrincipal principal = CanonicalSecurity.requireRole(authentication, "ROLE_BUYER");
         return service.cancel(parsePrincipalId(principal), publicId);

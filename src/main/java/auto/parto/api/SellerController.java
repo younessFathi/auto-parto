@@ -16,6 +16,7 @@ import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -39,6 +40,7 @@ public class SellerController {
                     content = @Content)
     })
     @PostMapping("/create")
+    @PreAuthorize("isAuthenticated()")
     public Mono<SellerDto> createSeller(@RequestBody @Valid SellerDto sellerDto) {
         return sellerService.create(sellerDto);
     }
@@ -52,6 +54,7 @@ public class SellerController {
                     content = @Content)
     })
     @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public Mono<SellerDto> getSellerById(@PathVariable String id) {
         return sellerService.getSellerById(id)
                 .switchIfEmpty(Mono.error(new EntityNotFoundException("Seller not found")));
@@ -71,6 +74,7 @@ public class SellerController {
     }
 
     @PostMapping("/{id}/wallet/add")
+    @PreAuthorize("hasRole('SELLER')")
     public Mono<SellerDto> addFunds(@PathVariable String id, @RequestParam BigDecimal amount,
                                     @RequestParam(defaultValue = "MAD") Currency currency,
                                     @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
@@ -97,6 +101,7 @@ public class SellerController {
     }
 
     @PostMapping("/{id}/wallet/deduct")
+    @PreAuthorize("hasRole('SELLER')")
     public Mono<SellerDto> deductFunds(@PathVariable String id, @RequestParam BigDecimal amount,
                                        @RequestParam(defaultValue = "MAD") Currency currency,
                                        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
@@ -118,6 +123,7 @@ public class SellerController {
                     content = @Content)
     })
     @PostMapping("/{id}/deactivate")
+    @PreAuthorize("hasRole('SELLER')")
     public Mono<SellerDto> deactivateSeller(@PathVariable String id, Authentication authentication) {
         CanonicalSecurity.requireOwner(authentication, id, "ROLE_SELLER");
         return sellerService.deactivate(id)

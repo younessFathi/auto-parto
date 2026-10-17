@@ -42,6 +42,7 @@ public class FcmNotificationController {
      * Register device token from React Native app
      */
     @PostMapping("/register")
+    @PreAuthorize("isAuthenticated()")
     public Mono<ResponseEntity<Map<String, Object>>> registerToken(
             @Valid @RequestBody RegisterTokenRequest request,
             Authentication authentication) {

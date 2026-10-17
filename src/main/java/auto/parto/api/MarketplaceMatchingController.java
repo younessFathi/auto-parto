@@ -6,6 +6,7 @@ import auto.parto.security.CanonicalSecurity;
 import auto.parto.service.MarketplaceMatchingService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,6 +28,7 @@ public class MarketplaceMatchingController {
     }
 
     @GetMapping("/{publicId}/matches")
+    @PreAuthorize("hasRole('BUYER')")
     public Mono<PartListingMatchResponse> findMatches(@PathVariable UUID publicId,
                                                        @RequestParam(defaultValue = "20") int limit,
                                                        Authentication authentication) {

@@ -49,6 +49,7 @@ public class NotificationController {
     }
 
     @GetMapping(value = "/subscribe", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public Flux<ServerSentEvent<NotificationRequest>> subscribe() {
         return notificationSink.asFlux()
                 .map(this::createServerSentEvent)
@@ -73,6 +74,7 @@ public class NotificationController {
 
     // Subscribe with user-specific notifications
     @GetMapping(value = "/subscribe/{userId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public Flux<ServerSentEvent<NotificationRequest>> subscribeToUser(
             @PathVariable String userId,
             org.springframework.security.core.Authentication authentication) {
