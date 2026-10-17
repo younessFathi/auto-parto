@@ -18,10 +18,11 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @WebFluxTest(controllers = BuyerProfileController.class)
-@Import(TestConfig.class)
+@Import({TestConfig.class, ReactiveMethodSecurityTestConfig.class})
 @TestPropertySource(properties = {
         "auto.parto.persistence.postgresql.enabled=true",
         "auto.parto.persistence.postgresql.buyer-identity.enabled=true"
@@ -73,6 +74,31 @@ class BuyerProfileControllerTest {
                 .bodyValue("{\"phoneNumber\":\"invalid\"}")
                 .exchange()
                 .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void rejectsWrongRoleBeforeCallingService() {
+        webTestClient.mutateWith(org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers
+                        .mockAuthentication(new TestAuthentication(
+                                new CanonicalPrincipal(UUID.randomUUID().toString(), "seller@example.test", "ROLE_SELLER"))))
+                .put().uri("/customers/profile")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"firstName\":\"Ada\",\"lastName\":\"Lovelace\",\"phoneNumber\":\"+212600000000\"}")
+                .exchange()
+                .expectStatus().isForbidden();
+
+        verifyNoInteractions(profileService);
+    }
+
+    @Test
+    void rejectsMissingAuthenticationBeforeCallingService() {
+        webTestClient.put().uri("/customers/profile")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"firstName\":\"Ada\"}")
+                .exchange()
+                .expectStatus().isUnauthorized();
+
+        verifyNoInteractions(profileService);
     }
 
     private record TestAuthentication(CanonicalPrincipal principal) implements Authentication {
