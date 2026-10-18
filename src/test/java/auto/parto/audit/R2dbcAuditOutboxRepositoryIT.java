@@ -187,18 +187,22 @@ class R2dbcAuditOutboxRepositoryIT {
 
     @Test
     void purgesOnlyBoundedTerminalAuditDeliveries() {
-        UUID eventId = insertPendingEvent(Instant.now().minusSeconds(10));
-        AuditOutboxRecord claimed = repository.claimForReplay(
-                        deliveryIdForEvent(eventId), "purge-worker", Instant.now(), Duration.ofMinutes(1))
+        UUID oldEventId = insertOldTerminalEvent();
+        UUID freshEventId = insertPendingEvent(Instant.now());
+        AuditOutboxRecord freshClaim = repository.claimForReplay(
+                        deliveryIdForEvent(freshEventId), "purge-worker", Instant.now(), Duration.ofMinutes(1))
                 .block();
-        repository.markDelivered(claimed.deliveryId(), claimed.claimOwner(), Instant.now()).block();
+        repository.markExhausted(freshClaim.deliveryId(), freshClaim.claimOwner(), "AUDIT_DELIVERY_PERMANENT")
+                .block();
         UUID pendingEventId = insertPendingEvent(Instant.now());
         long before = countAuditDeliveries();
 
-        int purged = repository.purgeTerminalBefore(Instant.now().plusSeconds(1), 1).block();
+        int purged = repository.purgeTerminalBefore(Instant.now(), 1).block();
 
         assertThat(purged).isEqualTo(1);
         assertThat(countAuditDeliveries()).isEqualTo(before - 1);
+        assertThat(countDeliveriesForEvent(oldEventId)).isZero();
+        assertThat(countDeliveriesForEvent(freshEventId)).isEqualTo(1);
         assertThat(countDeliveriesForEvent(pendingEventId)).isEqualTo(1);
     }
 
@@ -239,6 +243,29 @@ class R2dbcAuditOutboxRepositoryIT {
                 .bind("availableAt", availableAt)
                 .fetch().rowsUpdated()
                 .block();
+        return eventId;
+    }
+
+    private UUID insertOldTerminalEvent() {
+        UUID eventId = insertPendingEvent(Instant.now());
+        Long eventDatabaseId = databaseClient.sql("SELECT id FROM outbox_events WHERE event_id = :eventId")
+                .bind("eventId", eventId)
+                .map((row, metadata) -> row.get("id", Long.class))
+                .one()
+                .block();
+        databaseClient.sql("DELETE FROM outbox_deliveries WHERE outbox_event_id = :eventId")
+                .bind("eventId", eventDatabaseId)
+                .fetch().rowsUpdated().block();
+        Instant old = Instant.now().minus(Duration.ofDays(8));
+        databaseClient.sql("""
+                        INSERT INTO outbox_deliveries
+                            (public_id, outbox_event_id, destination, status, last_error, created_at, updated_at)
+                        VALUES (:publicId, :eventId, 'AUDIT', 'EXHAUSTED', 'AUDIT_DELIVERY_PERMANENT', :old, :old)
+                        """)
+                .bind("publicId", UUID.randomUUID())
+                .bind("eventId", eventDatabaseId)
+                .bind("old", old)
+                .fetch().rowsUpdated().block();
         return eventId;
     }
 

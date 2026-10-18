@@ -19,6 +19,21 @@ services:
       timeout: 5s
       retries: 5
 
+  audit-postgresql-migrate:
+    image: flyway/flyway:10.20.1
+    profiles: ["audit"]
+    command: ["migrate"]
+    environment:
+      FLYWAY_URL: ${AUDIT_POSTGRES_JDBC_URL:-jdbc:postgresql://audit-postgresql:5432/auto_parto_audit}
+      FLYWAY_USER: ${AUDIT_POSTGRES_MIGRATION_USER:?set AUDIT_POSTGRES_MIGRATION_USER for the audit profile}
+      FLYWAY_PASSWORD: ${AUDIT_POSTGRES_MIGRATION_PASSWORD:?set AUDIT_POSTGRES_MIGRATION_PASSWORD for the audit profile}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+    volumes:
+      - ./src/main/resources/db/audit-migration:/flyway/sql:ro
+    depends_on:
+      audit-postgresql:
+        condition: service_healthy
+
 volumes:
   audit-postgres-data:
 

@@ -11,6 +11,9 @@ import org.springframework.r2dbc.core.DatabaseClient;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -85,6 +88,55 @@ class AuditPublisherPostgresqlIT {
         assertThat(statusFor(eventId)).isEqualTo("DISPATCHED");
     }
 
+    @Test
+    void workerProcessesPersistedOutboxDeliveryThroughItsLifecycle() {
+        AuditProcessingProperties properties = new AuditProcessingProperties();
+        properties.setWorkerId("integration-worker");
+        properties.setBatchSize(10);
+        properties.setPollInterval(Duration.ofMillis(10));
+        properties.setReconciliationInterval(Duration.ofHours(1));
+        properties.setCleanupInterval(Duration.ofHours(1));
+        AuditOutboxWorker worker = new AuditOutboxWorker(publisher, properties, Clock.systemUTC());
+        UUID eventId = insertApplicationEvent(Instant.now().minusSeconds(1));
+
+        worker.start();
+        try {
+                    StepVerifier.create(Flux.interval(Duration.ofMillis(10))
+                            .flatMap(ignored -> statusPublisher(eventId))
+                            .filter("DISPATCHED"::equals)
+                            .next()
+                            .timeout(Duration.ofSeconds(5)))
+                    .expectNext("DISPATCHED")
+                    .verifyComplete();
+            assertThat(auditStore.contains(eventId).block()).isTrue();
+        } finally {
+            worker.stop();
+        }
+    }
+
+    @Test
+    void persistedRetryFailureReachesExhaustionAndReconciliationRequeuesMissingAudit() {
+        UUID retryEventId = insertApplicationEvent(Instant.now().minusSeconds(1));
+        AuditPublisher failingPublisher = new AuditPublisher(
+                outbox, new R2dbcAuditStore(applicationDatabase), Clock.systemUTC(),
+                3, 1, Duration.ofSeconds(1), Duration.ofMinutes(1),
+                (requester, eventId) -> reactor.core.publisher.Mono.just(true));
+
+        failingPublisher.publishBatch("failure-worker", 10, Duration.ofMinutes(1)).block();
+        makeDue(retryEventId);
+        failingPublisher.publishBatch("failure-worker", 10, Duration.ofMinutes(1)).block();
+
+        assertThat(statusFor(retryEventId)).isEqualTo("PENDING");
+        makeDue(retryEventId);
+        failingPublisher.publishBatch("failure-worker", 10, Duration.ofMinutes(1)).block();
+        assertThat(statusFor(retryEventId)).isEqualTo("EXHAUSTED");
+
+        UUID reconciliationEventId = insertApplicationEvent(Instant.now().minusSeconds(1));
+        markDispatchedWithoutAuditRow(reconciliationEventId);
+        assertThat(publisher.reconcile(Instant.now().minusSeconds(1), 10).block()).isEqualTo(1L);
+        assertThat(statusFor(reconciliationEventId)).isEqualTo("PENDING");
+    }
+
     private UUID insertApplicationEvent(Instant availableAt) {
         UUID eventId = UUID.randomUUID();
         applicationDatabase.sql("""
@@ -112,6 +164,40 @@ class AuditPublisherPostgresqlIT {
                 .bind("eventId", eventId)
                 .map((row, metadata) -> row.get("status", String.class))
                 .one().block();
+    }
+
+    private Mono<String> statusPublisher(UUID eventId) {
+        return applicationDatabase.sql("""
+                        SELECT od.status FROM outbox_deliveries od
+                        JOIN outbox_events oe ON oe.id = od.outbox_event_id
+                        WHERE oe.event_id = :eventId AND od.destination = 'AUDIT'
+                        """)
+                .bind("eventId", eventId)
+                .map((row, metadata) -> row.get("status", String.class))
+                .one();
+    }
+
+    private void makeDue(UUID eventId) {
+        applicationDatabase.sql("""
+                        UPDATE outbox_deliveries od SET available_at = CURRENT_TIMESTAMP
+                        FROM outbox_events oe
+                        WHERE oe.id = od.outbox_event_id AND oe.event_id = :eventId
+                          AND od.destination = 'AUDIT'
+                        """)
+                .bind("eventId", eventId)
+                .fetch().rowsUpdated().block();
+    }
+
+    private void markDispatchedWithoutAuditRow(UUID eventId) {
+        applicationDatabase.sql("""
+                        UPDATE outbox_deliveries od
+                        SET status = 'DISPATCHED', delivered_at = CURRENT_TIMESTAMP
+                        FROM outbox_events oe
+                        WHERE oe.id = od.outbox_event_id AND oe.event_id = :eventId
+                          AND od.destination = 'AUDIT'
+                        """)
+                .bind("eventId", eventId)
+                .fetch().rowsUpdated().block();
     }
 
     private long countAuditEvents(UUID eventId) {

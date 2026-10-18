@@ -78,6 +78,22 @@ auto:
           enabled: ${APP_POSTGRES_FILES_ENABLED:false}
         notification-preferences:
           enabled: ${APP_POSTGRES_NOTIFICATION_PREFERENCES_ENABLED:false}
+    audit:
+      enabled: ${APP_AUDIT_OUTBOX_ENABLED:false}
+      r2dbc-url: ${AUDIT_POSTGRES_R2DBC_URL:r2dbc:postgresql://localhost:5432/auto_parto_audit}
+      username: ${AUDIT_POSTGRES_RUNTIME_USER:}
+      password: ${AUDIT_POSTGRES_RUNTIME_PASSWORD:}
+      worker-id: ${AUDIT_OUTBOX_WORKER_ID:audit-worker}
+      batch-size: ${AUDIT_OUTBOX_BATCH_SIZE:100}
+      poll-interval: ${AUDIT_OUTBOX_POLL_INTERVAL:1s}
+      lease-duration: ${AUDIT_OUTBOX_LEASE_DURATION:30s}
+      max-attempts: ${AUDIT_OUTBOX_MAX_ATTEMPTS:3}
+      max-concurrency: ${AUDIT_OUTBOX_MAX_CONCURRENCY:4}
+      base-retry-delay: ${AUDIT_OUTBOX_BASE_RETRY_DELAY:2s}
+      max-retry-delay: ${AUDIT_OUTBOX_MAX_RETRY_DELAY:1m}
+      reconciliation-interval: ${AUDIT_OUTBOX_RECONCILIATION_INTERVAL:5m}
+      reconciliation-lookback: ${AUDIT_OUTBOX_RECONCILIATION_LOOKBACK:1d}
+      cleanup-interval: ${AUDIT_OUTBOX_CLEANUP_INTERVAL:1h}
     images:
       uploads: ../uploads
     storage:

@@ -26,5 +26,5 @@ public interface AuditOutboxRepository {
 
     Mono<Void> markForReplay(UUID deliveryId, Instant availableAt);
 
-    Mono<Integer> purgeTerminalBefore(Instant cutoff, int limit);
+    Mono<Integer> purgeTerminalBefore(Instant now, int limit);
 }

@@ -8,6 +8,8 @@ Outbox event claiming, lease expiry, retry, exhaustion, replay, and provider del
 
 ## AP-0013 processing contract
 
+Set `APP_AUDIT_OUTBOX_ENABLED=true` only in a deployment where the separate audit PostgreSQL schema has been migrated and the application has a least-privilege audit writer credential. Configure `AUDIT_POSTGRES_R2DBC_URL`, `AUDIT_POSTGRES_RUNTIME_USER`, and `AUDIT_POSTGRES_RUNTIME_PASSWORD` separately from the application database. The application starts one bounded lifecycle worker per instance; PostgreSQL leases ensure instances claim different deliveries. `/api/v1/admin/audit/{eventId}/replay` is restricted to authenticated administrators.
+
 The audit worker claims `outbox_deliveries` rows by destination with PostgreSQL `FOR UPDATE SKIP LOCKED`. Claims use a bounded lease and are recoverable after expiry. Processing is at least once: the audit store is idempotent on the stable event UUID, and a worker crash after the audit write can cause a duplicate acknowledgement rather than a duplicate audit row.
 
 Each claim increments the bounded attempt counter. Retryable failures use capped exponential backoff; permanent failures and retry exhaustion become durable `EXHAUSTED` state with one of the controlled error classifications. Terminal audit delivery rows are eligible for bounded cleanup after the seven-day reconciliation retention window. Replay requires an operator-authorized caller and reuses the original event UUID.

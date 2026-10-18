@@ -1,8 +1,6 @@
 package auto.parto.audit;
 
 import org.springframework.r2dbc.core.DatabaseClient;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -11,8 +9,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-@Repository
-@ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql", name = "enabled", havingValue = "true")
 public class R2dbcAuditOutboxRepository implements AuditOutboxRepository {
 
     private static final String EVENT_COLUMNS = """
@@ -184,9 +180,9 @@ public class R2dbcAuditOutboxRepository implements AuditOutboxRepository {
     }
 
     @Override
-    public Mono<Integer> purgeTerminalBefore(Instant cutoff, int limit) {
-        if (cutoff == null) {
-            return Mono.error(new IllegalArgumentException("cutoff is required"));
+    public Mono<Integer> purgeTerminalBefore(Instant now, int limit) {
+        if (now == null) {
+            return Mono.error(new IllegalArgumentException("now is required"));
         }
         final int boundedLimit;
         try {
@@ -208,7 +204,7 @@ public class R2dbcAuditOutboxRepository implements AuditOutboxRepository {
                         USING candidates
                         WHERE od.id = candidates.id
                         """)
-                .bind("cutoff", cutoff)
+                .bind("cutoff", now.minus(AuditPersistenceLimits.TERMINAL_RETENTION))
                 .bind("limit", boundedLimit)
                 .fetch().rowsUpdated()
                 .map(Long::intValue);

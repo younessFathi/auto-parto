@@ -97,6 +97,18 @@ public final class AuditPublisher {
                 .reduce(0L, Long::sum);
     }
 
+    public Mono<Integer> purgeTerminal(int limit) {
+        if (limit < 1) {
+            return Mono.error(new IllegalArgumentException("limit must be positive"));
+        }
+        try {
+            AuditPersistenceLimits.requireBatchSize(limit);
+        } catch (IllegalArgumentException exception) {
+            return Mono.error(exception);
+        }
+        return outbox.purgeTerminalBefore(clock.instant(), limit);
+    }
+
     private Mono<Outcome> publishOne(AuditOutboxRecord record) {
         return auditStore.append(record.event())
                 .then(outbox.markDelivered(record.deliveryId(), record.claimOwner(), clock.instant()))
