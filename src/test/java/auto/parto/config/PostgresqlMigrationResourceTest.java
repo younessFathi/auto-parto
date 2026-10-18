@@ -128,6 +128,7 @@ class PostgresqlMigrationResourceTest {
         assertThat(sql).contains("audit_events_payload_object_chk");
         assertThat(sql).contains("CREATE ROLE audit_writer NOLOGIN");
         assertThat(sql).contains("CREATE ROLE audit_reader NOLOGIN");
+        assertThat(sql).contains("GRANT SELECT ON audit_events TO audit_writer");
         assertThat(sql).contains("REVOKE UPDATE, DELETE, TRUNCATE ON audit_events");
     }
 

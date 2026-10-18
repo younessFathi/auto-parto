@@ -159,6 +159,28 @@ class AuditPublisherTest {
                 .verify();
     }
 
+    @Test
+    void workerDoesNotClaimWhenAuditStoreIsUnavailable() {
+        FakeOutbox outbox = new FakeOutbox();
+        FakeAuditStore store = new FakeAuditStore();
+        store.readinessFailure = new IllegalStateException("audit database unavailable");
+        AuditProcessingProperties properties = new AuditProcessingProperties();
+        properties.setPollInterval(Duration.ofMillis(10));
+        properties.setReconciliationInterval(Duration.ofHours(1));
+        properties.setCleanupInterval(Duration.ofHours(1));
+        AuditOutboxWorker worker = new AuditOutboxWorker(
+                publisher(outbox, store), properties, Clock.fixed(NOW, ZoneOffset.UTC));
+
+        worker.start();
+        try {
+            Mono.delay(Duration.ofMillis(50)).block();
+        } finally {
+            worker.stop();
+        }
+
+        assertThat(outbox.claims).isZero();
+    }
+
     private static AuditPublisher publisher(FakeOutbox outbox, FakeAuditStore store) {
         return new AuditPublisher(
                 outbox,
@@ -190,9 +212,11 @@ class AuditPublisherTest {
         private final List<UUID> exhausted = new ArrayList<>();
         private final List<UUID> replay = new ArrayList<>();
         private Instant nextRetry;
+        private int claims;
 
         @Override
         public Flux<AuditOutboxRecord> claimDue(String workerId, int limit, Instant now, Duration leaseDuration) {
+            claims++;
             return Flux.fromIterable(due.stream().limit(limit).toList());
         }
 
@@ -261,6 +285,12 @@ class AuditPublisherTest {
         private final List<UUID> known = new ArrayList<>();
         private AuditAppendResult result = AuditAppendResult.CREATED;
         private AuditDeliveryException failure;
+        private RuntimeException readinessFailure;
+
+        @Override
+        public Mono<Void> readiness() {
+            return readinessFailure == null ? Mono.empty() : Mono.error(readinessFailure);
+        }
 
         @Override
         public Mono<AuditAppendResult> append(AuditEvent event) {

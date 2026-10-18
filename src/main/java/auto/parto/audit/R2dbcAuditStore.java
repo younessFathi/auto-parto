@@ -48,6 +48,14 @@ public final class R2dbcAuditStore implements AuditStore {
                 .defaultIfEmpty(false);
     }
 
+    @Override
+    public Mono<Void> readiness() {
+        return databaseClient.sql("SELECT 1")
+                .fetch()
+                .rowsUpdated()
+                .then();
+    }
+
     private static DatabaseClient.GenericExecuteSpec bindNullable(
             DatabaseClient.GenericExecuteSpec statement, String name, Object value, Class<?> type) {
         return value == null ? statement.bindNull(name, type) : statement.bind(name, value);

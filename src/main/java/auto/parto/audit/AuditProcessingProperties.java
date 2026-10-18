@@ -1,6 +1,7 @@
 package auto.parto.audit;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import io.r2dbc.spi.ConnectionFactoryOptions;
 
 import java.time.Duration;
 
@@ -53,4 +54,59 @@ public class AuditProcessingProperties {
     public void setReconciliationLookback(Duration reconciliationLookback) { this.reconciliationLookback = reconciliationLookback; }
     public Duration getCleanupInterval() { return cleanupInterval; }
     public void setCleanupInterval(Duration cleanupInterval) { this.cleanupInterval = cleanupInterval; }
+
+    public void validate() {
+        if (r2dbcUrl == null || r2dbcUrl.isBlank()) {
+            throw new IllegalStateException("auto.parto.audit.r2dbc-url is required when audit processing is enabled");
+        }
+        try {
+            ConnectionFactoryOptions options = ConnectionFactoryOptions.parse(r2dbcUrl);
+            if (!"postgresql".equals(options.getValue(ConnectionFactoryOptions.DRIVER))) {
+                throw new IllegalStateException("auto.parto.audit.r2dbc-url must use the postgresql driver");
+            }
+        } catch (RuntimeException exception) {
+            if (exception instanceof IllegalStateException stateException) {
+                throw stateException;
+            }
+            throw new IllegalStateException("auto.parto.audit.r2dbc-url is invalid", exception);
+        }
+        requireNonBlank(username, "username");
+        requireNonBlank(password, "password");
+        requireNonBlank(workerId, "worker-id");
+        AuditPersistenceLimits.requireBatchSize(batchSize);
+        requireRange(maxAttempts, 1, 20, "max-attempts");
+        requireRange(maxConcurrency, 1, 32, "max-concurrency");
+        requirePositive(pollInterval, "poll-interval");
+        requirePositive(leaseDuration, "lease-duration");
+        requirePositive(baseRetryDelay, "base-retry-delay");
+        requirePositive(maxRetryDelay, "max-retry-delay");
+        requirePositive(reconciliationInterval, "reconciliation-interval");
+        requirePositive(reconciliationLookback, "reconciliation-lookback");
+        requirePositive(cleanupInterval, "cleanup-interval");
+        Duration leaseGap = leaseDuration.minus(pollInterval);
+        if (leaseGap.isNegative() || leaseGap.isZero()) {
+            throw new IllegalStateException("lease-duration must be greater than poll-interval");
+        }
+        if (maxRetryDelay.compareTo(baseRetryDelay) < 0) {
+            throw new IllegalStateException("max-retry-delay must be at least base-retry-delay");
+        }
+    }
+
+    private static void requireNonBlank(String value, String field) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException("auto.parto.audit." + field + " is required when audit processing is enabled");
+        }
+    }
+
+    private static void requirePositive(Duration value, String field) {
+        if (value == null || value.isZero() || value.isNegative()) {
+            throw new IllegalStateException("auto.parto.audit." + field + " must be positive");
+        }
+    }
+
+    private static void requireRange(int value, int minimum, int maximum, String field) {
+        if (value < minimum || value > maximum) {
+            throw new IllegalStateException("auto.parto.audit." + field + " must be between " + minimum + " and " + maximum);
+        }
+    }
 }

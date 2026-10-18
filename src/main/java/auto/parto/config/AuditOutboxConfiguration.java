@@ -27,6 +27,7 @@ public class AuditOutboxConfiguration {
 
     @Bean(name = "auditConnectionFactory")
     ConnectionFactory auditConnectionFactory(AuditProcessingProperties properties) {
+        properties.validate();
         ConnectionFactoryOptions options = ConnectionFactoryOptions.parse(properties.getR2dbcUrl())
                 .mutate()
                 .option(ConnectionFactoryOptions.USER, properties.getUsername())

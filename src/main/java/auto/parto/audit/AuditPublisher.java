@@ -60,6 +60,10 @@ public final class AuditPublisher {
                         outcomes.stream().filter(outcome -> outcome == Outcome.EXHAUSTED).count()));
     }
 
+    public Mono<Void> readiness() {
+        return auditStore.readiness();
+    }
+
     public Mono<Void> replay(UUID eventId, String requester) {
         Objects.requireNonNull(eventId, "eventId");
         if (requester == null || requester.isBlank()) {

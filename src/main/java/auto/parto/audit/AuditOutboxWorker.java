@@ -6,6 +6,7 @@ import org.springframework.context.SmartLifecycle;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -33,10 +34,13 @@ public final class AuditOutboxWorker implements SmartLifecycle {
             return;
         }
         running = true;
-        subscription = Flux.merge(
+        subscription = publisher.readiness()
+                .doOnError(error -> log.warn("Audit database is unavailable; worker will not claim deliveries", error))
+                .retryWhen(Retry.fixedDelay(Long.MAX_VALUE, properties.getPollInterval()))
+                .thenMany(Flux.merge(
                         schedule(properties.getPollInterval(), this::publish),
                         schedule(properties.getReconciliationInterval(), this::reconcile),
-                        schedule(properties.getCleanupInterval(), this::cleanup))
+                        schedule(properties.getCleanupInterval(), this::cleanup)))
                 .subscribe(value -> { }, error -> log.error("Audit outbox worker stopped", error));
     }
 

@@ -27,6 +27,7 @@ import static io.r2dbc.spi.ConnectionFactoryOptions.PASSWORD;
 import static io.r2dbc.spi.ConnectionFactoryOptions.PORT;
 import static io.r2dbc.spi.ConnectionFactoryOptions.USER;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -137,6 +138,37 @@ class AuditPublisherPostgresqlIT {
         assertThat(statusFor(reconciliationEventId)).isEqualTo("PENDING");
     }
 
+    @Test
+    void leastPrivilegeRuntimeRoleCanAppendAndReconcileButCannotMutateAuditEvents() throws Exception {
+        String runtimeRole = "audit_runtime_" + UUID.randomUUID().toString().replace("-", "");
+        try (java.sql.Connection connection = AUDIT_POSTGRES.createConnection("")) {
+            try (java.sql.Statement statement = connection.createStatement()) {
+                statement.execute("CREATE ROLE " + runtimeRole + " LOGIN PASSWORD 'runtime-secret'");
+                statement.execute("GRANT audit_writer TO " + runtimeRole);
+            }
+        }
+
+        DatabaseClient runtimeDatabase = DatabaseClient.create(connectionFactory(AUDIT_POSTGRES, runtimeRole, "runtime-secret"));
+        R2dbcAuditStore runtimeStore = new R2dbcAuditStore(runtimeDatabase);
+        UUID eventId = UUID.randomUUID();
+        AuditEvent event = event(eventId);
+
+        assertThat(runtimeStore.append(event).block()).isEqualTo(AuditAppendResult.CREATED);
+        assertThat(runtimeStore.contains(eventId).block()).isTrue();
+
+        try (java.sql.Connection connection = AUDIT_POSTGRES.createConnection("")) {
+            try (java.sql.Statement statement = connection.createStatement()) {
+                statement.execute("SET ROLE " + runtimeRole);
+                assertThatThrownBy(() -> statement.execute(
+                        "UPDATE audit_events SET event_type = 'CHANGED' WHERE event_id = '" + eventId + "'"))
+                        .isInstanceOf(java.sql.SQLException.class);
+                assertThatThrownBy(() -> statement.execute(
+                        "DELETE FROM audit_events WHERE event_id = '" + eventId + "'"))
+                        .isInstanceOf(java.sql.SQLException.class);
+            }
+        }
+    }
+
     private UUID insertApplicationEvent(Instant availableAt) {
         UUID eventId = UUID.randomUUID();
         applicationDatabase.sql("""
@@ -213,12 +245,17 @@ class AuditPublisherPostgresqlIT {
     }
 
     private static ConnectionFactory connectionFactory(PostgreSQLContainer<?> postgres) {
+        return connectionFactory(postgres, postgres.getUsername(), postgres.getPassword());
+    }
+
+    private static ConnectionFactory connectionFactory(
+            PostgreSQLContainer<?> postgres, String username, String password) {
         return ConnectionFactories.get(ConnectionFactoryOptions.builder()
                 .option(DRIVER, "postgresql")
                 .option(HOST, postgres.getHost())
                 .option(PORT, postgres.getFirstMappedPort())
-                .option(USER, postgres.getUsername())
-                .option(PASSWORD, postgres.getPassword())
+                .option(USER, username)
+                .option(PASSWORD, password)
                 .option(DATABASE, postgres.getDatabaseName())
                 .build());
     }

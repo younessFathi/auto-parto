@@ -41,6 +41,29 @@ class AuditOutboxConfigurationTest {
                 });
     }
 
+    @Test
+    void enabledAuditProcessingRejectsMissingRuntimeCredentialsBeforeCreatingWorker() {
+        contextRunner
+                .withPropertyValues(
+                        "auto.parto.audit.enabled=true",
+                        "auto.parto.audit.r2dbc-url=r2dbc:postgresql://audit.example.test/audit")
+                .run(context -> assertThat(context.getStartupFailure())
+                        .hasMessageContaining("username is required"));
+    }
+
+    @Test
+    void enabledAuditProcessingRejectsInvalidWorkerSettings() {
+        contextRunner
+                .withPropertyValues(
+                        "auto.parto.audit.enabled=true",
+                        "auto.parto.audit.r2dbc-url=r2dbc:postgresql://audit.example.test/audit",
+                        "auto.parto.audit.username=audit_writer",
+                        "auto.parto.audit.password=test-only",
+                        "auto.parto.audit.poll-interval=0s")
+                .run(context -> assertThat(context.getStartupFailure())
+                        .hasMessageContaining("poll-interval must be positive"));
+    }
+
     @Configuration(proxyBeanMethods = false)
     static class PrimaryDatabaseConfiguration {
 
