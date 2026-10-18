@@ -83,6 +83,7 @@ public class R2dbcAuditOutboxRepository implements AuditOutboxRepository {
                         UPDATE outbox_deliveries
                         SET status = 'CLAIMED', lease_owner = :claimOwner,
                             lease_expires_at = :leaseExpiresAt,
+                            delivered_at = NULL, last_error = NULL,
                             attempt_count = attempt_count + 1
                         WHERE public_id = :deliveryId AND destination = 'AUDIT'
                           AND status <> 'CLAIMED'
@@ -180,6 +181,37 @@ public class R2dbcAuditOutboxRepository implements AuditOutboxRepository {
                 .bind("deliveryId", deliveryId)
                 .bind("availableAt", availableAt)
                 .fetch().rowsUpdated().flatMap(R2dbcAuditOutboxRepository::requireOneUpdatedRow);
+    }
+
+    @Override
+    public Mono<Integer> purgeTerminalBefore(Instant cutoff, int limit) {
+        if (cutoff == null) {
+            return Mono.error(new IllegalArgumentException("cutoff is required"));
+        }
+        final int boundedLimit;
+        try {
+            boundedLimit = AuditPersistenceLimits.requireBatchSize(limit);
+        } catch (IllegalArgumentException exception) {
+            return Mono.error(exception);
+        }
+        return databaseClient.sql("""
+                        WITH candidates AS (
+                            SELECT id
+                            FROM outbox_deliveries
+                            WHERE destination = 'AUDIT'
+                              AND status IN ('DISPATCHED', 'EXHAUSTED')
+                              AND updated_at < :cutoff
+                            ORDER BY updated_at, id
+                            LIMIT :limit
+                        )
+                        DELETE FROM outbox_deliveries od
+                        USING candidates
+                        WHERE od.id = candidates.id
+                        """)
+                .bind("cutoff", cutoff)
+                .bind("limit", boundedLimit)
+                .fetch().rowsUpdated()
+                .map(Long::intValue);
     }
 
     private Flux<AuditOutboxRecord> findByDeliveryIds(List<Long> deliveryIds) {

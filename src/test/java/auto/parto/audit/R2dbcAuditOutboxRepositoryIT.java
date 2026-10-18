@@ -186,6 +186,23 @@ class R2dbcAuditOutboxRepositoryIT {
     }
 
     @Test
+    void purgesOnlyBoundedTerminalAuditDeliveries() {
+        UUID eventId = insertPendingEvent(Instant.now().minusSeconds(10));
+        AuditOutboxRecord claimed = repository.claimForReplay(
+                        deliveryIdForEvent(eventId), "purge-worker", Instant.now(), Duration.ofMinutes(1))
+                .block();
+        repository.markDelivered(claimed.deliveryId(), claimed.claimOwner(), Instant.now()).block();
+        UUID pendingEventId = insertPendingEvent(Instant.now());
+        long before = countAuditDeliveries();
+
+        int purged = repository.purgeTerminalBefore(Instant.now().plusSeconds(1), 1).block();
+
+        assertThat(purged).isEqualTo(1);
+        assertThat(countAuditDeliveries()).isEqualTo(before - 1);
+        assertThat(countDeliveriesForEvent(pendingEventId)).isEqualTo(1);
+    }
+
+    @Test
     void reactiveTransactionRollsBackBusinessOutboxAndDeliveryWritesTogether() {
         UUID userPublicId = UUID.randomUUID();
         UUID eventId = UUID.randomUUID();
@@ -246,6 +263,13 @@ class R2dbcAuditOutboxRepositoryIT {
         return databaseClient.sql("SELECT count(*) AS total FROM outbox_deliveries od "
                         + "JOIN outbox_events oe ON oe.id = od.outbox_event_id WHERE oe.event_id = :eventId")
                 .bind("eventId", eventId)
+                .map((row, metadata) -> row.get("total", Long.class))
+                .one()
+                .block();
+    }
+
+    private long countAuditDeliveries() {
+        return databaseClient.sql("SELECT count(*) AS total FROM outbox_deliveries WHERE destination = 'AUDIT'")
                 .map((row, metadata) -> row.get("total", Long.class))
                 .one()
                 .block();

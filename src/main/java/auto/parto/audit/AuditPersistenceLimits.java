@@ -1,8 +1,11 @@
 package auto.parto.audit;
 
+import java.time.Duration;
+
 public final class AuditPersistenceLimits {
 
     public static final int MAX_BATCH_SIZE = 100;
+    public static final Duration TERMINAL_RETENTION = Duration.ofDays(7);
 
     private AuditPersistenceLimits() {
     }

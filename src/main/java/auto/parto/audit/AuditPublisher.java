@@ -17,6 +17,7 @@ public final class AuditPublisher {
     private final int maxConcurrency;
     private final Duration baseRetryDelay;
     private final Duration maxRetryDelay;
+    private final AuditReplayAuthorizer replayAuthorizer;
 
     public AuditPublisher(
             AuditOutboxRepository outbox,
@@ -25,7 +26,8 @@ public final class AuditPublisher {
             int maxAttempts,
             int maxConcurrency,
             Duration baseRetryDelay,
-            Duration maxRetryDelay) {
+            Duration maxRetryDelay,
+            AuditReplayAuthorizer replayAuthorizer) {
         this.outbox = Objects.requireNonNull(outbox, "outbox");
         this.auditStore = Objects.requireNonNull(auditStore, "auditStore");
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -36,6 +38,7 @@ public final class AuditPublisher {
         this.maxConcurrency = maxConcurrency;
         this.baseRetryDelay = requirePositive(baseRetryDelay, "baseRetryDelay");
         this.maxRetryDelay = requirePositive(maxRetryDelay, "maxRetryDelay");
+        this.replayAuthorizer = Objects.requireNonNull(replayAuthorizer, "replayAuthorizer");
     }
 
     public Mono<AuditPublishReport> publishBatch(String workerId, int limit, Duration leaseDuration) {
@@ -57,9 +60,15 @@ public final class AuditPublisher {
                         outcomes.stream().filter(outcome -> outcome == Outcome.EXHAUSTED).count()));
     }
 
-    public Mono<Void> replay(UUID eventId) {
+    public Mono<Void> replay(UUID eventId, String requester) {
         Objects.requireNonNull(eventId, "eventId");
-        return outbox.findByEventId(eventId)
+        if (requester == null || requester.isBlank()) {
+            return Mono.error(new IllegalArgumentException("replay requester is required"));
+        }
+        return replayAuthorizer.authorize(requester, eventId)
+                .filter(Boolean.TRUE::equals)
+                .switchIfEmpty(Mono.error(new SecurityException("audit replay is not authorized")))
+                .then(outbox.findByEventId(eventId))
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("audit event was not found")))
                 .flatMap(record -> outbox.claimForReplay(
                                 record.deliveryId(), "replay-" + eventId, clock.instant(), Duration.ofMinutes(1))
@@ -96,17 +105,16 @@ public final class AuditPublisher {
     }
 
     private Mono<Outcome> handleFailure(AuditOutboxRecord record, Throwable error) {
-        int nextAttempt = record.attemptCount() + 1;
         boolean retryable = !(error instanceof AuditDeliveryException deliveryException)
                 || deliveryException.retryable();
         String failureCode = classify(error);
-        if (!retryable || nextAttempt >= maxAttempts) {
+        if (!retryable || record.attemptCount() >= maxAttempts) {
             return outbox.markExhausted(record.deliveryId(), record.claimOwner(), failureCode)
                     .thenReturn(Outcome.EXHAUSTED);
         }
         return outbox.scheduleRetry(
                         record.deliveryId(), record.claimOwner(),
-                        clock.instant().plus(retryDelay(nextAttempt)),
+                        clock.instant().plus(retryDelay(record.attemptCount())),
                         failureCode)
                 .thenReturn(Outcome.RETRIED);
     }

@@ -25,4 +25,6 @@ public interface AuditOutboxRepository {
     Mono<Void> markExhausted(UUID deliveryId, String claimOwner, String failureCode);
 
     Mono<Void> markForReplay(UUID deliveryId, Instant availableAt);
+
+    Mono<Integer> purgeTerminalBefore(Instant cutoff, int limit);
 }

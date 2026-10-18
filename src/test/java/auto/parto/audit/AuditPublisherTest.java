@@ -88,17 +88,47 @@ class AuditPublisherTest {
     }
 
     @Test
+    void retryableFailureExhaustsAfterTheConfiguredMaximumAttempts() {
+        FakeOutbox outbox = new FakeOutbox();
+        FakeAuditStore store = new FakeAuditStore();
+        store.failure = new AuditDeliveryException("audit store unavailable", true);
+        AuditEvent event = event();
+        outbox.due.add(record(event, 3));
+
+        AuditPublishReport report = publisher(outbox, store)
+                .publishBatch("worker-1", 10, Duration.ofSeconds(30))
+                .block();
+
+        assertThat(report.exhausted()).isEqualTo(1);
+        assertThat(outbox.exhausted).containsExactly(event.eventId());
+        assertThat(outbox.retries).isEmpty();
+    }
+
+    @Test
     void replayRepublishesByStableEventId() {
         FakeOutbox outbox = new FakeOutbox();
         FakeAuditStore store = new FakeAuditStore();
         AuditEvent event = event();
         outbox.records.add(record(event, 4));
 
-        StepVerifier.create(publisher(outbox, store).replay(event.eventId()))
+        StepVerifier.create(publisher(outbox, store).replay(event.eventId(), "operator-1"))
                 .verifyComplete();
 
         assertThat(store.events).containsExactly(event.eventId());
         assertThat(outbox.delivered).containsExactly(event.eventId());
+    }
+
+    @Test
+    void replayRequiresAuthorizationBeforeReadingOrClaimingDelivery() {
+        FakeOutbox outbox = new FakeOutbox();
+        AuditEvent event = event();
+        outbox.records.add(record(event, 4));
+
+        StepVerifier.create(publisher(outbox, new FakeAuditStore()).replay(event.eventId(), "guest"))
+                .expectError(SecurityException.class)
+                .verify();
+
+        assertThat(outbox.delivered).isEmpty();
     }
 
     @Test
@@ -137,7 +167,8 @@ class AuditPublisherTest {
                 3,
                 2,
                 Duration.ofSeconds(2),
-                Duration.ofMinutes(1));
+                Duration.ofMinutes(1),
+                (requester, eventId) -> Mono.just("operator-1".equals(requester)));
     }
 
     private static AuditEvent event() {
@@ -210,6 +241,11 @@ class AuditPublisherTest {
             replay.add(eventFor(deliveryId).event().eventId());
             due.add(eventFor(deliveryId));
             return Mono.empty();
+        }
+
+        @Override
+        public Mono<Integer> purgeTerminalBefore(Instant cutoff, int limit) {
+            return Mono.just(0);
         }
 
         private AuditOutboxRecord eventFor(UUID deliveryId) {
