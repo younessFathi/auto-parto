@@ -23,6 +23,7 @@ public class AuditProcessingProperties {
     private Duration reconciliationInterval = Duration.ofMinutes(5);
     private Duration reconciliationLookback = Duration.ofDays(1);
     private Duration cleanupInterval = Duration.ofHours(1);
+    private Duration readinessTimeout = Duration.ofSeconds(2);
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -54,6 +55,8 @@ public class AuditProcessingProperties {
     public void setReconciliationLookback(Duration reconciliationLookback) { this.reconciliationLookback = reconciliationLookback; }
     public Duration getCleanupInterval() { return cleanupInterval; }
     public void setCleanupInterval(Duration cleanupInterval) { this.cleanupInterval = cleanupInterval; }
+    public Duration getReadinessTimeout() { return readinessTimeout; }
+    public void setReadinessTimeout(Duration readinessTimeout) { this.readinessTimeout = readinessTimeout; }
 
     public void validate() {
         if (r2dbcUrl == null || r2dbcUrl.isBlank()) {
@@ -83,6 +86,7 @@ public class AuditProcessingProperties {
         requirePositive(reconciliationInterval, "reconciliation-interval");
         requirePositive(reconciliationLookback, "reconciliation-lookback");
         requirePositive(cleanupInterval, "cleanup-interval");
+        requirePositive(readinessTimeout, "readiness-timeout");
         Duration leaseGap = leaseDuration.minus(pollInterval);
         if (leaseGap.isNegative() || leaseGap.isZero()) {
             throw new IllegalStateException("lease-duration must be greater than poll-interval");

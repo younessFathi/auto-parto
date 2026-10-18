@@ -6,7 +6,6 @@ import org.springframework.context.SmartLifecycle;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.util.retry.Retry;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -34,13 +33,10 @@ public final class AuditOutboxWorker implements SmartLifecycle {
             return;
         }
         running = true;
-        subscription = publisher.readiness()
-                .doOnError(error -> log.warn("Audit database is unavailable; worker will not claim deliveries", error))
-                .retryWhen(Retry.fixedDelay(Long.MAX_VALUE, properties.getPollInterval()))
-                .thenMany(Flux.merge(
+        subscription = Flux.merge(
                         schedule(properties.getPollInterval(), this::publish),
                         schedule(properties.getReconciliationInterval(), this::reconcile),
-                        schedule(properties.getCleanupInterval(), this::cleanup)))
+                        schedule(properties.getCleanupInterval(), this::cleanup))
                 .subscribe(value -> { }, error -> log.error("Audit outbox worker stopped", error));
     }
 
@@ -64,21 +60,30 @@ public final class AuditOutboxWorker implements SmartLifecycle {
     }
 
     private Mono<AuditPublishReport> publish() {
-        return publisher.publishBatch(properties.getWorkerId(), properties.getBatchSize(), properties.getLeaseDuration())
+        return whenReady(() -> publisher.publishBatch(
+                        properties.getWorkerId(), properties.getBatchSize(), properties.getLeaseDuration()))
                 .doOnNext(report -> log.debug("Audit outbox batch completed: {}", report))
                 .onErrorResume(error -> reportFailure("publish", error));
     }
 
     private Mono<Long> reconcile() {
-        return publisher.reconcile(clock.instant().minus(properties.getReconciliationLookback()), properties.getBatchSize())
+        return whenReady(() -> publisher.reconcile(
+                        clock.instant().minus(properties.getReconciliationLookback()), properties.getBatchSize()))
                 .doOnNext(count -> log.debug("Audit reconciliation scheduled {} replay(s)", count))
                 .onErrorResume(error -> reportFailure("reconcile", error));
     }
 
     private Mono<Integer> cleanup() {
-        return publisher.purgeTerminal(properties.getBatchSize())
+        return whenReady(() -> publisher.purgeTerminal(properties.getBatchSize()))
                 .doOnNext(count -> log.debug("Audit cleanup removed {} terminal delivery row(s)", count))
                 .onErrorResume(error -> reportFailure("cleanup", error));
+    }
+
+    private <T> Mono<T> whenReady(java.util.function.Supplier<Mono<T>> task) {
+        return publisher.readiness()
+                .timeout(properties.getReadinessTimeout())
+                .doOnError(error -> log.warn("Audit database is unavailable; worker will not claim deliveries"))
+                .then(Mono.defer(task));
     }
 
     private <T> Flux<T> schedule(java.time.Duration interval, java.util.function.Supplier<Mono<T>> task) {

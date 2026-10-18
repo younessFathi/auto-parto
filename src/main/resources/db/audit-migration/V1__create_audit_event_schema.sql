@@ -58,6 +58,5 @@ REVOKE ALL ON SEQUENCE audit_events_id_seq FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO audit_writer, audit_reader;
 GRANT INSERT ON audit_events TO audit_writer;
 GRANT USAGE, SELECT ON SEQUENCE audit_events_id_seq TO audit_writer;
-GRANT SELECT ON audit_events TO audit_writer;
 GRANT SELECT ON audit_events TO audit_reader;
 REVOKE UPDATE, DELETE, TRUNCATE ON audit_events FROM audit_writer, audit_reader;

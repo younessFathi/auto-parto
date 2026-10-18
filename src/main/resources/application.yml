@@ -94,6 +94,7 @@ auto:
       reconciliation-interval: ${AUDIT_OUTBOX_RECONCILIATION_INTERVAL:5m}
       reconciliation-lookback: ${AUDIT_OUTBOX_RECONCILIATION_LOOKBACK:1d}
       cleanup-interval: ${AUDIT_OUTBOX_CLEANUP_INTERVAL:1h}
+      readiness-timeout: ${AUDIT_OUTBOX_READINESS_TIMEOUT:2s}
     images:
       uploads: ../uploads
     storage:
