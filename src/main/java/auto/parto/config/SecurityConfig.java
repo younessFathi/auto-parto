@@ -34,7 +34,7 @@ public class SecurityConfig {
                 .authorizeExchange(exchange -> exchange
                         .pathMatchers("/auth/**").permitAll()
                         .pathMatchers(SWAGGER_WHITELIST).permitAll()
-                        .pathMatchers("/actuator/health").permitAll()
+                        .pathMatchers("/actuator/health/**").permitAll()
                         .anyExchange().authenticated()
                 )
                 .addFilterAt(new JwtTokenAuthenticationFilter(jwtTokenGenerator, errorResponseWriter), SecurityWebFiltersOrder.HTTP_BASIC)

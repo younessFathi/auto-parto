@@ -149,6 +149,12 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,auditReadiness
+      validate-group-membership: false
   info:
     build:
       enabled: true
