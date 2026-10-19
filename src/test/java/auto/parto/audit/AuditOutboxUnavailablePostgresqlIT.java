@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.boot.actuate.health.Status;
 import org.springframework.r2dbc.core.DatabaseClient;
+import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -65,19 +66,51 @@ class AuditOutboxUnavailablePostgresqlIT {
         AuditOutboxWorker worker = new AuditOutboxWorker(publisher, properties, Clock.systemUTC());
         UUID eventId = insertApplicationEvent();
 
-        AUDIT_POSTGRES.stop();
+        pauseAuditPostgres();
         try {
-            assertThat(health.health().block().getStatus()).isEqualTo(Status.DOWN);
+            awaitHealthStatus(health, Status.DOWN);
 
             worker.start();
             Thread.sleep(200);
-            worker.stop();
 
             assertThat(statusFor(eventId)).isEqualTo("PENDING");
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new AssertionError("test interrupted", exception);
+        } finally {
+            worker.stop();
+            unpauseAuditPostgres();
         }
+    }
+
+    private static void awaitHealthStatus(AuditReadinessHealthIndicator health, Status expectedStatus) {
+        Instant deadline = Instant.now().plusSeconds(5);
+        Status actualStatus = null;
+        while (Instant.now().isBefore(deadline)) {
+            actualStatus = health.health().block().getStatus();
+            if (expectedStatus.equals(actualStatus)) {
+                return;
+            }
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("interrupted while waiting for audit readiness", exception);
+            }
+        }
+        assertThat(actualStatus).isEqualTo(expectedStatus);
+    }
+
+    private static void pauseAuditPostgres() {
+        DockerClientFactory.instance().client()
+                .pauseContainerCmd(AUDIT_POSTGRES.getContainerId())
+                .exec();
+    }
+
+    private static void unpauseAuditPostgres() {
+        DockerClientFactory.instance().client()
+                .unpauseContainerCmd(AUDIT_POSTGRES.getContainerId())
+                .exec();
     }
 
     private UUID insertApplicationEvent() {
