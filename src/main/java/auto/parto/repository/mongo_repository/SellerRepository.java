@@ -2,6 +2,7 @@ package auto.parto.repository.mongo_repository;
 
 import auto.parto.model.Buyer;
 import auto.parto.model.Seller;
+import auto.parto.otp.OtpCodeHasher;
 import auto.parto.repository.ISellerRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.data.mongodb.core.FindAndModifyOptions;
@@ -48,13 +49,21 @@ public class SellerRepository implements ISellerRepository {
     }
 
     @Override
-    public Mono<Seller> updateGeneratedOtp(String email, String sentOtp, String field) {
+    public Mono<Seller> updateGeneratedOtp(String email, String sentOtp, String field, LocalDateTime expiresAt) {
         Query query = new Query(Criteria.where(field).is(email));
 
         Update update = new Update();
         if (sentOtp != null) {
-            update.set("otpDetails.otp", sentOtp);
-            update.set("otpDetails.timestamp", LocalDateTime.now());
+            LocalDateTime now = LocalDateTime.now();
+            update.set("otpDetails.otpHash", OtpCodeHasher.hashCode(sentOtp));
+            update.unset("otpDetails.otp");
+            update.set("otpDetails.purpose", "LOGIN");
+            update.set("otpDetails.identity", email);
+            update.set("otpDetails.timestamp", now);
+            update.set("otpDetails.expiresAt", expiresAt);
+            update.unset("otpDetails.consumedAt");
+            update.set("otpDetails.failedAttempts", 0);
+            update.unset("otpDetails.lockedUntil");
         }
         return reactiveMongoTemplate.findAndModify(
                 query,
@@ -62,6 +71,48 @@ public class SellerRepository implements ISellerRepository {
                 FindAndModifyOptions.options().returnNew(true),
                 Seller.class
         );
+    }
+
+    @Override
+    public Mono<Boolean> consumeValidOtp(String email, String otp, LocalDateTime now) {
+        Query query = new Query(new Criteria().andOperator(
+                Criteria.where("email").is(email),
+                Criteria.where("isActive").is(false),
+                Criteria.where("otpDetails.purpose").is("LOGIN"),
+                Criteria.where("otpDetails.identity").is(email),
+                Criteria.where("otpDetails.consumedAt").exists(false),
+                Criteria.where("otpDetails.expiresAt").gt(now),
+                new Criteria().orOperator(
+                        Criteria.where("otpDetails.lockedUntil").exists(false),
+                        Criteria.where("otpDetails.lockedUntil").lte(now))));
+        return reactiveMongoTemplate.findOne(query, Seller.class)
+                .filter(candidate -> candidate.getOtpDetails() != null
+                        && OtpCodeHasher.matchesCode(otp, candidate.getOtpDetails().getOtpHash()))
+                .flatMap(candidate -> reactiveMongoTemplate.findAndModify(
+                        new Query(new Criteria().andOperator(
+                                Criteria.where("_id").is(candidate.getId()),
+                                Criteria.where("otpDetails.consumedAt").exists(false))),
+                        new Update().set("otpDetails.consumedAt", now),
+                        FindAndModifyOptions.options().returnNew(true), Seller.class))
+                .hasElement();
+    }
+
+    @Override
+    public Mono<Seller> recordFailedOtpAttempt(String email, LocalDateTime now) {
+        Query query = new Query(new Criteria().andOperator(
+                Criteria.where("email").is(email),
+                Criteria.where("otpDetails.purpose").is("LOGIN"),
+                Criteria.where("otpDetails.identity").is(email),
+                Criteria.where("otpDetails.consumedAt").exists(false)));
+        return reactiveMongoTemplate.findAndModify(query,
+                        new Update().inc("otpDetails.failedAttempts", 1),
+                        FindAndModifyOptions.options().returnNew(true), Seller.class)
+                .flatMap(updated -> updated.getOtpDetails() != null
+                        && updated.getOtpDetails().getFailedAttempts() >= 5
+                        ? reactiveMongoTemplate.findAndModify(query,
+                                new Update().set("otpDetails.lockedUntil", now.plusMinutes(15)),
+                                FindAndModifyOptions.options().returnNew(true), Seller.class)
+                        : Mono.just(updated));
     }
 
     @Override

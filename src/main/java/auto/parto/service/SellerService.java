@@ -41,9 +41,6 @@ public class SellerService implements ISellerService {
     private final SellerIdentityMapper sellerIdentityMapper;
     @org.springframework.beans.factory.annotation.Value("${otp.expiration.minutes:5}")
     private long otpExpirationMinutes = 5;
-    private static final int MAX_FAILED_ATTEMPTS = 5;
-    private static final int LOCKOUT_MINUTES = 15;
-
     public SellerService(ISellerRepository sellerRepository, SellerDbMapper sellerDbMapper) {
         this(sellerRepository, sellerDbMapper, (AppUserRepository) null,
                 (SellerProfileRepository) null, (WalletRepository) null, null, null);
@@ -92,7 +89,9 @@ public class SellerService implements ISellerService {
     public Mono<SellerDto> create(OtpRequestDto request, String otp) {
         if (postgresqlIdentityReady()) return canonicalOnboardingRequired();
         if (sellerRepository == null) return legacyPersistenceUnavailable();
-        return sellerRepository.save(sellerDbMapper.toEntity(request, otp)).map(sellerDbMapper::toDto);
+        var seller = sellerDbMapper.toEntity(request, otp);
+        seller.getOtpDetails().setExpiresAt(LocalDateTime.now().plusMinutes(otpExpirationMinutes));
+        return sellerRepository.save(seller).map(sellerDbMapper::toDto);
     }
 
     @Override
@@ -181,7 +180,8 @@ public class SellerService implements ISellerService {
         return sellerRepository.updateGeneratedOtp(
                             email,
                             sentOtp,
-                        "email"
+                        "email",
+                        LocalDateTime.now().plusMinutes(otpExpirationMinutes)
                 ).map(sellerDbMapper::toDto);
     }
 
@@ -228,29 +228,15 @@ public class SellerService implements ISellerService {
                     .then(postgresqlOtpRepository.findByEmail(email))
                     .map(sellerIdentityMapper::toDto);
         }
-        return findSellerByEmail(email)
-                .flatMap(seller -> {
-                    var otpDetails = seller.getOtpDetailsDto();
-                    int newFailedAttempts = (otpDetails != null ? otpDetails.getFailedAttempts() : 0) + 1;
-                    final LocalDateTime newLockedUntil = newFailedAttempts >= MAX_FAILED_ATTEMPTS
-                            ? LocalDateTime.now().plusMinutes(LOCKOUT_MINUTES) : null;
-                    if (newLockedUntil != null) {
-                        log.info("Seller {} locked due to {} failed OTP attempts", email, newFailedAttempts);
-                    }
-                    String existingOtp = otpDetails != null ? otpDetails.getOtp() : null;
-                    LocalDateTime existingTimestamp = otpDetails != null ? otpDetails.getTimestamp() : LocalDateTime.now();
-                    return updateGeneratedOtpByEmail(email, existingOtp)
-                            .flatMap(updated -> {
-                                updated.setOtpDetailsDto(auto.parto.dto.OtpDetailsDto.builder()
-                                        .otp(existingOtp)
-                                        .timestamp(existingTimestamp)
-                                        .failedAttempts(newFailedAttempts)
-                                        .lockedUntil(newLockedUntil)
-                                        .build());
-                                return sellerRepository.save(sellerDbMapper.toEntity(updated))
-                                        .map(sellerDbMapper::toDto);
-                            });
-                });
+        if (sellerRepository == null) return legacyPersistenceUnavailable();
+        return sellerRepository.recordFailedOtpAttempt(email, LocalDateTime.now())
+                .map(sellerDbMapper::toDto);
+    }
+
+    @Override
+    public Mono<Boolean> consumeValidOtp(String email, String otp, LocalDateTime now) {
+        if (sellerRepository == null) return legacyPersistenceUnavailable();
+        return sellerRepository.consumeValidOtp(email, otp, now);
     }
 
     private boolean postgresqlReady() {

@@ -73,7 +73,7 @@ class RateLimitServiceTest {
     }
 
     @Test
-    void isAllowed_returnsTrue_onRedisError() {
+    void isAllowed_returnsFalse_onRedisError() {
         ReactiveRedisTemplate<String, String> redisTemplate = mock(ReactiveRedisTemplate.class);
         ReactiveValueOperations<String, String> valueOps = mock(ReactiveValueOperations.class);
         
@@ -83,19 +83,19 @@ class RateLimitServiceTest {
         RateLimitService service = createService(redisTemplate);
         
         StepVerifier.create(service.isAllowed("192.168.1.1", 5, Duration.ofMinutes(1)))
-                .expectNext(true)
+                .expectNext(false)
                 .verifyComplete();
     }
 
     @Test
-    void isAllowed_returnsTrue_whenRedisNotAvailable() {
+    void isAllowed_returnsFalse_whenRedisNotAvailable() {
         ObjectProvider<ReactiveRedisTemplate<String, String>> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(null);
         
         RateLimitService service = new RateLimitService(provider);
         
         StepVerifier.create(service.isAllowed("192.168.1.1", 5, Duration.ofMinutes(1)))
-                .expectNext(true)
+                .expectNext(false)
                 .verifyComplete();
     }
 

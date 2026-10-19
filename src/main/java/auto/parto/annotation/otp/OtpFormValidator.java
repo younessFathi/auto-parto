@@ -4,7 +4,7 @@ import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 
 public class OtpFormValidator implements ConstraintValidator<ValidOtp , String> {
-    String otpRegex = "\\d{4}";
+    String otpRegex = "\\d{6}";
     @Override
     public boolean isValid(String s, ConstraintValidatorContext constraintValidatorContext) {
         if(s == null || s.isEmpty()) return false;

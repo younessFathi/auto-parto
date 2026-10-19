@@ -3,18 +3,28 @@ package auto.parto.dto;
 import lombok.Builder;
 import lombok.Data;
 import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Data
 @Builder
-@Slf4j
 public class OtpDetailsDto {
+    @JsonIgnore
     private String otp;
+    @JsonIgnore
+    private String otpHash;
+    @JsonIgnore
+    private String purpose;
+    @JsonIgnore
+    private String identity;
     private LocalDateTime timestamp;
+    @JsonIgnore
+    private LocalDateTime expiresAt;
+    @JsonIgnore
+    private LocalDateTime consumedAt;
     private int failedAttempts;
+    @JsonIgnore
     private LocalDateTime lockedUntil;
 
     public OtpDetailsDto() {}
@@ -30,12 +40,26 @@ public class OtpDetailsDto {
         this.lockedUntil = lockedUntil;
     }
 
+    public OtpDetailsDto(String otp, String otpHash, String purpose, String identity,
+                         LocalDateTime timestamp, LocalDateTime expiresAt,
+                         LocalDateTime consumedAt, int failedAttempts, LocalDateTime lockedUntil) {
+        this.otp = otp;
+        this.otpHash = otpHash;
+        this.purpose = purpose;
+        this.identity = identity;
+        this.timestamp = timestamp;
+        this.expiresAt = expiresAt;
+        this.consumedAt = consumedAt;
+        this.failedAttempts = failedAttempts;
+        this.lockedUntil = lockedUntil;
+    }
+
     public boolean isLocked() {
         return lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now());
     }
 
     public boolean isExpired(long otpExpirationMinutes) {
-        log.info("duration {} " , Duration.between(timestamp, LocalDateTime.now()).toMinutes());
-        return Duration.between(timestamp, LocalDateTime.now()).toMinutes() > otpExpirationMinutes;
+        LocalDateTime expiry = expiresAt != null ? expiresAt : timestamp.plusMinutes(otpExpirationMinutes);
+        return !expiry.isAfter(LocalDateTime.now());
     }
 }

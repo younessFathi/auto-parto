@@ -6,7 +6,6 @@ import auto.parto.dto.TokenDto;
 import auto.parto.enums.CustomerType;
 import auto.parto.exception.OtpInvalidException;
 import auto.parto.exception.OtpLockedException;
-import auto.parto.otp.OtpService;
 import auto.parto.service.iservice.IBuyerService;
 import auto.parto.utils.JwtTokenGenerator;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,15 +29,13 @@ class BuyerOtpValidationStrategyTest {
     @Mock
     private IBuyerService buyerService;
     @Mock
-    private OtpService otpService;
-    @Mock
     private JwtTokenGenerator jwtTokenGenerator;
 
     private BuyerOtpValidationStrategy strategy;
 
     @BeforeEach
     void setUp() {
-        strategy = new BuyerOtpValidationStrategy(buyerService, otpService, jwtTokenGenerator);
+        strategy = new BuyerOtpValidationStrategy(buyerService, jwtTokenGenerator);
     }
 
     @Test
@@ -76,7 +73,7 @@ class BuyerOtpValidationStrategyTest {
                 .build();
 
         when(buyerService.findBuyerByEmail(email)).thenReturn(Mono.just(buyer));
-        when(otpService.validate(any(), eq(otp))).thenReturn(Mono.error(new OtpInvalidException("Invalid OTP")));
+        when(buyerService.consumeValidOtp(eq(email), eq(otp), any(LocalDateTime.class))).thenReturn(Mono.just(false));
         when(buyerService.recordFailedOtpAttemptByEmail(email)).thenReturn(Mono.just(buyer));
 
         StepVerifier.create(strategy.validate(otp, email))

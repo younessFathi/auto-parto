@@ -6,6 +6,8 @@ import auto.parto.dto.OtpRequestDto;
 import jakarta.validation.constraints.Email;
 import reactor.core.publisher.Mono;
 
+import java.time.LocalDateTime;
+
 public interface IBuyerService {
     Mono<Boolean> checkIfBuyerExistUsingPhoneNumber(String phoneNumber);
     Mono<Boolean> checkIfBuyerExistUsingEmail(String email);
@@ -20,4 +22,5 @@ public interface IBuyerService {
     Mono<Boolean> checkIfBuyerExistClerkId(String userId);
     Mono<BuyerDto> activateUser(BuyerDto buyerDto);
     Mono<BuyerDto> recordFailedOtpAttemptByEmail(String email);
+    Mono<Boolean> consumeValidOtp(String email, String otp, LocalDateTime now);
 }

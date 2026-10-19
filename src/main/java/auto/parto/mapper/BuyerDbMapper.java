@@ -4,6 +4,7 @@ import auto.parto.dto.BuyerDto;
 import auto.parto.dto.OtpRequestDto;
 import auto.parto.model.Buyer;
 import auto.parto.model.OtpDetails;
+import auto.parto.otp.OtpCodeHasher;
 import org.mapstruct.InjectionStrategy;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -34,8 +35,11 @@ public interface BuyerDbMapper {
                 .isActive(Boolean.FALSE)
                 .otpDetails(
                         OtpDetails.builder()
-                                .otp(otp)
+                                .otpHash(OtpCodeHasher.hashCode(otp))
+                                .purpose("LOGIN")
+                                .identity(otpRequestDto.getEmail())
                                 .timestamp(LocalDateTime.now())
+                                .expiresAt(LocalDateTime.now().plusMinutes(5))
                                 .build()
                 )
                 .build();

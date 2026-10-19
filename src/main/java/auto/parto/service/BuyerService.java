@@ -36,9 +36,6 @@ public class BuyerService implements IBuyerService {
     private final BuyerIdentityMapper buyerIdentityMapper;
     @org.springframework.beans.factory.annotation.Value("${otp.expiration.minutes:5}")
     private long otpExpirationMinutes = 5;
-    private static final int MAX_FAILED_ATTEMPTS = 5;
-    private static final int LOCKOUT_MINUTES = 15;
-
     public BuyerService(BuyerRepository buyerRepository, ISellerRepository sellerRepository,
                         BuyerDbMapper buyerDbMapper, SellerDbMapper sellerDbMapper) {
         this(buyerRepository, sellerRepository, buyerDbMapper, sellerDbMapper,
@@ -163,9 +160,9 @@ public class BuyerService implements IBuyerService {
         log.info("Creating new customer with email: {}", otpRequestDto.getEmail());
         if (postgresqlIdentityReady()) return canonicalOnboardingRequired();
         if (buyerRepository == null) return legacyPersistenceUnavailable();
-        return buyerRepository.save(
-                buyerDbMapper.toEntity(otpRequestDto , otp)
-        ).map(buyerDbMapper::toDto);
+        var buyer = buyerDbMapper.toEntity(otpRequestDto, otp);
+        buyer.getOtpDetails().setExpiresAt(LocalDateTime.now().plusMinutes(otpExpirationMinutes));
+        return buyerRepository.save(buyer).map(buyerDbMapper::toDto);
     }
 
     @Override
@@ -188,8 +185,8 @@ public class BuyerService implements IBuyerService {
         }
         if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.updateGeneratedOtp(
-                            phoneNumber, sentOtp ,
-                        "phoneNumber"
+                            phoneNumber, sentOtp, "phoneNumber",
+                        LocalDateTime.now().plusMinutes(otpExpirationMinutes)
                         ).map(buyerDbMapper::toDto);
     }
 
@@ -203,8 +200,8 @@ public class BuyerService implements IBuyerService {
         }
         if (buyerRepository == null) return legacyPersistenceUnavailable();
         return buyerRepository.updateGeneratedOtp(
-                email, sentOtp ,
-                "email"
+                email, sentOtp, "email",
+                LocalDateTime.now().plusMinutes(otpExpirationMinutes)
         ).map(buyerDbMapper::toDto);
     }
 
@@ -227,30 +224,15 @@ public class BuyerService implements IBuyerService {
                     .then(postgresqlOtpRepository.findByEmail(email))
                     .map(buyerIdentityMapper::toDto);
         }
-        return findBuyerByEmail(email)
-                .flatMap(buyer -> {
-                    var otpDetails = buyer.getOtpDetailsDto();
-                    int newFailedAttempts = (otpDetails != null ? otpDetails.getFailedAttempts() : 0) + 1;
-                    final LocalDateTime newLockedUntil = newFailedAttempts >= MAX_FAILED_ATTEMPTS
-                            ? LocalDateTime.now().plusMinutes(LOCKOUT_MINUTES) : null;
-                    if (newLockedUntil != null) {
-                        log.info("Buyer {} locked due to {} failed OTP attempts", email, newFailedAttempts);
-                    }
-                    String existingOtp = otpDetails != null ? otpDetails.getOtp() : null;
-                    LocalDateTime existingTimestamp = otpDetails != null ? otpDetails.getTimestamp() : LocalDateTime.now();
-                    return updateGeneratedOtpByEmail(email, existingOtp)
-                            .flatMap(updated -> {
-                                updated.setOtpDetailsDto(auto.parto.dto.OtpDetailsDto.builder()
-                                        .otp(existingOtp)
-                                        .timestamp(existingTimestamp)
-                                        .failedAttempts(newFailedAttempts)
-                                        .lockedUntil(newLockedUntil)
-                                        .build());
-                                if (buyerRepository == null) return legacyPersistenceUnavailable();
-                                return buyerRepository.save(buyerDbMapper.toEntity(updated))
-                                        .map(buyerDbMapper::toDto);
-                            });
-                });
+        if (buyerRepository == null) return legacyPersistenceUnavailable();
+        return buyerRepository.recordFailedOtpAttempt(email, LocalDateTime.now())
+                .map(buyerDbMapper::toDto);
+    }
+
+    @Override
+    public Mono<Boolean> consumeValidOtp(String email, String otp, LocalDateTime now) {
+        if (buyerRepository == null) return legacyPersistenceUnavailable();
+        return buyerRepository.consumeValidOtp(email, otp, now);
     }
 
     private boolean postgresqlIdentityReady() {

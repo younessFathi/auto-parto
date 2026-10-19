@@ -22,10 +22,10 @@ public class OtpRequestDto {
     private String firstName;
     @Length(min = 3, max = 15)
     private String lastName;
+    @NotBlank
     @Email
     private String email;
 
     @NotNull(message = "Customer type is required BUYER / SELLER")
     private CustomerType customerType;
 }
-

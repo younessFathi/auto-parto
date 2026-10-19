@@ -26,8 +26,8 @@ public class RateLimitService {
         ReactiveRedisTemplate<String, String> redisTemplate = redisTemplateProvider.getIfAvailable();
         
         if (redisTemplate == null) {
-            log.warn("Redis not available, allowing request");
-            return Mono.just(true);
+            log.error("Redis not available, rejecting authentication request");
+            return Mono.just(false);
         }
 
         String key = RATE_LIMIT_PREFIX + ip;
@@ -43,7 +43,7 @@ public class RateLimitService {
                 .map(count -> count <= maxRequests)
                 .onErrorResume(e -> {
                     log.error("Rate limit check failed for IP: {}", ip, e);
-                    return Mono.just(true);
+                    return Mono.just(false);
                 });
     }
 

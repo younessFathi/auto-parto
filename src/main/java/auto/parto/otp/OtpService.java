@@ -45,7 +45,7 @@ public class OtpService {
             throw new OtpExpiredException(Constants.Exception.EXPIRED_OTP);
         }
 
-        if (!cachedOtp.getOtp().equals(otp)) {
+        if (!OtpCodeHasher.matchesCode(otp, cachedOtp.getOtpHash())) {
             log.info("{} : {}" , Constants.Exception.INVALID_OTP_FOR, id);
             throw new OtpInvalidException(Constants.Exception.INVALID_OTP);
         }

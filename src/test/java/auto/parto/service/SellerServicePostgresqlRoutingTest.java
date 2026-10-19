@@ -87,7 +87,7 @@ class SellerServicePostgresqlRoutingTest {
 
         assertThat(service.updateGeneratedOtpByEmail(identity.email(), "123456").block()).isSameAs(dto);
         assertThat(service.recordFailedOtpAttempt(identity.email()).block()).isSameAs(dto);
-        verify(mongoRepository, never()).updateGeneratedOtp(any(), any(), any());
+        verify(mongoRepository, never()).updateGeneratedOtp(any(), any(), any(), any());
     }
 
     private static AppUserRecord user() {

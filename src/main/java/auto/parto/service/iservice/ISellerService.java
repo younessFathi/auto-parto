@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotNull;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 public interface ISellerService {
     Mono<SellerDto> create(@Valid SellerDto sellerDto);
@@ -23,4 +24,5 @@ public interface ISellerService {
     Mono<SellerDto> findSellerByEmail(String email);
     Mono<SellerDto> activateUser(SellerDto sellerDto);
     Mono<SellerDto> recordFailedOtpAttempt(String email);
+    Mono<Boolean> consumeValidOtp(String email, String otp, LocalDateTime now);
 }
