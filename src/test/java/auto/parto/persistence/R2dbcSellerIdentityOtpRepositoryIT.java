@@ -173,6 +173,21 @@ class R2dbcSellerIdentityOtpRepositoryIT {
     }
 
     @Test
+    void correctOtpRemainsRejectedAfterLockExpiresWhenChallengeTtlIsLonger() {
+        String email = uniqueEmail();
+        Instant issuedAt = Instant.now();
+        Instant expiresAt = issuedAt.plusSeconds(3600);
+        Instant afterLock = issuedAt.plusSeconds(901);
+
+        StepVerifier.create(repository.create(email, "Grace", "Hopper", "123456", expiresAt)
+                        .thenMany(reactor.core.publisher.Flux.range(0, 5)
+                                .concatMap(ignored -> repository.recordFailedAttempt(email, issuedAt)))
+                        .then(repository.consumeValidOtp(email, "123456", afterLock)))
+                .expectNext(false)
+                .verifyComplete();
+    }
+
+    @Test
     void concurrentValidConsumesSucceedExactlyOnce() {
         String email = uniqueEmail();
 

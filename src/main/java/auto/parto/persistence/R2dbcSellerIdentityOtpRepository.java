@@ -167,6 +167,7 @@ public class R2dbcSellerIdentityOtpRepository implements SellerIdentityOtpReposi
                               AND oc.code_hash = :codeHash
                               AND oc.expires_at > :now
                               AND (oc.locked_until IS NULL OR oc.locked_until <= :now)
+                              AND oc.failed_attempts < 5
                             ORDER BY oc.created_at DESC
                             LIMIT 1
                             FOR UPDATE
