@@ -17,11 +17,10 @@ public class BuyerAuthStrategy implements AuthStrategy {
     private final IBuyerService buyerService;
     @Override
     public Mono<Object> create(OtpRequestDto request, String sentOtp) {
-        return buyerService.checkIfBuyerExistUsingPhoneNumber(request.getPhoneNumber())
-                .flatMap(exists -> !exists ?
-                        buyerService.create(request, sentOtp) :
-                        buyerService.updateGeneratedOtpByPhoneNumber(request.getPhoneNumber(), sentOtp)
-                )
+        return buyerService.checkIfBuyerExistUsingEmail(request.getEmail())
+                .flatMap(exists -> exists
+                        ? buyerService.updateGeneratedOtpByEmail(request.getEmail(), sentOtp)
+                        : buyerService.create(request, sentOtp))
                 .map(buyerDto -> (Object) buyerDto); // Cast to Object or common interface
     }
 

@@ -4,9 +4,7 @@ import auto.parto.dto.OtpRequestDto;
 import auto.parto.dto.SellerDto;
 import auto.parto.dto.TokenDto;
 import auto.parto.enums.CustomerType;
-import auto.parto.exception.OtpExpiredException;
 import auto.parto.exception.OtpInvalidException;
-import auto.parto.exception.OtpLockedException;
 import auto.parto.mapper.SellerIdentityMapper;
 import auto.parto.persistence.SellerIdentityOtpRepository;
 import auto.parto.persistence.SellerIdentityRecord;
@@ -70,12 +68,6 @@ public final class SellerIdentityStrategy implements AuthStrategy, OtpValidation
     private Mono<SellerIdentityRecord> validateAndConsume(SellerIdentityRecord identity,
                                                           String otp, String email, Instant now) {
         if (!identity.active()) return Mono.error(new OtpInvalidException(Constants.Exception.INVALID_OTP));
-        if (identity.lockedUntil() != null && identity.lockedUntil().isAfter(now)) {
-            return Mono.error(new OtpLockedException("Account is locked due to too many failed attempts"));
-        }
-        if (identity.otpExpiresAt() == null || !identity.otpExpiresAt().isAfter(now)) {
-            return Mono.error(new OtpExpiredException(Constants.Exception.EXPIRED_OTP));
-        }
         return repository.consumeValidOtp(email, otp, now)
                 .flatMap(valid -> valid ? Mono.just(identity)
                         : repository.recordFailedAttempt(email, now)

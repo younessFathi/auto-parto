@@ -4,9 +4,7 @@ import auto.parto.dto.BuyerDto;
 import auto.parto.dto.OtpRequestDto;
 import auto.parto.dto.TokenDto;
 import auto.parto.enums.CustomerType;
-import auto.parto.exception.OtpExpiredException;
 import auto.parto.exception.OtpInvalidException;
-import auto.parto.exception.OtpLockedException;
 import auto.parto.mapper.BuyerIdentityMapper;
 import auto.parto.persistence.BuyerIdentityOtpRepository;
 import auto.parto.persistence.BuyerIdentityRecord;
@@ -71,12 +69,6 @@ public final class BuyerIdentityStrategy implements AuthStrategy, OtpValidationS
     private Mono<BuyerIdentityRecord> validateAndConsume(BuyerIdentityRecord identity,
                                                          String otp, String email, Instant now) {
         if (!identity.active()) return Mono.error(new OtpInvalidException(Constants.Exception.INVALID_OTP));
-        if (identity.lockedUntil() != null && identity.lockedUntil().isAfter(now)) {
-            return Mono.error(new OtpLockedException("Account is locked due to too many failed attempts"));
-        }
-        if (identity.otpExpiresAt() == null || !identity.otpExpiresAt().isAfter(now)) {
-            return Mono.error(new OtpExpiredException(Constants.Exception.EXPIRED_OTP));
-        }
         return repository.consumeValidOtp(email, otp, now)
                 .flatMap(valid -> valid ? Mono.just(identity)
                         : repository.recordFailedAttempt(email, now)

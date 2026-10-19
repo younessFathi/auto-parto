@@ -46,19 +46,19 @@ public class AuthController {
 
     @PostMapping("/send-otp-email")
     public Mono<Object> sendOTPToEmail(@Valid @RequestBody OtpRequestDto otpRequestDto) {
-        return emailService.sendOTPEmail(otpRequestDto.getEmail(), otpService.generate())
-                .flatMap(sentOtp -> {
-                            AuthStrategy strategy = authStrategies.get(otpRequestDto.getCustomerType());
-                            if (strategy == null) {
-                                return Mono.error(new IllegalArgumentException("Unsupported customer type: " + otpRequestDto.getCustomerType()));
-                            }
-                            return strategy.create(otpRequestDto, sentOtp);
-                });
+        String generatedOtp = otpService.generate();
+        AuthStrategy strategy = authStrategies.get(otpRequestDto.getCustomerType());
+        if (strategy == null) {
+            return Mono.error(new IllegalArgumentException("Unsupported customer type: " + otpRequestDto.getCustomerType()));
+        }
+        return strategy.create(otpRequestDto, generatedOtp)
+                .flatMap(result -> emailService.sendOTPEmail(otpRequestDto.getEmail(), generatedOtp)
+                        .thenReturn(result));
     }
 
 
     @PostMapping("/validate-otp")
-    public Mono<TokenDto<?>> validateOTP(@RequestBody ValidateOtpRequest validateOtpRequest) {
+    public Mono<TokenDto<?>> validateOTP(@Valid @RequestBody ValidateOtpRequest validateOtpRequest) {
         OtpValidationStrategy<?> strategy = otpValidationStrategies.get(validateOtpRequest.getCustomerType());
         if (strategy == null) {
             return Mono.error(new IllegalArgumentException("Unsupported customer type: " + validateOtpRequest.getCustomerType()));

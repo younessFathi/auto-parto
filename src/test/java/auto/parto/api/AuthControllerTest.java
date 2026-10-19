@@ -2,6 +2,10 @@ package auto.parto.api;
 
 import auto.parto.dto.*;
 import auto.parto.enums.CustomerType;
+import auto.parto.exception.OtpExpiredException;
+import auto.parto.exception.OtpInvalidException;
+import auto.parto.exception.OtpLockedException;
+import auto.parto.exception.OtpTooManyRequestsException;
 import auto.parto.otp.EmailService;
 import auto.parto.otp.OtpService;
 import auto.parto.service.iservice.AuthStrategy;
@@ -22,6 +26,9 @@ import reactor.core.publisher.Mono;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @WebFluxTest(controllers = AuthController.class, properties = {
@@ -128,6 +135,59 @@ class AuthControllerTest {
                 .bodyValue(request)
                 .exchange()
                 .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void validateOtp_returns400_whenEmailIsMalformed() {
+        clearInvocations(otpValidationStrategy);
+        ValidateOtpRequest request = new ValidateOtpRequest();
+        request.setOtp("123456");
+        request.setEmail("not-an-email");
+        request.setCustomerType(CustomerType.BUYER);
+
+        webTestClient.post().uri("/auth/validate-otp")
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(request).exchange()
+                .expectStatus().isBadRequest();
+
+        verify(otpValidationStrategy, never()).validate(anyString(), anyString());
+    }
+
+    @Test
+    void validateOtp_returns400_whenOtpIsNotSixDigits() {
+        clearInvocations(otpValidationStrategy);
+        ValidateOtpRequest request = new ValidateOtpRequest();
+        request.setOtp("1234");
+        request.setEmail("test@test.com");
+        request.setCustomerType(CustomerType.BUYER);
+
+        webTestClient.post().uri("/auth/validate-otp")
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(request).exchange()
+                .expectStatus().isBadRequest();
+
+        verify(otpValidationStrategy, never()).validate(anyString(), anyString());
+    }
+
+    @Test
+    void validateOtp_usesSamePublicContractForEveryChallengeFailure() {
+        clearInvocations(otpValidationStrategy);
+        when(otpValidationStrategy.validate(anyString(), anyString())).thenReturn(
+                Mono.error(new OtpInvalidException()),
+                Mono.error(new OtpExpiredException()),
+                Mono.error(new OtpLockedException()),
+                Mono.error(new OtpTooManyRequestsException()));
+
+        for (int attempt = 0; attempt < 4; attempt++) {
+            ValidateOtpRequest request = new ValidateOtpRequest();
+            request.setOtp("123456");
+            request.setEmail("test@test.com");
+            request.setCustomerType(CustomerType.BUYER);
+
+            webTestClient.post().uri("/auth/validate-otp")
+                    .contentType(MediaType.APPLICATION_JSON).bodyValue(request).exchange()
+                    .expectStatus().isBadRequest()
+                    .expectBody().jsonPath("$.code").isEqualTo("OTP_INVALID")
+                    .jsonPath("$.message").isEqualTo("Invalid OTP");
+        }
     }
 
 }

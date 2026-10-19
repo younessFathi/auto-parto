@@ -38,17 +38,17 @@ public class OtpExceptionHandler {
 
     @ExceptionHandler(OtpExpiredException.class)
     public ResponseEntity<ApiErrorResponse> handleOtpExpiredException(OtpExpiredException ex, ServerWebExchange exchange) {
-        return buildErrorResponse(HttpStatus.GONE, "OTP_EXPIRED", "OTP has expired", exchange, null);
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, "OTP_INVALID", "Invalid OTP", exchange, null);
     }
 
     @ExceptionHandler(OtpTooManyRequestsException.class)
     public ResponseEntity<ApiErrorResponse> handleOtpTooManyRequestsException(OtpTooManyRequestsException ex, ServerWebExchange exchange) {
-        return buildErrorResponse(HttpStatus.TOO_MANY_REQUESTS, "OTP_RATE_LIMITED", "Too many OTP attempts", exchange, null);
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, "OTP_INVALID", "Invalid OTP", exchange, null);
     }
 
     @ExceptionHandler(OtpLockedException.class)
     public ResponseEntity<ApiErrorResponse> handleOtpLockedException(OtpLockedException ex, ServerWebExchange exchange) {
-        return buildErrorResponse(HttpStatus.LOCKED, "OTP_LOCKED", "OTP verification is locked", exchange, null);
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, "OTP_INVALID", "Invalid OTP", exchange, null);
     }
 
     @ExceptionHandler(FileUploadException.class)

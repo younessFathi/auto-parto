@@ -65,7 +65,7 @@ class OtpExceptionHandlerTest {
     }
 
     @Test
-    void handlesOtpLockedExceptionWithLockedStatus() {
+    void handlesOtpLockedExceptionWithGenericInvalidStatus() {
         OtpExceptionHandler handler = new OtpExceptionHandler();
         MockServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/auth/validate-otp/1234").build()
@@ -77,10 +77,10 @@ class OtpExceptionHandlerTest {
                 exchange
         );
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.LOCKED);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().getCode()).isEqualTo("OTP_LOCKED");
-        assertThat(response.getBody().getMessage()).isEqualTo("OTP verification is locked");
+        assertThat(response.getBody().getCode()).isEqualTo("OTP_INVALID");
+        assertThat(response.getBody().getMessage()).isEqualTo("Invalid OTP");
         assertThat(response.getBody().getRequestId()).isEqualTo("req-lock-001");
     }
 

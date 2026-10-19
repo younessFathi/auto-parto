@@ -10,10 +10,11 @@ import lombok.Data;
 @Data
 public class ValidateOtpRequest {
     @ValidOtp
+    @NotBlank
     private String otp;
     @Email
+    @NotBlank
     private String email;
     @NotNull
-    @NotBlank
     private CustomerType customerType;
 }

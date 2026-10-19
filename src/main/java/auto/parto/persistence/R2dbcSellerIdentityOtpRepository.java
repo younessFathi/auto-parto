@@ -203,6 +203,9 @@ public class R2dbcSellerIdentityOtpRepository implements SellerIdentityOtpReposi
                               AND au.role = 'SELLER'
                               AND oc.purpose = 'LOGIN'
                               AND oc.consumed_at IS NULL
+                              AND oc.expires_at > :now
+                              AND (oc.locked_until IS NULL OR oc.locked_until <= :now)
+                              AND oc.failed_attempts < 5
                             ORDER BY oc.created_at DESC
                             LIMIT 1
                             FOR UPDATE
@@ -224,6 +227,7 @@ public class R2dbcSellerIdentityOtpRepository implements SellerIdentityOtpReposi
                         WHERE oc.id = audit.entity_id
                         """)
                 .bind("email", email)
+                .bind("now", now)
                 .bind("lockUntil", now.plusSeconds(15 * 60L))
                 .fetch()
                 .rowsUpdated()

@@ -5,7 +5,6 @@ import auto.parto.dto.OtpDetailsDto;
 import auto.parto.dto.TokenDto;
 import auto.parto.enums.CustomerType;
 import auto.parto.exception.OtpInvalidException;
-import auto.parto.exception.OtpLockedException;
 import auto.parto.service.iservice.IBuyerService;
 import auto.parto.utils.JwtTokenGenerator;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,7 +38,7 @@ class BuyerOtpValidationStrategyTest {
     }
 
     @Test
-    void validate_returnsError_whenAccountIsLocked() {
+    void validate_returnsGenericError_whenAccountIsLocked() {
         String email = "buyer@test.com";
         BuyerDto buyer = BuyerDto.builder()
                 .id("buyer-123")
@@ -52,9 +51,11 @@ class BuyerOtpValidationStrategyTest {
                 .build();
 
         when(buyerService.findBuyerByEmail(email)).thenReturn(Mono.just(buyer));
+        when(buyerService.consumeValidOtp(eq(email), eq("123456"), any(LocalDateTime.class))).thenReturn(Mono.just(false));
+        when(buyerService.recordFailedOtpAttemptByEmail(email)).thenReturn(Mono.just(buyer));
 
         StepVerifier.create(strategy.validate("123456", email))
-                .expectError(OtpLockedException.class)
+                .expectError(OtpInvalidException.class)
                 .verify();
     }
 

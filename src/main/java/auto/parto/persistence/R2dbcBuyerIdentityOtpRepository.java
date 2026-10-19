@@ -95,6 +95,9 @@ public class R2dbcBuyerIdentityOtpRepository implements BuyerIdentityOtpReposito
                             JOIN app_users au ON au.id = oc.user_id
                             WHERE LOWER(au.email) = LOWER(:email) AND au.role = 'BUYER'
                               AND oc.purpose = 'LOGIN' AND oc.consumed_at IS NULL
+                              AND oc.expires_at > :now
+                              AND (oc.locked_until IS NULL OR oc.locked_until <= :now)
+                              AND oc.failed_attempts < 5
                               AND oc.code_hash = :codeHash AND oc.expires_at > :now
                               AND (oc.locked_until IS NULL OR oc.locked_until <= :now)
                             ORDER BY oc.created_at DESC LIMIT 1 FOR UPDATE
@@ -119,6 +122,9 @@ public class R2dbcBuyerIdentityOtpRepository implements BuyerIdentityOtpReposito
                             JOIN app_users au ON au.id = oc.user_id
                             WHERE LOWER(au.email) = LOWER(:email) AND au.role = 'BUYER'
                               AND oc.purpose = 'LOGIN' AND oc.consumed_at IS NULL
+                              AND oc.expires_at > :now
+                              AND (oc.locked_until IS NULL OR oc.locked_until <= :now)
+                              AND oc.failed_attempts < 5
                             ORDER BY oc.created_at DESC LIMIT 1 FOR UPDATE
                         ), audit AS (
                             INSERT INTO audit_records (public_id, actor_user_id, action, entity_type, entity_id)
@@ -132,7 +138,7 @@ public class R2dbcBuyerIdentityOtpRepository implements BuyerIdentityOtpReposito
                             last_audit_record_id = audit.audit_id
                         FROM audit WHERE oc.id = audit.entity_id
                         """)
-                .bind("email", email).bind("lockUntil", now.plusSeconds(900))
+                .bind("email", email).bind("now", now).bind("lockUntil", now.plusSeconds(900))
                 .fetch().rowsUpdated().then();
     }
 

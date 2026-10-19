@@ -7,6 +7,10 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.mongodb.core.FindAndModifyOptions;
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.AggregationUpdate;
+import org.springframework.data.mongodb.core.aggregation.ArithmeticOperators;
+import org.springframework.data.mongodb.core.aggregation.ComparisonOperators;
+import org.springframework.data.mongodb.core.aggregation.ConditionalOperators;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
@@ -103,7 +107,17 @@ public class BuyerRepository implements ICustomerRepository {
                 .flatMap(candidate -> reactiveMongoTemplate.findAndModify(
                         new Query(new Criteria().andOperator(
                                 Criteria.where("_id").is(candidate.getId()),
-                                Criteria.where("otpDetails.consumedAt").exists(false))),
+                                Criteria.where("email").is(email),
+                                Criteria.where("isActive").is(false),
+                                Criteria.where("otpDetails.purpose").is("LOGIN"),
+                                Criteria.where("otpDetails.identity").is(email),
+                                Criteria.where("otpDetails.otpHash").is(candidate.getOtpDetails().getOtpHash()),
+                                Criteria.where("otpDetails.consumedAt").exists(false),
+                                Criteria.where("otpDetails.expiresAt").gt(now),
+                                new Criteria().orOperator(
+                                        Criteria.where("otpDetails.lockedUntil").exists(false),
+                                        Criteria.where("otpDetails.lockedUntil").lte(now)),
+                                Criteria.where("otpDetails.failedAttempts").lt(5))),
                         new Update().set("otpDetails.consumedAt", now),
                         FindAndModifyOptions.options().returnNew(true), Buyer.class))
                 .hasElement();
@@ -115,16 +129,24 @@ public class BuyerRepository implements ICustomerRepository {
                 Criteria.where("email").is(email),
                 Criteria.where("otpDetails.purpose").is("LOGIN"),
                 Criteria.where("otpDetails.identity").is(email),
-                Criteria.where("otpDetails.consumedAt").exists(false)));
+                Criteria.where("otpDetails.consumedAt").exists(false),
+                Criteria.where("otpDetails.expiresAt").gt(now),
+                new Criteria().orOperator(
+                        Criteria.where("otpDetails.lockedUntil").exists(false),
+                        Criteria.where("otpDetails.lockedUntil").lte(now)),
+                Criteria.where("otpDetails.failedAttempts").lt(5)));
+        AggregationUpdate update = AggregationUpdate.update()
+                .set("otpDetails.failedAttempts")
+                .toValueOf(ArithmeticOperators.valueOf("otpDetails.failedAttempts").add(1))
+                .set("otpDetails.lockedUntil")
+                .toValue(ConditionalOperators.when(
+                                ComparisonOperators.valueOf("otpDetails.failedAttempts").greaterThanEqualToValue(5))
+                        .then(now.plusMinutes(15))
+                        .otherwiseValueOf("otpDetails.lockedUntil"));
         return reactiveMongoTemplate.findAndModify(query,
-                        new Update().inc("otpDetails.failedAttempts", 1),
+                        update,
                         FindAndModifyOptions.options().returnNew(true), Buyer.class)
-                .flatMap(updated -> updated.getOtpDetails() != null
-                        && updated.getOtpDetails().getFailedAttempts() >= 5
-                        ? reactiveMongoTemplate.findAndModify(query,
-                                new Update().set("otpDetails.lockedUntil", now.plusMinutes(15)),
-                                FindAndModifyOptions.options().returnNew(true), Buyer.class)
-                        : Mono.just(updated));
+                ;
     }
 
     @Override
