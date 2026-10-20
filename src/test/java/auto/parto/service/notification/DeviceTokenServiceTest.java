@@ -17,6 +17,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class DeviceTokenServiceTest {
 
@@ -62,24 +63,29 @@ class DeviceTokenServiceTest {
     }
 
     @Test
-    void rebuildsRedisProjectionAcrossBoundedPostgresqlPages() {
+    void rebuildsRedisProjectionPreservingSamePlatformRegistrationsAcrossBoundedPages() {
         UUID owner = UUID.randomUUID();
         DeviceTokenRecord first = record(owner, "service-token-3", "ANDROID");
-        DeviceTokenRecord second = record(owner, "service-token-4", "IOS");
+        DeviceTokenRecord second = record(owner, "service-token-4", "ANDROID");
         when(repository.findActive(1)).thenReturn(Mono.just(first).flux());
         when(repository.findActiveAfter(first.lastSeenAt(), first.publicId(), 1))
                 .thenReturn(Mono.just(second).flux());
         when(repository.findActiveAfter(second.lastSeenAt(), second.publicId(), 1))
                 .thenReturn(reactor.core.publisher.Flux.empty());
-        when(redis.registerDeviceToken(any(), anyString(), anyString(), anyString(), any()))
+        when(redis.registerRebuiltDeviceToken(any(), anyString(), anyString(), anyString(), any()))
                 .thenReturn(Mono.just(true));
 
         StepVerifier.create(service.rebuildRedisProjection(1))
                 .expectNext(2)
                 .verifyComplete();
 
-        verify(redis, org.mockito.Mockito.times(2))
-                .registerDeviceToken(any(), anyString(), anyString(), anyString(), any());
+        var rebuilt = org.mockito.ArgumentCaptor.forClass(DeviceTokenService.DeviceToken.class);
+        verify(redis, org.mockito.Mockito.times(2)).registerRebuiltDeviceToken(
+                rebuilt.capture(), anyString(), anyString(), anyString(), any());
+        assertThat(rebuilt.getAllValues()).extracting(DeviceTokenService.DeviceToken::getToken)
+                .containsExactly("service-token-3", "service-token-4");
+        assertThat(rebuilt.getAllValues()).extracting(DeviceTokenService.DeviceToken::getPlatform)
+                .containsOnly("android");
     }
 
     private static RegisterTokenRequest request(String token, String platform, String userId) {

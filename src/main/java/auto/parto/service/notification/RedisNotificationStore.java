@@ -334,12 +334,26 @@ public class RedisNotificationStore {
 
 
     public Mono<Boolean> registerDeviceToken(DeviceTokenService.DeviceToken newDeviceToken , String userKey , String ownerKey , String userId , RegisterTokenRequest request){
+        return registerDeviceToken(newDeviceToken, userKey, ownerKey, userId, request, true);
+    }
+
+    /** Rebuild a row without collapsing a distinct same-platform registration. */
+    public Mono<Boolean> registerRebuiltDeviceToken(DeviceTokenService.DeviceToken newDeviceToken,
+                                                     String userKey, String ownerKey, String userId,
+                                                     RegisterTokenRequest request) {
+        return registerDeviceToken(newDeviceToken, userKey, ownerKey, userId, request, false);
+    }
+
+    private Mono<Boolean> registerDeviceToken(DeviceTokenService.DeviceToken newDeviceToken,
+                                               String userKey, String ownerKey, String userId,
+                                               RegisterTokenRequest request, boolean deduplicateDevice) {
         return redisTemplate.opsForValue().get(userKey)
                 .defaultIfEmpty("[]")
                 .map(this::deserializeTokens)
                 .map(tokens -> {
-                    // Remove existing token if present (to update it) or if same device
-                    tokens.removeIf(t -> t.getToken().equals(request.getDeviceToken()) || isSameDevice(t, request));
+                    // Live registration replaces the same device; recovery replaces only the same provider token.
+                    tokens.removeIf(t -> t.getToken().equals(request.getDeviceToken())
+                            || (deduplicateDevice && isSameDevice(t, request)));
                     tokens.add(newDeviceToken);
 
                     // Keep only last 3 active tokens per user

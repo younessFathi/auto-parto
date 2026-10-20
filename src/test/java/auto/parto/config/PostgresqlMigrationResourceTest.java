@@ -106,6 +106,15 @@ class PostgresqlMigrationResourceTest {
     }
 
     @Test
+    void deviceTokenRecoveryMigrationAddsActiveKeysetIndex() throws IOException {
+        String sql = readResource("/db/migration/V10__add_device_token_recovery_index.sql");
+
+        assertThat(sql).contains("device_tokens_active_recovery_idx")
+                .contains("ON device_tokens (last_seen_at DESC, public_id DESC)")
+                .contains("WHERE status = 'ACTIVE'");
+    }
+
+    @Test
     void partListingStatusMigrationSeparatesLifecycleStates() throws IOException {
         String sql = readResource("/db/migration/V6__separate_part_listing_statuses.sql");
 

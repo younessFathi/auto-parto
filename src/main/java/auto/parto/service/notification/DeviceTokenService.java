@@ -115,7 +115,11 @@ public class DeviceTokenService {
                 }));
     }
 
-    /** Rebuilds the bounded Redis device-token projection from PostgreSQL. */
+    /**
+     * Rebuilds the complete Redis device-token projection in sequential pages.
+     * The limit bounds each query and in-memory page; the operation continues until
+     * all active registrations have been processed.
+     */
     public Mono<Integer> rebuildRedisProjection(int limit) {
         if (postgresqlRepository == null) {
             return Mono.just(0);
@@ -146,7 +150,7 @@ public class DeviceTokenService {
                             .active(true)
                             .build();
                     String userId = record.ownerUserPublicId().toString();
-                    return projectToRedis(deviceToken, USER_TOKENS_PREFIX + userId,
+                    return projectRebuiltTokenToRedis(deviceToken, USER_TOKENS_PREFIX + userId,
                             TOKEN_OWNER_PREFIX + record.providerToken(), userId,
                             registrationRequest(record)).thenReturn(1);
                     });
@@ -161,6 +165,11 @@ public class DeviceTokenService {
     private Mono<Boolean> projectToRedis(DeviceToken deviceToken, String userKey, String ownerKey,
                                          String userId, RegisterTokenRequest request) {
         return redisNotificationStore.registerDeviceToken(deviceToken, userKey, ownerKey, userId, request);
+    }
+
+    private Mono<Boolean> projectRebuiltTokenToRedis(DeviceToken deviceToken, String userKey, String ownerKey,
+                                                     String userId, RegisterTokenRequest request) {
+        return redisNotificationStore.registerRebuiltDeviceToken(deviceToken, userKey, ownerKey, userId, request);
     }
 
     private static RegisterTokenRequest registrationRequest(DeviceTokenRecord record) {

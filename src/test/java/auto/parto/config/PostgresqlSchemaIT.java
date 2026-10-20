@@ -33,7 +33,7 @@ class PostgresqlSchemaIT {
                 .locations("classpath:db/migration")
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(9);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(10);
         assertThat(flyway.migrate().migrationsExecuted).isZero();
 
         try (Connection connection = POSTGRES.createConnection("")) {
@@ -59,6 +59,7 @@ class PostgresqlSchemaIT {
 
             assertThat(indexExists(connection, "outbox_events", "outbox_events_claim_idx")).isTrue();
             assertThat(indexExists(connection, "outbox_deliveries", "outbox_deliveries_claim_idx")).isTrue();
+            assertThat(indexExists(connection, "device_tokens", "device_tokens_active_recovery_idx")).isTrue();
             assertThat(indexExists(connection, "part_requests", "part_requests_search_idx")).isTrue();
             assertThat(indexExists(connection, "part_requests", "part_requests_vehicle_search_idx")).isTrue();
             assertThat(indexExists(connection, "part_requests", "part_requests_buyer_created_public_idx")).isTrue();
