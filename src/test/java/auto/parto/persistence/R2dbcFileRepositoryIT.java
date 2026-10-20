@@ -94,14 +94,15 @@ class R2dbcFileRepositoryIT {
     }
 
     @Test
-    void activatesPendingFileOnceForItsOwner() {
+    void finalizingFileRepeatedlyReturnsTheSameActiveRecord() {
         UUID owner = UUID.randomUUID();
         UUID request = UUID.randomUUID();
         StepVerifier.create(insertRequest(owner, request)
                         .then(repository.createForRequest(owner, request, "objects/active", "photo.jpg",
                                 "image/jpeg", 12, "sha"))
-                        .flatMapMany(file -> repository.activate(file.publicId(), owner)
+                .flatMapMany(file -> repository.activate(file.publicId(), owner)
                                 .concatWith(repository.activate(file.publicId(), owner))))
+                .assertNext(active -> assertThat(active.status()).isEqualTo("ACTIVE"))
                 .assertNext(active -> assertThat(active.status()).isEqualTo("ACTIVE"))
                 .verifyComplete();
     }
