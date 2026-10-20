@@ -15,6 +15,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Comparator;
+import java.util.PriorityQueue;
+import java.util.List;
 import java.util.stream.Stream;
 
 @Component
@@ -74,14 +77,7 @@ public final class LocalFileStorage implements FileStorage {
         if (limit < 1 || limit > 1000) {
             return Flux.error(new IllegalArgumentException("limit must be between 1 and 1000"));
         }
-        return Flux.usingWhen(Mono.fromCallable(() -> Files.exists(root) ? Files.walk(root) : Stream.<Path>empty())
-                        .subscribeOn(Schedulers.boundedElastic()),
-                paths -> Flux.fromStream(paths.filter(Files::isRegularFile)
-                        .map(root::relativize)
-                        .map(Path::toString)
-                        .filter(key -> !key.startsWith(".staging/"))
-                        .limit(limit)),
-                stream -> Mono.fromRunnable(stream::close));
+        return scanObjectKeys(limit).flatMapMany(scan -> Flux.fromIterable(scan.keys()));
     }
 
     @Override
@@ -92,15 +88,26 @@ public final class LocalFileStorage implements FileStorage {
         return Mono.fromCallable(() -> {
             if (!Files.exists(root)) return new ObjectKeyScan(java.util.List.of(), false);
             try (Stream<Path> paths = Files.walk(root)) {
-                java.util.List<String> keys = paths.filter(Files::isRegularFile)
+                PriorityQueue<String> smallestKeys = new PriorityQueue<>(limit + 1, Comparator.reverseOrder());
+                paths.filter(Files::isRegularFile)
                         .map(root::relativize)
                         .map(Path::toString)
+                        .map(key -> key.replace(java.io.File.separatorChar, '/'))
                         .filter(key -> !key.startsWith(".staging/"))
-                        .limit(limit + 1)
-                        .toList();
+                        .forEach(key -> retainSmallest(smallestKeys, key, limit + 1));
+                List<String> keys = smallestKeys.stream().sorted().toList();
                 return new ObjectKeyScan(keys.stream().limit(limit).toList(), keys.size() > limit);
             }
         }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private static void retainSmallest(PriorityQueue<String> keys, String candidate, int capacity) {
+        if (keys.size() < capacity) {
+            keys.offer(candidate);
+        } else if (candidate.compareTo(keys.peek()) < 0) {
+            keys.poll();
+            keys.offer(candidate);
+        }
     }
 
     private Path safePath(String objectKey) {

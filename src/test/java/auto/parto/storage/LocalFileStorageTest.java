@@ -59,5 +59,7 @@ class LocalFileStorageTest {
         Files.writeString(root.resolve(".staging/job/temp"), "temp");
 
         assertThat(storage.listObjectKeys(1).collectList().block()).containsExactly("objects/a");
+        assertThat(storage.scanObjectKeys(1).block())
+                .isEqualTo(new FileStorage.ObjectKeyScan(java.util.List.of("objects/a"), true));
     }
 }
