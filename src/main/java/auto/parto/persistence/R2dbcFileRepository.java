@@ -170,6 +170,16 @@ public class R2dbcFileRepository implements FileRepository {
                 .map((row, metadata) -> row.get("active_count", Long.class)).one();
     }
 
+    @Override
+    public Flux<FileRecord> findStalePending(Instant createdBefore, int limit) {
+        if (createdBefore == null) throw new IllegalArgumentException("createdBefore is required");
+        if (limit < 1 || limit > 1001) throw new IllegalArgumentException("limit must be between 1 and 1001");
+        return databaseClient.sql(SELECT + " WHERE file.status = 'PENDING' AND file.created_at < :createdBefore "
+                        + "ORDER BY file.created_at, file.public_id LIMIT :limit")
+                .bind("createdBefore", createdBefore).bind("limit", limit)
+                .map((row, metadata) -> map(row)).all();
+    }
+
     private Flux<FileRecord> findForTarget(UUID targetPublicId, String targetColumn, int limit) {
         requirePublicId(targetPublicId, "targetPublicId");
         requireLimit(limit);
@@ -235,6 +245,29 @@ public class R2dbcFileRepository implements FileRepository {
                         .bind("auditId", auditId).bind("filePublicId", filePublicId)
                         .bind("ownerPublicId", ownerUserPublicId).fetch().rowsUpdated()
                         .map(rows -> rows == 1)));
+    }
+
+    @Override
+    public Mono<Boolean> tombstonePending(UUID filePublicId, UUID ownerUserPublicId) {
+        requirePublicId(filePublicId, "filePublicId");
+        requirePublicId(ownerUserPublicId, "ownerUserPublicId");
+        return transactions.transactional(databaseClient.sql("""
+                        WITH target AS (
+                            SELECT id FROM files
+                            WHERE public_id = :filePublicId
+                              AND owner_user_id = (SELECT id FROM app_users WHERE public_id = :ownerPublicId)
+                              AND status = 'PENDING'
+                            FOR UPDATE
+                        ), audit AS (
+                            INSERT INTO audit_records (public_id, action, entity_type, entity_id)
+                            SELECT gen_random_uuid(), 'UPDATE', 'files', id FROM target
+                            RETURNING id
+                        )
+                        UPDATE files SET status = 'TOMBSTONED', last_audit_record_id = (SELECT id FROM audit)
+                        WHERE id = (SELECT id FROM target)
+                        """)
+                .bind("filePublicId", filePublicId).bind("ownerPublicId", ownerUserPublicId)
+                .fetch().rowsUpdated().map(rows -> rows == 1));
     }
 
     private Mono<Long> insertAudit(UUID filePublicId, UUID ownerUserPublicId) {

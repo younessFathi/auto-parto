@@ -12,6 +12,7 @@ import reactor.test.StepVerifier;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -82,6 +83,23 @@ class StorageReconciliationServiceTest {
                 }).verifyComplete();
     }
 
+    @Test
+    void recoversStalePendingReservationBeforeReconciliation() {
+        FileRecord stale = new FileRecord(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null,
+                "objects/stale", "file.jpg", "image/jpeg", 1, "sha", "PENDING",
+                Instant.now().minus(Duration.ofHours(2)), Instant.now().minus(Duration.ofHours(2)));
+        StubRepository repository = new StubRepository(List.of(), 0, List.of(stale));
+        StubStorage storage = new StubStorage();
+
+        StepVerifier.create(new StorageReconciliationService(repository, storage, 10, false,
+                        Duration.ofHours(1)).reconcile())
+                .assertNext(report -> assertThat(report.healthy()).isTrue())
+                .verifyComplete();
+
+        assertThat(repository.tombstoned).containsExactly(stale.publicId());
+        assertThat(storage.deleted).containsExactly("objects/stale");
+    }
+
     private static FileRecord record(String key) {
         return new FileRecord(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null, key,
                 "file.jpg", "image/jpeg", 1, "sha", "ACTIVE", Instant.now(), Instant.now());
@@ -90,13 +108,22 @@ class StorageReconciliationServiceTest {
     private static final class StubRepository implements FileRepository {
         private final List<FileRecord> records;
         private final long activeCount;
-        private StubRepository(List<FileRecord> records) { this(records, records.size()); }
+        private final List<FileRecord> stalePending;
+        private final List<UUID> tombstoned = new java.util.ArrayList<>();
+        private StubRepository(List<FileRecord> records) { this(records, records.size(), List.of()); }
         private StubRepository(List<FileRecord> records, long activeCount) {
+            this(records, activeCount, List.of());
+        }
+        private StubRepository(List<FileRecord> records, long activeCount, List<FileRecord> stalePending) {
             this.records = records;
             this.activeCount = activeCount;
+            this.stalePending = stalePending;
         }
         public Flux<FileRecord> findActive(int limit) { return Flux.fromIterable(records).take(limit); }
         public Mono<Long> countActive() { return Mono.just(activeCount); }
+        public Flux<FileRecord> findStalePending(Instant createdBefore, int limit) {
+            return Flux.fromIterable(stalePending).take(limit);
+        }
         public Mono<FileRecord> createForRequest(UUID a, UUID b, String c, String d, String e, long f, String g) { return Mono.empty(); }
         public Mono<FileRecord> createForListing(UUID a, UUID b, String c, String d, String e, long f, String g) { return Mono.empty(); }
         public Flux<FileRecord> findByRequest(UUID a, int b) { return Flux.empty(); }
@@ -105,6 +132,7 @@ class StorageReconciliationServiceTest {
         public Mono<FileRecord> findByPublicId(UUID a) { return Mono.empty(); }
         public Mono<FileRecord> activate(UUID a, UUID b) { return Mono.empty(); }
         public Mono<Boolean> tombstone(UUID a, UUID b) { return Mono.just(false); }
+        public Mono<Boolean> tombstonePending(UUID a, UUID b) { tombstoned.add(a); return Mono.just(true); }
     }
 
     private static final class StubStorage implements FileStorage {

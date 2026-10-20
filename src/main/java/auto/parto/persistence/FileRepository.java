@@ -5,6 +5,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 import java.util.List;
+import java.time.Instant;
 
 public interface FileRepository {
 
@@ -38,6 +39,10 @@ public interface FileRepository {
 
     Mono<Long> countActive();
 
+    default Flux<FileRecord> findStalePending(Instant createdBefore, int limit) {
+        return Flux.empty();
+    }
+
     default Mono<Long> countActiveByOwner(UUID ownerUserPublicId) {
         return Mono.empty();
     }
@@ -47,4 +52,8 @@ public interface FileRepository {
     Mono<FileRecord> activate(UUID filePublicId, UUID ownerUserPublicId);
 
     Mono<Boolean> tombstone(UUID filePublicId, UUID ownerUserPublicId);
+
+    default Mono<Boolean> tombstonePending(UUID filePublicId, UUID ownerUserPublicId) {
+        return tombstone(filePublicId, ownerUserPublicId);
+    }
 }

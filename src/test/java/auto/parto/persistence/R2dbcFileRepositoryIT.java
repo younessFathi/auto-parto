@@ -13,6 +13,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.test.StepVerifier;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 import java.util.List;
 
@@ -158,6 +160,36 @@ class R2dbcFileRepositoryIT {
                 }).verifyComplete();
     }
 
+    @Test
+    void stalePendingRecoveryReleasesOwnerQuota() {
+        UUID owner = UUID.randomUUID();
+        UUID staleRequest = UUID.randomUUID();
+        UUID newRequest = UUID.randomUUID();
+        StepVerifier.create(insertUser(owner)
+                        .then(insertRequestOnly(owner, staleRequest))
+                        .then(insertRequestOnly(owner, newRequest))
+                        .then(repository.createForRequest(owner, staleRequest, "objects/stale", "photo.jpg",
+                                "image/jpeg", 12, "sha", 1))
+                        .flatMap(stale -> databaseClient.sql("""
+                                WITH audit AS (
+                                    INSERT INTO audit_records (public_id, action, entity_type, entity_id)
+                                    SELECT gen_random_uuid(), 'UPDATE', 'files', id FROM files WHERE public_id = :file
+                                    RETURNING id
+                                )
+                                UPDATE files SET created_at = :createdAt, last_audit_record_id = (SELECT id FROM audit)
+                                WHERE public_id = :file
+                                """)
+                                .bind("createdAt", Instant.now().minus(Duration.ofHours(2)))
+                                .bind("file", stale.publicId()).fetch().rowsUpdated().thenReturn(stale))
+                        .flatMap(stale -> new auto.parto.service.StorageReconciliationService(repository,
+                                new DeletingStorage(), 10, false, Duration.ofHours(1)).reconcile()
+                                .then(repository.findByPublicId(stale.publicId())))
+                        .flatMap(ignored -> repository.createForRequest(owner, newRequest, "objects/recovered",
+                                "photo.jpg", "image/jpeg", 12, "sha", 1)))
+                .assertNext(file -> assertThat(file.objectKey()).isEqualTo("objects/recovered"))
+                .verifyComplete();
+    }
+
     private reactor.core.publisher.Mono<Void> insertRequest(UUID owner, UUID request) {
         return insertUser(owner).then(insertRequestOnly(owner, request));
     }
@@ -171,6 +203,14 @@ class R2dbcFileRepositoryIT {
         return databaseClient.sql("""
                         INSERT INTO part_requests (public_id, buyer_user_id, name, condition, category, status)
                         VALUES (:request, (SELECT id FROM app_users WHERE public_id = :owner), 'Request', 'NEW', 'CAR', 'OPEN')
-                        """).bind("request", request).bind("owner", owner).fetch().rowsUpdated().then();
+                """).bind("request", request).bind("owner", owner).fetch().rowsUpdated().then();
+    }
+
+    private static final class DeletingStorage implements auto.parto.storage.FileStorage {
+        public reactor.core.publisher.Mono<auto.parto.storage.StoredObject> put(String a, java.nio.file.Path b,
+                                                                                  String c, long d, String e) { return reactor.core.publisher.Mono.empty(); }
+        public reactor.core.publisher.Flux<org.springframework.core.io.buffer.DataBuffer> read(String a) { return reactor.core.publisher.Flux.empty(); }
+        public reactor.core.publisher.Mono<Boolean> exists(String a) { return reactor.core.publisher.Mono.just(false); }
+        public reactor.core.publisher.Mono<Void> delete(String a) { return reactor.core.publisher.Mono.empty(); }
     }
 }
