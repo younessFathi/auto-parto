@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Component
 @Slf4j
@@ -261,8 +262,8 @@ public class RedisNotificationStore {
     }
 
     private boolean isSameDevice(DeviceTokenService.DeviceToken existing, RegisterTokenRequest newRequest) {
-        return existing.getPlatform().equals(newRequest.getPlatform()) &&
-                existing.getAppVersion().equals(newRequest.getAppVersion());
+        return existing.getPlatform().equalsIgnoreCase(newRequest.getPlatform()) &&
+                Objects.equals(existing.getAppVersion(), newRequest.getAppVersion());
     }
 
     // --- JSON Helpers ---

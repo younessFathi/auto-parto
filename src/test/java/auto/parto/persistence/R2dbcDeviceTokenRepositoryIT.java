@@ -72,20 +72,31 @@ class R2dbcDeviceTokenRepositoryIT {
     }
 
     @Test
-    void registeringExistingTokenReactivatesItForNewOwnerWithAudit() {
+    void registeringExistingTokenForAnotherOwnerIsRejected() {
         UUID firstOwner = UUID.randomUUID();
         UUID secondOwner = UUID.randomUUID();
 
         StepVerifier.create(insertUser(firstOwner)
                         .then(insertUser(secondOwner))
                         .then(repository.register(firstOwner, "token-reassign-1", "ios"))
-                        .flatMap(token -> repository.invalidate("token-reassign-1")
-                                .then(repository.register(secondOwner, "token-reassign-1", "web"))))
-                .assertNext(token -> {
-                    assertThat(token.ownerUserPublicId()).isEqualTo(secondOwner);
-                    assertThat(token.platform()).isEqualTo("WEB");
-                    assertThat(token.status()).isEqualTo("ACTIVE");
-                    assertThat(token.invalidatedAt()).isNull();
+                        .then(repository.register(secondOwner, "token-reassign-1", "web")))
+                .verifyErrorSatisfies(error -> assertThat(error)
+                        .isInstanceOf(auto.parto.exception.ConflictException.class));
+    }
+
+    @Test
+    void registeringExistingTokenForSameOwnerIsIdempotent() {
+        UUID owner = UUID.randomUUID();
+
+        StepVerifier.create(insertUser(owner)
+                        .then(repository.register(owner, "token-repeat-1", "android"))
+                        .flatMap(first -> repository.register(owner, "token-repeat-1", "ios"))
+                        .flatMap(second -> repository.findActiveByOwnerPublicId(owner, 10).collectList()
+                                .map(tokens -> new TokenEvidence(second, tokens))))
+                .assertNext(result -> {
+                    assertThat(result.token().ownerUserPublicId()).isEqualTo(owner);
+                    assertThat(result.token().platform()).isEqualTo("IOS");
+                    assertThat(result.tokens()).hasSize(1);
                 })
                 .verifyComplete();
     }
@@ -109,6 +120,19 @@ class R2dbcDeviceTokenRepositoryIT {
     @Test
     void missingOwnerDoesNotRegisterToken() {
         StepVerifier.create(repository.register(UUID.randomUUID(), "token-missing-1", "android"))
+                .verifyComplete();
+    }
+
+    @Test
+    void findsActiveTokensForBoundedProjectionRebuild() {
+        UUID owner = UUID.randomUUID();
+
+        StepVerifier.create(insertUser(owner)
+                        .then(repository.register(owner, "token-rebuild-1", "web"))
+                        .then(repository.findActive(10).collectList()))
+                .assertNext(tokens -> assertThat(tokens)
+                        .extracting(DeviceTokenRecord::providerToken)
+                        .contains("token-rebuild-1"))
                 .verifyComplete();
     }
 

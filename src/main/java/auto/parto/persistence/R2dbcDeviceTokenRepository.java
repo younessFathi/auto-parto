@@ -47,10 +47,40 @@ public class R2dbcDeviceTokenRepository implements DeviceTokenRepository {
         if (limit < 1 || limit > 100) throw new IllegalArgumentException("limit must be between 1 and 100");
         return databaseClient.sql(SELECT + """
                         WHERE owner.public_id = :ownerPublicId AND token.status = 'ACTIVE'
-                        ORDER BY token.last_seen_at DESC
+                        ORDER BY token.last_seen_at DESC, token.public_id DESC
                         LIMIT :limit
                         """)
                 .bind("ownerPublicId", ownerUserPublicId)
+                .bind("limit", limit)
+                .map((row, metadata) -> map(row))
+                .all();
+    }
+
+    @Override
+    public Flux<DeviceTokenRecord> findActiveAfter(Instant lastSeenAt, UUID publicId, int limit) {
+        if (lastSeenAt == null || publicId == null) throw new IllegalArgumentException("cursor is required");
+        if (limit < 1 || limit > 1000) throw new IllegalArgumentException("limit must be between 1 and 1000");
+        return databaseClient.sql(SELECT + """
+                        WHERE token.status = 'ACTIVE'
+                          AND (token.last_seen_at, token.public_id) < (:lastSeenAt, :publicId)
+                        ORDER BY token.last_seen_at DESC, token.public_id DESC
+                        LIMIT :limit
+                        """)
+                .bind("lastSeenAt", lastSeenAt)
+                .bind("publicId", publicId)
+                .bind("limit", limit)
+                .map((row, metadata) -> map(row))
+                .all();
+    }
+
+    @Override
+    public Flux<DeviceTokenRecord> findActive(int limit) {
+        if (limit < 1 || limit > 1000) throw new IllegalArgumentException("limit must be between 1 and 1000");
+        return databaseClient.sql(SELECT + """
+                        WHERE token.status = 'ACTIVE'
+                        ORDER BY token.last_seen_at DESC, token.public_id DESC
+                        LIMIT :limit
+                        """)
                 .bind("limit", limit)
                 .map((row, metadata) -> map(row))
                 .all();
@@ -100,6 +130,10 @@ public class R2dbcDeviceTokenRepository implements DeviceTokenRepository {
 
     private Mono<DeviceTokenRecord> updateExisting(DeviceTokenRecord existing, UUID ownerUserPublicId,
                                                    String platform) {
+        if (!existing.ownerUserPublicId().equals(ownerUserPublicId)) {
+            return Mono.error(new auto.parto.exception.ConflictException(
+                    "device token is already registered to another user"));
+        }
         return findOwnerId(ownerUserPublicId)
                 .flatMap(ownerId -> insertAudit(existing.publicId())
                         .flatMap(auditId -> databaseClient.sql("""

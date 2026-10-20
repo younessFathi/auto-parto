@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.ObjectProvider;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
@@ -58,7 +59,12 @@ public class DeviceTokenService {
         }
         return postgresqlOwner(userId)
                 .flatMap(owner -> postgresqlRepository.register(owner, request.getDeviceToken(), request.getPlatform())
-                        .then(redisNotificationStore.registerDeviceToken(deviceToken, userKey, ownerKey, userId, request)))
+                        .flatMap(token -> projectToRedis(deviceToken, userKey, ownerKey, userId, request)
+                                .onErrorResume(error -> {
+                                    log.warn("Device token projection could not be updated; PostgreSQL remains authoritative",
+                                            error);
+                                    return Mono.just(true);
+                                })))
                 .defaultIfEmpty(false);
     }
 
@@ -97,11 +103,72 @@ public class DeviceTokenService {
             tokens.removeIf(t -> t.getToken().equals(token));
         });
         log.warn("Marked token as invalid: {}", maskToken(token));
-        Mono<Void> redisInvalidation = redisNotificationStore.markTokenInvalidByToken(token);
-        if (postgresqlRepository != null) {
-            redisInvalidation = Mono.when(redisInvalidation, postgresqlRepository.invalidate(token).then()).then();
+        Mono<Void> redisInvalidation = Mono.defer(() -> redisNotificationStore.markTokenInvalidByToken(token));
+        if (postgresqlRepository == null) {
+            return redisInvalidation;
         }
-        return redisInvalidation;
+        return postgresqlRepository.invalidate(token)
+                .then(redisInvalidation.onErrorResume(error -> {
+                    log.warn("Device token Redis projection could not be invalidated; PostgreSQL is authoritative",
+                            error);
+                    return Mono.empty();
+                }));
+    }
+
+    /** Rebuilds the bounded Redis device-token projection from PostgreSQL. */
+    public Mono<Integer> rebuildRedisProjection(int limit) {
+        if (postgresqlRepository == null) {
+            return Mono.just(0);
+        }
+        if (limit < 1 || limit > 1000) {
+            return Mono.error(new IllegalArgumentException("limit must be between 1 and 1000"));
+        }
+        return rebuildRedisProjectionPage(null, null, limit)
+                .reduce(0, Integer::sum);
+    }
+
+    private Flux<Integer> rebuildRedisProjectionPage(java.time.Instant lastSeenAt, java.util.UUID publicId,
+                                                     int limit) {
+        Mono<java.util.List<DeviceTokenRecord>> page = lastSeenAt == null
+                ? postgresqlRepository.findActive(limit).collectList()
+                : postgresqlRepository.findActiveAfter(lastSeenAt, publicId, limit).collectList();
+        return page.flatMapMany(records -> {
+            if (records.isEmpty()) {
+                return Flux.empty();
+            }
+            Flux<Integer> projected = Flux.fromIterable(records)
+                    .concatMap(record -> {
+                    DeviceToken deviceToken = DeviceToken.builder()
+                            .token(record.providerToken())
+                            .platform(record.platform().toLowerCase(java.util.Locale.ROOT))
+                            .registeredAt(record.createdAt().atZone(java.time.ZoneOffset.UTC).toLocalDateTime())
+                            .lastUsed(record.lastSeenAt().atZone(java.time.ZoneOffset.UTC).toLocalDateTime())
+                            .active(true)
+                            .build();
+                    String userId = record.ownerUserPublicId().toString();
+                    return projectToRedis(deviceToken, USER_TOKENS_PREFIX + userId,
+                            TOKEN_OWNER_PREFIX + record.providerToken(), userId,
+                            registrationRequest(record)).thenReturn(1);
+                    });
+            if (records.size() < limit) {
+                return projected;
+            }
+            DeviceTokenRecord last = records.get(records.size() - 1);
+            return projected.concatWith(rebuildRedisProjectionPage(last.lastSeenAt(), last.publicId(), limit));
+        });
+    }
+
+    private Mono<Boolean> projectToRedis(DeviceToken deviceToken, String userKey, String ownerKey,
+                                         String userId, RegisterTokenRequest request) {
+        return redisNotificationStore.registerDeviceToken(deviceToken, userKey, ownerKey, userId, request);
+    }
+
+    private static RegisterTokenRequest registrationRequest(DeviceTokenRecord record) {
+        RegisterTokenRequest request = new RegisterTokenRequest();
+        request.setDeviceToken(record.providerToken());
+        request.setPlatform(record.platform());
+        request.setUserId(record.ownerUserPublicId().toString());
+        return request;
     }
 
     public String maskToken(String token) {
