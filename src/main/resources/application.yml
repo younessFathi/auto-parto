@@ -61,6 +61,7 @@ auto:
           storage-reconciliation:
             enabled: ${APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_ENABLED:false}
             max-files: ${APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_MAX_FILES:1000}
+            delete-orphans: ${APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_DELETE_ORPHANS:false}
             timeout: ${APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_TIMEOUT:30s}
         identity:
           enabled: ${APP_POSTGRES_IDENTITY_ENABLED:false}
@@ -100,6 +101,9 @@ auto:
     storage:
       provider: ${APP_FILE_STORAGE_PROVIDER:local}
       max-upload-bytes: ${APP_FILE_STORAGE_MAX_UPLOAD_BYTES:10485760}
+      max-image-width: ${APP_FILE_STORAGE_MAX_IMAGE_WIDTH:10000}
+      max-image-height: ${APP_FILE_STORAGE_MAX_IMAGE_HEIGHT:10000}
+      max-active-files-per-owner: ${APP_FILE_STORAGE_MAX_ACTIVE_FILES_PER_OWNER:50}
       local:
         root: ${APP_FILE_STORAGE_LOCAL_ROOT:${auto.parto.images.uploads}}
       s3:

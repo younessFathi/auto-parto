@@ -48,4 +48,16 @@ class LocalFileStorageTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("cannot be used");
     }
+
+    @Test
+    void listsBoundedObjectKeysAndSkipsStagingFiles() throws Exception {
+        LocalFileStorage storage = new LocalFileStorage(root.toString(), "test");
+        Files.createDirectories(root.resolve("objects"));
+        Files.createDirectories(root.resolve(".staging/job"));
+        Files.writeString(root.resolve("objects/a"), "a");
+        Files.writeString(root.resolve("objects/b"), "b");
+        Files.writeString(root.resolve(".staging/job/temp"), "temp");
+
+        assertThat(storage.listObjectKeys(1).collectList().block()).containsExactly("objects/a");
+    }
 }

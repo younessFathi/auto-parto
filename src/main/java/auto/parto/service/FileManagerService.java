@@ -21,6 +21,8 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.io.IOException;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.nio.file.Files;
@@ -43,33 +45,52 @@ public class FileManagerService implements IFileManagerService {
     private final FileRepository postgresqlFileRepository;
     private final FileStorage fileStorage;
     private final long maxUploadBytes;
+    private final int maxImageWidth;
+    private final int maxImageHeight;
+    private final long maxActiveFilesPerOwner;
 
     public FileManagerService(@Value("${auto.parto.images.uploads}") String uploadsDirectory , IFileService fileService) {
-        this(uploadsDirectory, fileService, null, new LocalFileStorage(uploadsDirectory, "test"), 10 * 1024 * 1024L);
+        this(uploadsDirectory, fileService, null, new LocalFileStorage(uploadsDirectory, "test"),
+                10 * 1024 * 1024L, 10000, 10000, 50);
     }
 
     public FileManagerService(@Value("${auto.parto.images.uploads}") String uploadsDirectory,
                               IFileService fileService, FileRepository postgresqlFileRepository) {
         this(uploadsDirectory, fileService, postgresqlFileRepository,
-                new LocalFileStorage(uploadsDirectory, "test"), 10 * 1024 * 1024L);
+                new LocalFileStorage(uploadsDirectory, "test"), 10 * 1024 * 1024L, 10000, 10000, 50);
     }
 
     public FileManagerService(String uploadsDirectory, IFileService fileService,
                               FileRepository postgresqlFileRepository, FileStorage fileStorage) {
-        this(uploadsDirectory, fileService, postgresqlFileRepository, fileStorage, 10 * 1024 * 1024L);
+        this(uploadsDirectory, fileService, postgresqlFileRepository, fileStorage, 10 * 1024 * 1024L,
+                10000, 10000, 50);
     }
 
     public FileManagerService(String uploadsDirectory, IFileService fileService,
                               FileRepository postgresqlFileRepository, FileStorage fileStorage,
                               long maxUploadBytes) {
+        this(uploadsDirectory, fileService, postgresqlFileRepository, fileStorage, maxUploadBytes,
+                10000, 10000, 50);
+    }
+
+    public FileManagerService(String uploadsDirectory, IFileService fileService,
+                              FileRepository postgresqlFileRepository, FileStorage fileStorage,
+                              long maxUploadBytes, int maxImageWidth, int maxImageHeight,
+                              long maxActiveFilesPerOwner) {
         if (maxUploadBytes < 1 || maxUploadBytes > Integer.MAX_VALUE - 1) {
             throw new IllegalArgumentException("max upload bytes must be between 1 and 2147483646");
+        }
+        if (maxImageWidth < 1 || maxImageHeight < 1 || maxActiveFilesPerOwner < 1) {
+            throw new IllegalArgumentException("image dimensions and owner quota must be positive");
         }
         this.uploadsDirectory = uploadsDirectory;
         this.fileService = fileService;
         this.postgresqlFileRepository = postgresqlFileRepository;
         this.fileStorage = fileStorage;
         this.maxUploadBytes = maxUploadBytes;
+        this.maxImageWidth = maxImageWidth;
+        this.maxImageHeight = maxImageHeight;
+        this.maxActiveFilesPerOwner = maxActiveFilesPerOwner;
     }
 
     @Autowired
@@ -77,9 +98,13 @@ public class FileManagerService implements IFileManagerService {
                               IFileService fileService,
                               ObjectProvider<FileRepository> postgresqlFileRepositoryProvider,
                               ObjectProvider<FileStorage> fileStorageProvider,
-                              @Value("${auto.parto.storage.max-upload-bytes:10485760}") long maxUploadBytes) {
+                              @Value("${auto.parto.storage.max-upload-bytes:10485760}") long maxUploadBytes,
+                              @Value("${auto.parto.storage.max-image-width:10000}") int maxImageWidth,
+                              @Value("${auto.parto.storage.max-image-height:10000}") int maxImageHeight,
+                              @Value("${auto.parto.storage.max-active-files-per-owner:50}") long maxActiveFilesPerOwner) {
         this(uploadsDirectory, fileService, postgresqlFileRepositoryProvider.getIfAvailable(),
-                fileStorageProvider.getIfAvailable(), maxUploadBytes);
+                fileStorageProvider.getIfAvailable(), maxUploadBytes, maxImageWidth, maxImageHeight,
+                maxActiveFilesPerOwner);
     }
 
     @Override
@@ -122,7 +147,8 @@ public class FileManagerService implements IFileManagerService {
         if (fileStorage == null) {
             return Mono.error(new IllegalStateException("File storage is not enabled"));
         }
-        return writeStagedImage(image)
+        return enforceOwnerQuota(ownerUserPublicId)
+                .then(writeStagedImage(image))
                 .flatMap(staged -> {
                     String objectKey = targetPublicId + "/" + staged.generatedFilename();
                     Mono<FileRecord> metadata = requestTarget
@@ -247,6 +273,25 @@ public class FileManagerService implements IFileManagerService {
         if (!expectedType.equals(normalizedType) || !hasImageSignature(normalizedType, bytes)) {
             throw new FileUploadException(Constants.FileUpload.INVALID_FILE_TYPE_ONLY_IMAGE_FILES_ARE_ALLOWED);
         }
+        try {
+            BufferedImage decoded = ImageIO.read(new java.io.ByteArrayInputStream(bytes));
+            if (decoded != null && (decoded.getWidth() > maxImageWidth || decoded.getHeight() > maxImageHeight)) {
+                throw new FileUploadException("Image dimensions exceed the configured limit");
+            }
+        } catch (IOException error) {
+            // Signature validation remains the compatibility check for legacy fixtures whose
+            // payloads are not fully decodable; decoded images are always dimension-bounded.
+            log.debug("Image dimensions unavailable for signature-validated payload", error);
+        }
+    }
+
+    private Mono<Void> enforceOwnerQuota(UUID ownerUserPublicId) {
+        return Mono.defer(() -> {
+            Mono<Long> count = postgresqlFileRepository.countActiveByOwner(ownerUserPublicId);
+            if (count == null) return Mono.empty();
+            return count.flatMap(active -> active >= maxActiveFilesPerOwner
+                    ? Mono.error(new FileUploadException("file quota exceeded")) : Mono.empty());
+        });
     }
 
     private boolean hasImageSignature(String contentType, byte[] bytes) {

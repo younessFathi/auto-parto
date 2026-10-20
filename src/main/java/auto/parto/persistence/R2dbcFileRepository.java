@@ -133,6 +133,18 @@ public class R2dbcFileRepository implements FileRepository {
                 .map((row, metadata) -> row.get("active_count", Long.class)).one();
     }
 
+    @Override
+    public Mono<Long> countActiveByOwner(UUID ownerUserPublicId) {
+        requirePublicId(ownerUserPublicId, "ownerUserPublicId");
+        return databaseClient.sql("""
+                        SELECT COUNT(*) AS active_count FROM files file
+                        JOIN app_users owner ON owner.id = file.owner_user_id
+                        WHERE owner.public_id = :ownerPublicId AND file.status = 'ACTIVE'
+                        """)
+                .bind("ownerPublicId", ownerUserPublicId)
+                .map((row, metadata) -> row.get("active_count", Long.class)).one();
+    }
+
     private Flux<FileRecord> findForTarget(UUID targetPublicId, String targetColumn, int limit) {
         requirePublicId(targetPublicId, "targetPublicId");
         requireLimit(limit);

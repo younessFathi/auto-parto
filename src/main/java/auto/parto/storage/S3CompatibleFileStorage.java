@@ -18,11 +18,14 @@ import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.ArrayList;
+import java.util.List;
 
 @Component
 @ConditionalOnProperty(prefix = "auto.parto.storage", name = "provider", havingValue = "s3")
@@ -86,6 +89,25 @@ public final class S3CompatibleFileStorage implements FileStorage {
     public Mono<Void> delete(String objectKey) {
         DeleteObjectRequest request = DeleteObjectRequest.builder().bucket(bucket).key(requireText(objectKey, "objectKey")).build();
         return Mono.fromFuture(client.deleteObject(request)).then();
+    }
+
+    @Override
+    public Flux<String> listObjectKeys(int limit) {
+        if (limit < 1 || limit > 1000) {
+            return Flux.error(new IllegalArgumentException("limit must be between 1 and 1000"));
+        }
+        return listPage(null, limit, new ArrayList<>()).flatMapMany(Flux::fromIterable);
+    }
+
+    private Mono<List<String>> listPage(String continuationToken, int limit, List<String> keys) {
+        ListObjectsV2Request.Builder builder = ListObjectsV2Request.builder().bucket(bucket).maxKeys(limit);
+        if (continuationToken != null) builder.continuationToken(continuationToken);
+        return Mono.fromFuture(client.listObjectsV2(builder.build())).flatMap(response -> {
+            response.contents().stream().map(software.amazon.awssdk.services.s3.model.S3Object::key)
+                    .limit(limit - keys.size()).forEach(keys::add);
+            if (keys.size() >= limit || !response.isTruncated()) return Mono.just(keys);
+            return listPage(response.nextContinuationToken(), limit, keys);
+        });
     }
 
     @PreDestroy

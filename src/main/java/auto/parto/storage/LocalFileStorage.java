@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.stream.Stream;
 
 @Component
 @ConditionalOnProperty(prefix = "auto.parto.storage", name = "provider", havingValue = "local", matchIfMissing = true)
@@ -66,6 +67,21 @@ public final class LocalFileStorage implements FileStorage {
             Files.deleteIfExists(safePath(objectKey));
             return (Void) null;
         }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    @Override
+    public Flux<String> listObjectKeys(int limit) {
+        if (limit < 1 || limit > 1000) {
+            return Flux.error(new IllegalArgumentException("limit must be between 1 and 1000"));
+        }
+        return Flux.usingWhen(Mono.fromCallable(() -> Files.exists(root) ? Files.walk(root) : Stream.<Path>empty())
+                        .subscribeOn(Schedulers.boundedElastic()),
+                paths -> Flux.fromStream(paths.filter(Files::isRegularFile)
+                        .map(root::relativize)
+                        .map(Path::toString)
+                        .filter(key -> !key.startsWith(".staging/"))
+                        .limit(limit)),
+                stream -> Mono.fromRunnable(stream::close));
     }
 
     private Path safePath(String objectKey) {

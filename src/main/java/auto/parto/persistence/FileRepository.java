@@ -24,6 +24,10 @@ public interface FileRepository {
 
     Mono<Long> countActive();
 
+    default Mono<Long> countActiveByOwner(UUID ownerUserPublicId) {
+        return Mono.empty();
+    }
+
     Mono<FileRecord> findByPublicId(UUID filePublicId);
 
     Mono<FileRecord> activate(UUID filePublicId, UUID ownerUserPublicId);

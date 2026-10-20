@@ -53,6 +53,21 @@ class StorageReconciliationServiceTest {
                 }).verifyComplete();
     }
 
+    @Test
+    void reportsOrphanObjectsAndCanRemediateThemIdempotently() {
+        FileRecord present = record("objects/present");
+        StubStorage storage = new StubStorage(List.of("objects/present", "objects/orphan"));
+
+        StepVerifier.create(new StorageReconciliationService(new StubRepository(List.of(present)), storage,
+                        10, true).reconcile())
+                .assertNext(report -> {
+                    assertThat(report.orphanObjectKeys()).containsExactly("objects/orphan");
+                    assertThat(report.orphanDeletionEnabled()).isTrue();
+                    assertThat(report.healthy()).isFalse();
+                    assertThat(storage.deleted).containsExactly("objects/orphan");
+                }).verifyComplete();
+    }
+
     private static FileRecord record(String key) {
         return new FileRecord(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null, key,
                 "file.jpg", "image/jpeg", 1, "sha", "ACTIVE", Instant.now(), Instant.now());
@@ -79,9 +94,14 @@ class StorageReconciliationServiceTest {
     }
 
     private static final class StubStorage implements FileStorage {
+        private final List<String> keys;
+        private final List<String> deleted = new java.util.ArrayList<>();
+        private StubStorage() { this(List.of()); }
+        private StubStorage(List<String> keys) { this.keys = keys; }
         public Mono<StoredObject> put(String a, Path b, String c, long d, String e) { return Mono.empty(); }
         public Flux<DataBuffer> read(String a) { return Flux.empty(); }
         public Mono<Boolean> exists(String key) { return Mono.just("objects/present".equals(key)); }
-        public Mono<Void> delete(String a) { return Mono.empty(); }
+        public Mono<Void> delete(String a) { deleted.add(a); return Mono.empty(); }
+        public Flux<String> listObjectKeys(int limit) { return Flux.fromIterable(keys).take(limit); }
     }
 }

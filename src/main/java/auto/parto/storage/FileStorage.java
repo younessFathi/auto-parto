@@ -16,4 +16,12 @@ public interface FileStorage {
     Mono<Boolean> exists(String objectKey);
 
     Mono<Void> delete(String objectKey);
+
+    /** Returns at most {@code limit} object keys for a bounded reconciliation scan. */
+    default Flux<String> listObjectKeys(int limit) {
+        if (limit < 1 || limit > 1000) {
+            return Flux.error(new IllegalArgumentException("limit must be between 1 and 1000"));
+        }
+        return Flux.empty();
+    }
 }
