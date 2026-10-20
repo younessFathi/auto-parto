@@ -6,6 +6,8 @@ The upload boundary validates the extension, declared MIME type, signature, succ
 
 Pending metadata is a bounded quota reservation. The startup reconciliation pass treats records older than `APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_PENDING_TIMEOUT` (default `1h`) as abandoned, processes at most the configured reconciliation bound per run, atomically tombstones each still-pending record, and idempotently deletes its provider object. A concurrent finalization wins the state transition and is never cleaned as stale. A sentinel result keeps readiness unhealthy when more stale records remain than the bound, so later runs continue recovery without unbounded work.
 
+PostgreSQL uses the forward V11 `files_pending_recovery_idx` partial index on `(created_at, public_id)` for the stale pending keyset scan.
+
 ## Reconciliation
 
 When the PostgreSQL cutover storage gate is enabled, reconciliation scans at most `APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_MAX_FILES` active metadata rows and the same bounded number of provider keys, requesting one sentinel key to detect provider overflow. Missing objects, orphan keys, and either scan overflow keep readiness unhealthy; partial scans are never deleted. The readiness health details include bounded missing/orphan keys, capacity state, and whether orphan deletion is enabled. The default policy is report-only; set `APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_DELETE_ORPHANS=true` only for an operator-approved cleanup deployment. Cleanup is bounded, sequential, and safe to repeat because provider deletion is idempotent.

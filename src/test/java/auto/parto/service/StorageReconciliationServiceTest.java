@@ -100,6 +100,30 @@ class StorageReconciliationServiceTest {
         assertThat(storage.deleted).containsExactly("objects/stale");
     }
 
+    @Test
+    void failsClosedAndProcessesOnlyBoundedStalePendingReservations() {
+        List<FileRecord> stale = List.of(
+                pendingRecord("objects/stale-1"), pendingRecord("objects/stale-2"));
+        StubRepository repository = new StubRepository(List.of(), 0, stale);
+        StubStorage storage = new StubStorage();
+
+        StepVerifier.create(new StorageReconciliationService(repository, storage, 1, false,
+                        Duration.ofHours(1)).reconcile())
+                .assertNext(report -> {
+                    assertThat(report.capacityExceeded()).isTrue();
+                    assertThat(report.healthy()).isFalse();
+                }).verifyComplete();
+
+        assertThat(repository.tombstoned).hasSize(1);
+        assertThat(storage.deleted).hasSize(1);
+    }
+
+    private static FileRecord pendingRecord(String key) {
+        return new FileRecord(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null,
+                key, "file.jpg", "image/jpeg", 1, "sha", "PENDING",
+                Instant.now().minus(Duration.ofHours(2)), Instant.now().minus(Duration.ofHours(2)));
+    }
+
     private static FileRecord record(String key) {
         return new FileRecord(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null, key,
                 "file.jpg", "image/jpeg", 1, "sha", "ACTIVE", Instant.now(), Instant.now());

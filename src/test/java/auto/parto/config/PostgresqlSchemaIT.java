@@ -33,7 +33,7 @@ class PostgresqlSchemaIT {
                 .locations("classpath:db/migration")
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(10);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(11);
         assertThat(flyway.migrate().migrationsExecuted).isZero();
 
         try (Connection connection = POSTGRES.createConnection("")) {
@@ -72,6 +72,7 @@ class PostgresqlSchemaIT {
             assertThat(indexExists(connection, "part_listings", "part_listings_matching_vehicle_idx")).isTrue();
             assertThat(indexExists(connection, "part_listings", "part_listings_matching_category_condition_idx")).isTrue();
             assertThat(indexExists(connection, "part_listings", "part_listings_matching_full_idx")).isTrue();
+            assertThat(indexExists(connection, "files", "files_pending_recovery_idx")).isTrue();
 
             assertThat(constraintExists(connection, "offers", "offers_target_chk")).isTrue();
             assertThat(constraintExists(connection, "offers", "offers_request_owner_fk")).isTrue();
@@ -150,6 +151,11 @@ class PostgresqlSchemaIT {
             assertThat(explainUsesIndex(connection,
                     "SELECT * FROM files WHERE owner_user_id = 1 AND status = 'ACTIVE'"))
                     .contains("files_owner_status_idx");
+            assertThat(explainUsesIndex(connection,
+                    "SELECT * FROM files WHERE status = 'PENDING' "
+                            + "AND created_at < CURRENT_TIMESTAMP "
+                            + "ORDER BY created_at, public_id LIMIT 1001"))
+                    .contains("files_pending_recovery_idx");
             assertThat(explainUsesIndex(connection,
                     "SELECT * FROM wallet_ledger WHERE wallet_id = 1 ORDER BY created_at DESC"))
                     .contains("wallet_ledger_wallet_created_idx");

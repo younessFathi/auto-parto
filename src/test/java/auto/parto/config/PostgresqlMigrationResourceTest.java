@@ -115,6 +115,15 @@ class PostgresqlMigrationResourceTest {
     }
 
     @Test
+    void pendingFileRecoveryMigrationIndexesStaleRowsByKeysetOrder() throws IOException {
+        String sql = readResource("/db/migration/V11__add_pending_file_recovery_index.sql");
+
+        assertThat(sql).contains("files_pending_recovery_idx")
+                .contains("ON files (created_at, public_id)")
+                .contains("WHERE status = 'PENDING'");
+    }
+
+    @Test
     void partListingStatusMigrationSeparatesLifecycleStates() throws IOException {
         String sql = readResource("/db/migration/V6__separate_part_listing_statuses.sql");
 
