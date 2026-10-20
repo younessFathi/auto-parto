@@ -51,6 +51,26 @@ class StorageReconciliationStartupGateTest {
         assertThat(gate.health().block().getDetails()).containsEntry("reason", "storage reconciliation failed");
     }
 
+    @Test
+    void exposesOrphanDetailsWhenReconciliationFindsDrift() {
+        FileRecord record = new FileRecord(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null,
+                "objects/active", "file.jpg", "image/jpeg", 1, "sha", "ACTIVE", Instant.now(), Instant.now());
+        StorageReconciliationService service = new StorageReconciliationService(
+                new Records(List.of(record)), new MissingStorage() {
+                    @Override
+                    public Mono<Boolean> exists(String key) { return Mono.just(true); }
+                    @Override
+                    public Flux<String> listObjectKeys(int limit) { return Flux.just("objects/active", "objects/orphan"); }
+                }, 10);
+        StorageReconciliationStartupGate gate = new StorageReconciliationStartupGate(service, Duration.ofSeconds(1));
+        gate.onApplicationEvent(startedEvent());
+        try { Thread.sleep(100); } catch (InterruptedException exception) { Thread.currentThread().interrupt(); }
+
+        assertThat(gate.health().block().getDetails())
+                .containsEntry("orphanObjectKeys", List.of("objects/orphan"))
+                .containsEntry("orphanDeletionEnabled", false);
+    }
+
     private static ApplicationStartedEvent startedEvent() {
         return new ApplicationStartedEvent(new SpringApplication(), new String[0], new GenericApplicationContext(), Duration.ZERO);
     }

@@ -41,8 +41,10 @@ public final class StorageReconciliationStartupGate
         reconciliation.reconcile()
                 .timeout(timeout)
                 .subscribe(report -> state.set(report.healthy()
-                                ? Health.up().withDetail("checkedFiles", report.checkedFiles()).build()
+                        ? Health.up().withDetail("checkedFiles", report.checkedFiles()).build()
                                 : Health.down().withDetail("missingObjectKeys", report.missingObjectKeys())
+                                .withDetail("orphanObjectKeys", report.orphanObjectKeys())
+                                .withDetail("orphanDeletionEnabled", report.orphanDeletionEnabled())
                                 .withDetail("capacityExceeded", report.capacityExceeded()).build()),
                         error -> {
                             state.set(Health.down().withDetail("reason", "storage reconciliation failed").build());

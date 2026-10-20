@@ -99,6 +99,23 @@ public final class S3CompatibleFileStorage implements FileStorage {
         return listPage(null, limit, new ArrayList<>()).flatMapMany(Flux::fromIterable);
     }
 
+    @Override
+    public Mono<ObjectKeyScan> scanObjectKeys(int limit) {
+        if (limit < 1 || limit > 1000) {
+            return Mono.error(new IllegalArgumentException("limit must be between 1 and 1000"));
+        }
+        int pageSize = Math.min(limit + 1, 1000);
+        ListObjectsV2Request request = ListObjectsV2Request.builder().bucket(bucket).maxKeys(pageSize).build();
+        return Mono.fromFuture(client.listObjectsV2(request))
+                .map(response -> {
+                    List<String> keys = response.contents().stream()
+                            .map(software.amazon.awssdk.services.s3.model.S3Object::key)
+                            .limit(limit)
+                            .toList();
+                    return new ObjectKeyScan(keys, response.isTruncated() || response.contents().size() > limit);
+                });
+    }
+
     private Mono<List<String>> listPage(String continuationToken, int limit, List<String> keys) {
         ListObjectsV2Request.Builder builder = ListObjectsV2Request.builder().bucket(bucket).maxKeys(limit);
         if (continuationToken != null) builder.continuationToken(continuationToken);

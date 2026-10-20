@@ -68,6 +68,20 @@ class StorageReconciliationServiceTest {
                 }).verifyComplete();
     }
 
+    @Test
+    void failsClosedWhenProviderScanIsTruncated() {
+        FileRecord present = record("objects/present");
+        StubStorage storage = new StubStorage(List.of("objects/present", "objects/orphan"));
+
+        StepVerifier.create(new StorageReconciliationService(new StubRepository(List.of(present)), storage, 1).reconcile())
+                .assertNext(report -> {
+                    assertThat(report.capacityExceeded()).isTrue();
+                    assertThat(report.healthy()).isFalse();
+                    assertThat(report.orphanObjectKeys()).containsExactly("objects/present");
+                    assertThat(storage.deleted).isEmpty();
+                }).verifyComplete();
+    }
+
     private static FileRecord record(String key) {
         return new FileRecord(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null, key,
                 "file.jpg", "image/jpeg", 1, "sha", "ACTIVE", Instant.now(), Instant.now());

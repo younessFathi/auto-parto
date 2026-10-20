@@ -13,6 +13,9 @@ import reactor.core.publisher.Flux;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import javax.imageio.ImageIO;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -47,7 +50,7 @@ class FileManagerServicePostgresqlTest {
         Path stored = Files.list(uploadRoot.resolve(request.toString())).findFirst().orElseThrow();
         assertThat(Files.readAllBytes(stored)).startsWith((byte) 0xff, (byte) 0xd8, (byte) 0xff);
         verify(repository).createForRequest(eq(owner), eq(request), contains(request.toString()), eq("photo.jpg"),
-                eq("image/jpeg"), eq(8L), anyString());
+                eq("image/jpeg"), anyLong(), anyString());
     }
 
     @Test
@@ -94,7 +97,7 @@ class FileManagerServicePostgresqlTest {
         assertThat(service.saveForListing(imagePart("photo.jpg", "image/jpeg", "hello"), owner, listing).block())
                 .isEqualTo(file.toString());
         verify(repository).createForListing(eq(owner), eq(listing), contains(listing.toString()), eq("photo.jpg"),
-                eq("image/jpeg"), eq(8L), anyString());
+                eq("image/jpeg"), anyLong(), anyString());
     }
 
     @Test
@@ -105,6 +108,17 @@ class FileManagerServicePostgresqlTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service
                 .saveForRequest(imagePart("photo.jpg", "image/jpeg", "plain text"), UUID.randomUUID(), UUID.randomUUID())
                 .block()).isInstanceOf(auto.parto.exception.FileUploadException.class);
+    }
+
+    @Test
+    void rejectsMalformedContentWithAnImageSignature() {
+        FileManagerService service = new FileManagerService(uploadRoot.toString(), mock(IFileService.class),
+                mock(FileRepository.class), new auto.parto.storage.LocalFileStorage(uploadRoot.toString(), "test"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service
+                .saveForRequest(imagePart("photo.jpg", "image/jpeg", "malformed-signature"),
+                        UUID.randomUUID(), UUID.randomUUID()).block())
+                .isInstanceOf(auto.parto.exception.FileUploadException.class);
     }
 
     @Test
@@ -133,9 +147,21 @@ class FileManagerServicePostgresqlTest {
         headers.setContentType(MediaType.parseMediaType(contentType));
         when(image.filename()).thenReturn(filename);
         when(image.headers()).thenReturn(headers);
-        byte[] bytes = content.equals("hello")
-                ? new byte[]{(byte) 0xff, (byte) 0xd8, (byte) 0xff, 'h', 'e', 'l', 'l', 'o'}
-                : content.getBytes();
+        byte[] bytes;
+        if (content.equals("hello")) {
+            try {
+                BufferedImage validImage = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB);
+                ByteArrayOutputStream output = new ByteArrayOutputStream();
+                ImageIO.write(validImage, "jpg", output);
+                bytes = output.toByteArray();
+            } catch (java.io.IOException exception) {
+                throw new IllegalStateException(exception);
+            }
+        } else if (content.equals("malformed-signature")) {
+            bytes = new byte[]{(byte) 0xff, (byte) 0xd8, (byte) 0xff, 'b', 'a', 'd'};
+        } else {
+            bytes = content.getBytes();
+        }
         when(image.content()).thenReturn(Flux.just(new DefaultDataBufferFactory().wrap(bytes)));
         return image;
     }

@@ -50,17 +50,27 @@ public final class StorageReconciliationService {
                     .concatMap(record -> fileStorage.exists(record.objectKey())
                             .map(exists -> new CheckedFile(record, exists)))
                     .collectList();
-            Mono<List<String>> objects = fileStorage.listObjectKeys(maxFiles).collectList();
+            Mono<FileStorage.ObjectKeyScan> objects = fileStorage.scanObjectKeys(maxFiles);
             return Mono.zip(checked, objects).flatMap(result -> {
                 List<CheckedFile> checkedFiles = result.getT1();
                 Set<String> activeKeys = checkedFiles.stream().map(file -> file.record().objectKey()).collect(java.util.stream.Collectors.toSet());
-                List<String> orphans = result.getT2().stream().filter(key -> !activeKeys.contains(key)).toList();
+                FileStorage.ObjectKeyScan scan = result.getT2();
+                if (scan.truncated()) {
+                    return Mono.just(new StorageReconciliationReport(checkedFiles.size(),
+                            missingKeys(checkedFiles), scan.keys(), true, deleteOrphans));
+                }
+                List<String> orphans = scan.keys().stream().filter(key -> !activeKeys.contains(key)).toList();
                 Mono<Void> remediation = deleteOrphans
                         ? Flux.fromIterable(orphans).concatMap(fileStorage::delete).then()
                         : Mono.empty();
                 return remediation.thenReturn(report(checkedFiles, orphans, false));
             });
         });
+    }
+
+    private static List<String> missingKeys(List<CheckedFile> checkedFiles) {
+        return checkedFiles.stream().filter(file -> !file.exists())
+                .map(file -> file.record().objectKey()).toList();
     }
 
     private StorageReconciliationReport report(List<CheckedFile> checkedFiles, List<String> orphans,

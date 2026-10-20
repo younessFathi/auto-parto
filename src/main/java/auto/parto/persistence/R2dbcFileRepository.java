@@ -40,7 +40,15 @@ public class R2dbcFileRepository implements FileRepository {
                                              String originalFilename, String contentType, long byteSize,
                                              String checksum) {
         return create(ownerUserPublicId, requestPublicId, null, objectKey, originalFilename, contentType,
-                byteSize, checksum);
+                byteSize, checksum, 1000);
+    }
+
+    @Override
+    public Mono<FileRecord> createForRequest(UUID ownerUserPublicId, UUID requestPublicId, String objectKey,
+                                             String originalFilename, String contentType, long byteSize,
+                                             String checksum, long activeFileQuota) {
+        return create(ownerUserPublicId, requestPublicId, null, objectKey, originalFilename, contentType,
+                byteSize, checksum, activeFileQuota);
     }
 
     @Override
@@ -48,12 +56,20 @@ public class R2dbcFileRepository implements FileRepository {
                                              String originalFilename, String contentType, long byteSize,
                                              String checksum) {
         return create(ownerUserPublicId, null, listingPublicId, objectKey, originalFilename, contentType,
-                byteSize, checksum);
+                byteSize, checksum, 1000);
+    }
+
+    @Override
+    public Mono<FileRecord> createForListing(UUID ownerUserPublicId, UUID listingPublicId, String objectKey,
+                                             String originalFilename, String contentType, long byteSize,
+                                             String checksum, long activeFileQuota) {
+        return create(ownerUserPublicId, null, listingPublicId, objectKey, originalFilename, contentType,
+                byteSize, checksum, activeFileQuota);
     }
 
     private Mono<FileRecord> create(UUID ownerPublicId, UUID requestPublicId, UUID listingPublicId,
                                     String objectKey, String originalFilename, String contentType, long byteSize,
-                                    String checksum) {
+                                    String checksum, long activeFileQuota) {
         requirePublicId(ownerPublicId, "ownerUserPublicId");
         if ((requestPublicId == null) == (listingPublicId == null)) {
             throw new IllegalArgumentException("exactly one file target is required");
@@ -62,6 +78,9 @@ public class R2dbcFileRepository implements FileRepository {
         requireText(originalFilename, "originalFilename");
         requireText(contentType, "contentType");
         if (byteSize < 0) throw new IllegalArgumentException("byteSize cannot be negative");
+        if (activeFileQuota < 1 || activeFileQuota > 1000) {
+            throw new IllegalArgumentException("activeFileQuota must be between 1 and 1000");
+        }
         String targetColumn = requestPublicId != null ? "part_request_id" : "part_listing_id";
         String targetSql = requestPublicId != null
                 ? "SELECT request.id FROM part_requests request "
@@ -80,14 +99,20 @@ public class R2dbcFileRepository implements FileRepository {
                 WHERE owner.public_id = :ownerPublicId AND owner.status = 'ACTIVE'
                 RETURNING public_id
                 """.formatted(targetColumn, targetSql);
-        return databaseClient.sql(sql)
+        return databaseClient.sql("SELECT pg_advisory_xact_lock(hashtextextended(CAST(:ownerPublicId AS text), 0))")
+                .bind("ownerPublicId", ownerPublicId).fetch().all().then(
+                databaseClient.sql(sql.replace("WHERE owner.public_id = :ownerPublicId AND owner.status = 'ACTIVE'",
+                                "WHERE owner.public_id = :ownerPublicId AND owner.status = 'ACTIVE'\n"
+                                        + "  AND (SELECT COUNT(*) FROM files existing WHERE existing.owner_user_id = owner.id"
+                                        + " AND existing.status <> 'TOMBSTONED') < :activeFileQuota"))
                 .bind("targetPublicId", requestPublicId != null ? requestPublicId : listingPublicId)
                 .bind("ownerPublicId", ownerPublicId).bind("objectKey", objectKey)
                 .bind("originalFilename", originalFilename).bind("contentType", contentType)
                 .bind("byteSize", byteSize)
+                .bind("activeFileQuota", activeFileQuota)
                 .bind("checksum", checksum == null ? "" : checksum)
                 .map((row, metadata) -> row.get("public_id", UUID.class)).one()
-                .flatMap(this::findByPublicId).as(transactions::transactional);
+                .flatMap(this::findByPublicId)).as(transactions::transactional);
     }
 
     @Override
@@ -166,19 +191,34 @@ public class R2dbcFileRepository implements FileRepository {
                     if (!"PENDING".equals(existing.status())) {
                         return Mono.empty();
                     }
-                    return insertAudit(filePublicId, ownerUserPublicId)
-                            .flatMap(auditId -> databaseClient.sql("""
-                                            UPDATE files SET status = 'ACTIVE', last_audit_record_id = :auditId
-                                            WHERE public_id = :filePublicId
-                                              AND owner_user_id = (SELECT id FROM app_users WHERE public_id = :ownerPublicId)
-                                              AND status = 'PENDING'
-                                            RETURNING public_id
-                                            """)
-                                    .bind("auditId", auditId).bind("filePublicId", filePublicId)
-                                    .bind("ownerPublicId", ownerUserPublicId)
-                                    .map((row, metadata) -> row.get("public_id", UUID.class)).one())
-                            .flatMap(this::findByPublicId);
+                    return atomicActivate(filePublicId, ownerUserPublicId)
+                            .flatMap(this::findByPublicId)
+                            .switchIfEmpty(findByPublicId(filePublicId)
+                                    .filter(record -> "ACTIVE".equals(record.status())
+                                            && ownerUserPublicId.equals(record.ownerUserPublicId())));
                 }));
+    }
+
+    private Mono<UUID> atomicActivate(UUID filePublicId, UUID ownerUserPublicId) {
+        return databaseClient.sql("""
+                WITH target AS (
+                    SELECT id FROM files
+                    WHERE public_id = :filePublicId
+                      AND owner_user_id = (SELECT id FROM app_users WHERE public_id = :ownerPublicId)
+                      AND status = 'PENDING'
+                    FOR UPDATE
+                ), audit AS (
+                    INSERT INTO audit_records (public_id, action, entity_type, entity_id)
+                    SELECT gen_random_uuid(), 'UPDATE', 'files', id FROM target
+                    RETURNING id
+                ), updated AS (
+                    UPDATE files SET status = 'ACTIVE', last_audit_record_id = (SELECT id FROM audit)
+                    WHERE id = (SELECT id FROM target)
+                    RETURNING public_id
+                )
+                SELECT public_id FROM updated
+                """).bind("filePublicId", filePublicId).bind("ownerPublicId", ownerUserPublicId)
+                .map((row, metadata) -> row.get("public_id", UUID.class)).one();
     }
 
     @Override

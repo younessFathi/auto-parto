@@ -11,8 +11,22 @@ public interface FileRepository {
     Mono<FileRecord> createForRequest(UUID ownerUserPublicId, UUID requestPublicId, String objectKey,
                                       String originalFilename, String contentType, long byteSize, String checksum);
 
+    default Mono<FileRecord> createForRequest(UUID ownerUserPublicId, UUID requestPublicId, String objectKey,
+                                              String originalFilename, String contentType, long byteSize,
+                                              String checksum, long activeFileQuota) {
+        return createForRequest(ownerUserPublicId, requestPublicId, objectKey, originalFilename, contentType,
+                byteSize, checksum);
+    }
+
     Mono<FileRecord> createForListing(UUID ownerUserPublicId, UUID listingPublicId, String objectKey,
                                       String originalFilename, String contentType, long byteSize, String checksum);
+
+    default Mono<FileRecord> createForListing(UUID ownerUserPublicId, UUID listingPublicId, String objectKey,
+                                              String originalFilename, String contentType, long byteSize,
+                                              String checksum, long activeFileQuota) {
+        return createForListing(ownerUserPublicId, listingPublicId, objectKey, originalFilename, contentType,
+                byteSize, checksum);
+    }
 
     Flux<FileRecord> findByRequest(UUID requestPublicId, int limit);
 

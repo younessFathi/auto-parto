@@ -84,6 +84,25 @@ public final class LocalFileStorage implements FileStorage {
                 stream -> Mono.fromRunnable(stream::close));
     }
 
+    @Override
+    public Mono<ObjectKeyScan> scanObjectKeys(int limit) {
+        if (limit < 1 || limit > 1000) {
+            return Mono.error(new IllegalArgumentException("limit must be between 1 and 1000"));
+        }
+        return Mono.fromCallable(() -> {
+            if (!Files.exists(root)) return new ObjectKeyScan(java.util.List.of(), false);
+            try (Stream<Path> paths = Files.walk(root)) {
+                java.util.List<String> keys = paths.filter(Files::isRegularFile)
+                        .map(root::relativize)
+                        .map(Path::toString)
+                        .filter(key -> !key.startsWith(".staging/"))
+                        .limit(limit + 1)
+                        .toList();
+                return new ObjectKeyScan(keys.stream().limit(limit).toList(), keys.size() > limit);
+            }
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
     private Path safePath(String objectKey) {
         if (objectKey == null || objectKey.isBlank() || objectKey.contains("\\")
                 || objectKey.startsWith("/") || objectKey.contains("..")) {

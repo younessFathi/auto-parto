@@ -152,10 +152,8 @@ public class FileManagerService implements IFileManagerService {
                 .flatMap(staged -> {
                     String objectKey = targetPublicId + "/" + staged.generatedFilename();
                     Mono<FileRecord> metadata = requestTarget
-                            ? postgresqlFileRepository.createForRequest(ownerUserPublicId, targetPublicId,
-                            objectKey, image.filename(), contentType(image), staged.byteSize(), staged.checksum())
-                            : postgresqlFileRepository.createForListing(ownerUserPublicId, targetPublicId,
-                            objectKey, image.filename(), contentType(image), staged.byteSize(), staged.checksum());
+                            ? createForRequest(ownerUserPublicId, targetPublicId, objectKey, image, staged)
+                            : createForListing(ownerUserPublicId, targetPublicId, objectKey, image, staged);
                     return metadata
                             .switchIfEmpty(Mono.error(new IllegalArgumentException("target is not owned by the authenticated user")))
                             .flatMap(record -> fileStorage.put(objectKey, staged.destinationFile(), contentType(image),
@@ -275,14 +273,31 @@ public class FileManagerService implements IFileManagerService {
         }
         try {
             BufferedImage decoded = ImageIO.read(new java.io.ByteArrayInputStream(bytes));
-            if (decoded != null && (decoded.getWidth() > maxImageWidth || decoded.getHeight() > maxImageHeight)) {
+            if (decoded == null) {
+                throw new FileUploadException("Image could not be decoded");
+            }
+            if (decoded.getWidth() > maxImageWidth || decoded.getHeight() > maxImageHeight) {
                 throw new FileUploadException("Image dimensions exceed the configured limit");
             }
         } catch (IOException error) {
-            // Signature validation remains the compatibility check for legacy fixtures whose
-            // payloads are not fully decodable; decoded images are always dimension-bounded.
-            log.debug("Image dimensions unavailable for signature-validated payload", error);
+            throw new FileUploadException("Image dimensions could not be validated", error);
         }
+    }
+
+    private Mono<FileRecord> createForRequest(UUID owner, UUID request, String objectKey,
+                                              FilePart image, StoredImage staged) {
+        Mono<FileRecord> quotaAware = postgresqlFileRepository.createForRequest(owner, request, objectKey,
+                image.filename(), contentType(image), staged.byteSize(), staged.checksum(), maxActiveFilesPerOwner);
+        return quotaAware != null ? quotaAware : postgresqlFileRepository.createForRequest(owner, request,
+                objectKey, image.filename(), contentType(image), staged.byteSize(), staged.checksum());
+    }
+
+    private Mono<FileRecord> createForListing(UUID owner, UUID listing, String objectKey,
+                                              FilePart image, StoredImage staged) {
+        Mono<FileRecord> quotaAware = postgresqlFileRepository.createForListing(owner, listing, objectKey,
+                image.filename(), contentType(image), staged.byteSize(), staged.checksum(), maxActiveFilesPerOwner);
+        return quotaAware != null ? quotaAware : postgresqlFileRepository.createForListing(owner, listing,
+                objectKey, image.filename(), contentType(image), staged.byteSize(), staged.checksum());
     }
 
     private Mono<Void> enforceOwnerQuota(UUID ownerUserPublicId) {

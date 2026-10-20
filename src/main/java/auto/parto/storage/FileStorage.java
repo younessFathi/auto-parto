@@ -24,4 +24,15 @@ public interface FileStorage {
         }
         return Flux.empty();
     }
+
+    default Mono<ObjectKeyScan> scanObjectKeys(int limit) {
+        return listObjectKeys(limit + 1).collectList()
+                .map(keys -> new ObjectKeyScan(keys.stream().limit(limit).toList(), keys.size() > limit));
+    }
+
+    record ObjectKeyScan(java.util.List<String> keys, boolean truncated) {
+        public ObjectKeyScan {
+            keys = java.util.List.copyOf(keys);
+        }
+    }
 }

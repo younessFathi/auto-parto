@@ -123,12 +123,54 @@ class R2dbcFileRepositoryIT {
                 }).verifyComplete();
     }
 
+    @Test
+    void concurrentQuotaAdmissionsAllowOnlyOneReservedFile() {
+        UUID owner = UUID.randomUUID();
+        UUID requestOne = UUID.randomUUID();
+        UUID requestTwo = UUID.randomUUID();
+        StepVerifier.create(insertUser(owner)
+                        .then(insertRequestOnly(owner, requestOne))
+                        .then(insertRequestOnly(owner, requestTwo))
+                        .thenMany(reactor.core.publisher.Flux.merge(
+                                repository.createForRequest(owner, requestOne, "objects/quota-a", "photo.jpg",
+                                        "image/jpeg", 12, "sha", 1),
+                                repository.createForRequest(owner, requestTwo, "objects/quota-b", "photo.jpg",
+                                        "image/jpeg", 12, "sha", 1)))
+                        .collectList())
+                .assertNext(files -> assertThat(files).hasSize(1))
+                .verifyComplete();
+    }
+
+    @Test
+    void concurrentFinalizationReturnsTheWinningActiveRecordToBothCallers() {
+        UUID owner = UUID.randomUUID();
+        UUID request = UUID.randomUUID();
+        StepVerifier.create(insertRequest(owner, request)
+                        .then(repository.createForRequest(owner, request, "objects/race", "photo.jpg",
+                                "image/jpeg", 12, "sha"))
+                        .flatMapMany(file -> reactor.core.publisher.Flux.merge(
+                                repository.activate(file.publicId(), owner), repository.activate(file.publicId(), owner)))
+                        .collectList())
+                .assertNext(files -> {
+                    assertThat(files).hasSize(2);
+                    assertThat(files).allMatch(file -> "ACTIVE".equals(file.status()));
+                    assertThat(files.get(0).publicId()).isEqualTo(files.get(1).publicId());
+                }).verifyComplete();
+    }
+
     private reactor.core.publisher.Mono<Void> insertRequest(UUID owner, UUID request) {
+        return insertUser(owner).then(insertRequestOnly(owner, request));
+    }
+
+    private reactor.core.publisher.Mono<Void> insertUser(UUID owner) {
         return databaseClient.sql("INSERT INTO app_users (public_id, email, role, status) VALUES (:owner, :email, 'BUYER', 'ACTIVE')")
-                .bind("owner", owner).bind("email", "file-" + owner + "@example.test").fetch().rowsUpdated().then()
-                .then(databaseClient.sql("""
+                .bind("owner", owner).bind("email", "file-" + owner + "@example.test").fetch().rowsUpdated().then();
+    }
+
+    private reactor.core.publisher.Mono<Void> insertRequestOnly(UUID owner, UUID request) {
+        return databaseClient.sql("""
                         INSERT INTO part_requests (public_id, buyer_user_id, name, condition, category, status)
                         VALUES (:request, (SELECT id FROM app_users WHERE public_id = :owner), 'Request', 'NEW', 'CAR', 'OPEN')
-                        """).bind("request", request).bind("owner", owner).fetch().rowsUpdated().then());
+                        """).bind("request", request).bind("owner", owner).fetch().rowsUpdated().then();
     }
 }

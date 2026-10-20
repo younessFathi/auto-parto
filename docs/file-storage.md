@@ -2,11 +2,11 @@
 
 F06 stores file bytes through the `FileStorage` port and stores only the object key, checksum, size, content type, ownership target, and lifecycle state in PostgreSQL. Uploads are staged before provider publication and move through `PENDING`, `ACTIVE`, and `TOMBSTONED`. Finalization is owner-guarded and idempotent. Provider deletion runs on the bounded reactive scheduler after a failed or completed staged upload.
 
-The upload boundary validates the extension, declared MIME type, signature, configured byte limit, decoded image dimensions, SHA-256 checksum, and the bounded active-file quota for the authenticated owner. The controller derives ownership from the authenticated principal and the repository repeats the target ownership check before creating metadata.
+The upload boundary validates the extension, declared MIME type, signature, successful image decoding, configured byte limit, decoded image dimensions, SHA-256 checksum, and the bounded active-file quota for the authenticated owner. PostgreSQL admits a pending file under an owner advisory transaction lock and counts non-tombstoned reservations, so concurrent uploads cannot bypass the quota. The controller derives ownership from the authenticated principal and the repository repeats the target ownership check before creating metadata.
 
 ## Reconciliation
 
-When the PostgreSQL cutover storage gate is enabled, reconciliation scans at most `APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_MAX_FILES` active metadata rows and the same bounded number of provider keys. Missing objects keep readiness unhealthy. Keys without active metadata are reported as orphans. The default policy is report-only; set `APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_DELETE_ORPHANS=true` only for an operator-approved cleanup deployment. Cleanup is bounded, sequential, and safe to repeat because provider deletion is idempotent.
+When the PostgreSQL cutover storage gate is enabled, reconciliation scans at most `APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_MAX_FILES` active metadata rows and the same bounded number of provider keys, requesting one sentinel key to detect provider overflow. Missing objects, orphan keys, and either scan overflow keep readiness unhealthy; partial scans are never deleted. The readiness health details include bounded missing/orphan keys, capacity state, and whether orphan deletion is enabled. The default policy is report-only; set `APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_DELETE_ORPHANS=true` only for an operator-approved cleanup deployment. Cleanup is bounded, sequential, and safe to repeat because provider deletion is idempotent.
 
 ## SeaweedFS deployment contract
 
