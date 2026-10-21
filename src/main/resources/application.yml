@@ -36,7 +36,7 @@ spring:
       time-to-live: 600000 # 10 minutes
 auth:
   provider: otp
-  google: ${REDACTED_CREDENTIAL:}
+  google:
     enabled: false
   clerk:
     enabled: false
@@ -107,6 +107,6 @@ management:
       enabled: true
       mode: full
 
-resend: ${REDACTED_CREDENTIAL:}
-  api-key: ${REDACTED_CREDENTIAL:}
+resend:
+  api-key: ${RESEND_API_KEY}
   enable: false
