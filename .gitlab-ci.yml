@@ -21,10 +21,6 @@ build:
   script:
     - echo "Starting Build..."
     - mvn -B -e clean compile
-  artifacts:
-    paths:
-      - target/
-    expire_in: 1 days # Keep build artifacts for debugging
 
 test:
   stage: test
@@ -39,10 +35,9 @@ test:
     - echo "Running Tests..."
     - mvn -B -e clean test || (echo "Surefire reports:" && ls -la target/surefire-reports && sed -n '1,200p' target/surefire-reports/*.txt && exit 1)
   artifacts:
-    paths:
-      - target/surefire-reports/
     reports:
       junit: target/surefire-reports/*.xml # Store test results for GitLab visualization
+    expire_in: 1 day
 
 integration-test:
   stage: test
@@ -56,10 +51,9 @@ integration-test:
   script:
     - mvn -B -e clean verify || (echo "Failsafe reports:" && ls -la target/failsafe-reports && sed -n '1,200p' target/failsafe-reports/*.txt && exit 1)
   artifacts:
-    paths:
-      - target/failsafe-reports/
     reports:
       junit: target/failsafe-reports/*.xml
+    expire_in: 1 day
 
 postgresql-migration-gate:
   stage: cutover-gate
@@ -100,7 +94,3 @@ package:
   script:
     - echo "Packaging Application..."
     - mvn -B -e clean package -DskipTests
-  artifacts:
-    paths:
-      - target/*.jar # Store the packaged JAR file
-    expire_in: 7 days

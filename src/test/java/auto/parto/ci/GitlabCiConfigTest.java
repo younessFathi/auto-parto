@@ -42,4 +42,15 @@ class GitlabCiConfigTest {
         assertThat(content).contains("mvn -B -e clean verify");
         assertThat(content).contains("target/failsafe-reports/");
     }
+
+    @Test
+    void doesNotArchiveBuildOrPackageOutputsAndRetainsOnlyShortLivedTestReports() throws IOException {
+        String content = Files.readString(Path.of(".gitlab-ci.yml"));
+
+        assertThat(content).doesNotContain("- target/\n")
+                .doesNotContain("target/*.jar")
+                .contains("junit: target/surefire-reports/*.xml")
+                .contains("junit: target/failsafe-reports/*.xml")
+                .contains("expire_in: 1 day");
+    }
 }
