@@ -31,3 +31,4 @@ Make PostgreSQL the only application persistence runtime. The project is still i
 
 - Started on branch `feat/ap-0037-remove-mongodb` from the latest GitHub `main`.
 - Initial inventory found MongoDB models and repositories still present as compatibility paths, while PostgreSQL repositories cover identity, marketplace, wallets, device tokens, notifications, files, notification preferences, and object storage.
+- Removed the unused `CustomerJwt` and `PushDeliveryLog` Mongo document classes after confirming they have no production or test callers. Remaining Mongo models stay until their active compatibility callers are removed.
