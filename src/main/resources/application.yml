@@ -7,6 +7,10 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:local}
   application:
     name: auto-parto
+  lifecycle:
+    timeout-per-shutdown-phase: ${APP_SHUTDOWN_TIMEOUT:20s}
+  codec:
+    max-in-memory-size: ${APP_MAX_IN_MEMORY_SIZE:1MB}
   data:
     mongodb:
       uri: ${MONGODB_URI:mongodb://localhost:27017/auto-parto}
@@ -17,9 +21,9 @@ spring:
       password: ${REDIS_PASSWORD:-}
       lettuce:
         pool:
-          max-active: 8
-          max-idle: 8
-          min-idle: 0
+          max-active: ${APP_REDIS_POOL_MAX_ACTIVE:8}
+          max-idle: ${APP_REDIS_POOL_MAX_IDLE:8}
+          min-idle: ${APP_REDIS_POOL_MIN_IDLE:0}
       database: 0
   r2dbc:
     url: ${APP_POSTGRES_R2DBC_URL:r2dbc:postgresql://localhost:5432/auto_parto}
@@ -116,13 +120,16 @@ auto:
         max-concurrency: ${APP_FILE_STORAGE_S3_MAX_CONCURRENCY:32}
     executor:
       retry:
-        pool-size: 3
+        pool-size: ${APP_RETRY_EXECUTOR_POOL_SIZE:3}
       notification-retry:
-        pool-size: 2
+        pool-size: ${APP_NOTIFICATION_RETRY_EXECUTOR_POOL_SIZE:2}
 
 jwt:
   secretKey: ${JWT_SECRET}
   expiration: 3600_000
+
+server:
+  shutdown: graceful
 
 notification:
   timeout: 100

@@ -49,13 +49,13 @@ After migration succeeds, run the development identity/profile fixtures:
 docker compose --profile postgres run --rm app-postgresql-fixtures
 ```
 
-Run the application with the completed PostgreSQL-only development cutover profile. This service excludes MongoDB auto-configuration, enables every PostgreSQL boundary and cutover gate, waits for migration and fixtures, and listens on host port `8081`:
+Run the application with the completed PostgreSQL-only development cutover profile. This service excludes MongoDB auto-configuration, enables every PostgreSQL boundary and cutover gate, and waits for migration and fixtures. The base deployment keeps the application port internal so replicas can share a network; add the local development override to publish it on host port `8081`:
 
 ```bash
-docker compose --profile postgres up -d springboot-postgresql-app
+docker compose -f docker-compose.yml -f docker-compose.local.yml --profile postgres up -d springboot-postgresql-app
 ```
 
-The default `springboot-app` service remains the legacy compatibility profile and continues to use MongoDB. Do not run both application services on the same host port when testing a traffic switch.
+The default `springboot-app` service remains the legacy compatibility profile and continues to use MongoDB. The production deployment should place a TLS entry point on the shared Compose network and scale the application service without publishing an instance-specific host port.
 
 The fixture service is structurally ordered after the Flyway service and connects with the restricted runtime role, not the bootstrap or migration role. It creates deterministic development buyer and seller identities, profiles, marketplace records, a wallet/ledger pair, and one active device token. The script is transactional and idempotent: rerunning it does not duplicate users, profiles, marketplace records, wallet entries, or device tokens. If a deterministic fixture conflicts with existing data, the script exits nonzero and rolls back the run. It intentionally does not seed OTP challenges, files, notifications, or outbox state because those records are transient or require a separate validated object-storage/notification fixture manifest.
 

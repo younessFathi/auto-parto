@@ -263,6 +263,10 @@ Each instance needs:
 - No committed secrets
 - Structured logs to standard output
 
+The repository's base Compose deployment keeps application port 8080 private to the Compose network, removes fixed application container names, and applies bounded CPU, memory, process, connection-pool, executor, and shutdown settings. `docker-compose.local.yml` is a loopback-only development override. A production TLS entry point should join the private network and route to the replicated application service; instance host-port publishing is not required.
+
+Spring Boot uses a 20-second graceful shutdown phase. It stops accepting new work through the server lifecycle and allows bounded in-flight work to finish before termination. The application image uses the non-root `spring` user, a read-only root filesystem, and a temporary `/tmp` filesystem. Runtime credentials are supplied through environment or the future secret-management integration and are never copied into the image.
+
 SSE requires additional deployment settings:
 
 - Long idle timeouts at the load balancer

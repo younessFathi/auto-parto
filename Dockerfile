@@ -38,6 +38,9 @@ COPY --from=build --chown=spring:spring /app/target/auto-parto-*.jar app.jar
 # Expose port
 EXPOSE 8080
 
+# Let the JVM receive the termination signal so Spring can drain in-flight work.
+STOPSIGNAL SIGTERM
+
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 CMD wget -qO- http://localhost:8080/actuator/health || exit 1
 

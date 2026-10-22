@@ -18,6 +18,14 @@ class DockerComposeConfigurationTest {
         String compose = Files.readString(Path.of("docker-compose.yml"));
 
         assertThat(compose).contains("springboot-app:");
+        assertThat(compose).contains("expose:\n      - \"8080\"")
+                .doesNotContain("container_name: springboot-app")
+                .contains("stop_grace_period: 20s")
+                .contains("read_only: true")
+                .contains("pids_limit: 256")
+                .contains("no-new-privileges:true")
+                .contains("mem_limit: 1g")
+                .contains("cpus: \"1.0\"");
         assertThat(compose).contains("SPRING_DATA_MONGODB_URI: ${MONGODB_URI:-mongodb://root:root@mongo:27017/auto-parto?authSource=admin}");
         assertThat(compose).contains("SPRING_DATA_REDIS_HOST: redis");
         assertThat(compose).contains("REDIS_PASSWORD: ${REDIS_PASSWORD:-password}");
@@ -34,6 +42,8 @@ class DockerComposeConfigurationTest {
         String compose = Files.readString(Path.of("docker-compose.yml"));
 
         assertThat(compose).contains("springboot-postgresql-app:");
+        assertThat(compose).doesNotContain("container_name: springboot-postgresql-app")
+                .contains("stop_grace_period: 20s");
         assertThat(compose).contains("SPRING_AUTOCONFIGURE_EXCLUDE:");
         assertThat(compose).contains("MongoReactiveAutoConfiguration");
         assertThat(compose).contains("APP_POSTGRES_CUTOVER_ENABLED: \"true\"");
@@ -85,5 +95,13 @@ class DockerComposeConfigurationTest {
         String output = new String(process.getInputStream().readAllBytes());
         assertThat(process.waitFor(30, TimeUnit.SECONDS)).isTrue();
         assertThat(process.exitValue()).withFailMessage(output).isZero();
+    }
+
+    @Test
+    void localOverridePublishesPortsWithoutPreventingReplicaScaling() throws IOException {
+        String localCompose = Files.readString(Path.of("docker-compose.local.yml"));
+
+        assertThat(localCompose).contains("127.0.0.1:8080:8080")
+                .contains("127.0.0.1:8081:8080");
     }
 }
