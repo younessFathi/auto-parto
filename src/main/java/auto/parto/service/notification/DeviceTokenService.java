@@ -15,14 +15,11 @@ import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @Slf4j
 public class DeviceTokenService {
 
-    private final Map<String, List<DeviceToken>> userTokens = new ConcurrentHashMap<>();
     private static final String USER_TOKENS_PREFIX = "fcm:user:tokens:";
     private static final String TOKEN_OWNER_PREFIX = "fcm:token:owner:";
     private final RedisNotificationStore redisNotificationStore;
@@ -99,9 +96,6 @@ public class DeviceTokenService {
      * Mark token as invalid (when FCM returns invalid token error)
      */
     public Mono<Void> markTokenInvalid(String token) {
-        userTokens.forEach((userId, tokens) -> {
-            tokens.removeIf(t -> t.getToken().equals(token));
-        });
         log.warn("Marked token as invalid: {}", maskToken(token));
         Mono<Void> redisInvalidation = Mono.defer(() -> redisNotificationStore.markTokenInvalidByToken(token));
         if (postgresqlRepository == null) {
@@ -185,12 +179,6 @@ public class DeviceTokenService {
             return "***";
         }
         return token.substring(0, 6) + "..." + token.substring(token.length() - 4);
-    }
-
-    private boolean isSameDevice(DeviceToken existing, RegisterTokenRequest newRequest) {
-        // Implement device identification logic
-        return existing.getPlatform().equals(newRequest.getPlatform()) &&
-                existing.getAppVersion().equals(newRequest.getAppVersion());
     }
 
     private Mono<java.util.UUID> postgresqlOwner(String userId) {
