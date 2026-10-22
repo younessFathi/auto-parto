@@ -168,5 +168,5 @@ management:
       mode: full
 
 resend:
-  api-key: ${REDACTED_CREDENTIAL:}
+  api-key: ${RESEND_API_KEY}
   enable: false

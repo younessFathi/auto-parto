@@ -28,7 +28,7 @@ class SecretsManagementConfigTest {
 
         assertThat(content)
                 .contains("SPRING_PROFILES_ACTIVE")
-                .contains("URI")
+                .contains("MONGODB_URI")
                 .contains("REDIS_HOST")
                 .contains("REDIS_PORT")
                 .contains("REDIS_PASSWORD")
