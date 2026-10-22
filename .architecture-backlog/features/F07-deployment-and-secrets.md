@@ -12,4 +12,4 @@ Deploy stateless application instances behind TLS with isolated configuration an
 
 ## Completion Tracking
 
-AP-0020 is in progress. The first deployment increment establishes replica-safe application services, non-root image execution, bounded runtime resources, graceful shutdown, and local-only port publishing for development. TLS, secret delivery, infrastructure hardening, and provider isolation remain separate follow-up tickets.
+AP-0020 is complete. Its deployment increment establishes replica-safe application services, non-root image execution, bounded runtime resources, graceful shutdown, and local-only port publishing for development. The actual application image is built and started in the deployment container test under the declared filesystem and resource constraints. TLS, secret delivery, infrastructure hardening, and provider isolation remain separate follow-up tickets.
