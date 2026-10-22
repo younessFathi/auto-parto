@@ -9,7 +9,7 @@ spring:
     name: auto-parto
   data:
     mongodb:
-      uri: ${URI:-mongodb://localhost:27017/auto-parto}
+      uri: ${MONGODB_URI:mongodb://localhost:27017/auto-parto}
       auto-index-creation: true
     redis:
       host: ${REDIS_HOST:localhost}
