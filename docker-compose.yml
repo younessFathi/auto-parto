@@ -4,9 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
     image: auto-parto-springboot-app:latest
-    container_name: springboot-app
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     environment:
       SPRING_DATA_MONGODB_URI: ${MONGODB_URI:-mongodb://root:root@mongo:27017/auto-parto?authSource=admin}
       SPRING_DATA_REDIS_HOST: redis
@@ -15,6 +14,14 @@ services:
       JWT_SECRET: ${JWT_SECRET:-MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=}
       OTP_PEPPER: local-development-pepper
     restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
     mem_limit: 1g
     cpus: "1.0"
     logging:
@@ -41,10 +48,9 @@ services:
       context: .
       dockerfile: Dockerfile
     image: auto-parto-springboot-app:postgresql
-    container_name: springboot-postgresql-app
     profiles: ["postgres"]
-    ports:
-      - "8081:8080"
+    expose:
+      - "8080"
     environment:
       SPRING_PROFILES_ACTIVE: local
       SPRING_AUTOCONFIGURE_EXCLUDE: >-
@@ -80,6 +86,14 @@ services:
     volumes:
       - ./uploads:/uploads
     restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
     mem_limit: 1g
     cpus: "1.0"
     networks:
