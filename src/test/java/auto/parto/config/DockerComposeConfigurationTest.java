@@ -18,7 +18,7 @@ class DockerComposeConfigurationTest {
         String compose = Files.readString(Path.of("docker-compose.yml"));
 
         assertThat(compose).contains("springboot-app:");
-        assertThat(compose).contains("SPRING_DATA_MONGODB_URI: ${URI:-mongodb://root:root@mongo:27017/auto-parto?authSource=admin}");
+        assertThat(compose).contains("SPRING_DATA_MONGODB_URI: ${MONGODB_URI:-mongodb://root:root@mongo:27017/auto-parto?authSource=admin}");
         assertThat(compose).contains("SPRING_DATA_REDIS_HOST: redis");
         assertThat(compose).contains("REDIS_PASSWORD: ${REDIS_PASSWORD:-password}");
         assertThat(compose).contains("JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-key-that-is-256-bits-long!}");

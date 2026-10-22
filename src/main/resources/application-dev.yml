@@ -5,9 +5,7 @@ spring:
     name: auto-parto
   data:
     mongodb:
-      uri: ${URI}
-      database: ${DB_NAME}
-      authentication-database: admin
+      uri: ${MONGODB_URI:mongodb://localhost:27017/auto-parto}
     redis:
       host: redis
       port: 6379
