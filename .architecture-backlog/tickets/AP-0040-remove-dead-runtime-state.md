@@ -1,6 +1,6 @@
 # AP-0040 Remove Dead Runtime State and Helpers
 
-- **Status:** In Progress
+- **Status:** Done
 - **Type:** Technical Enhancement
 - **Feature:** [Runtime Cleanup](../features/F12-runtime-cleanup.md)
 - **Linked Tickets:** [AP-0037](AP-0037-remove-mongodb.md), [AP-0038](AP-0038-provider-neutral-device-tokens.md), [AP-0023](AP-0023-telemetry-health.md)
@@ -28,3 +28,4 @@ Remove verified dead runtime state and obsolete helpers that obscure the Postgre
 ## Implementation Tracking
 
 - Removed the unused `DeviceTokenService.userTokens` map and its unreferenced device-comparison helper. Invalidation now uses the authoritative PostgreSQL path followed by best-effort Redis cleanup, with the Redis-only compatibility path preserved until AP-0037/AP-0038 complete their separate contracts.
+- Verification completed: `./mvnw -B test` passed 387 tests with 1 skip; `./mvnw -B verify` passed 152 integration/container tests with 1 skip and all JaCoCo checks; `git diff --check` passed.
