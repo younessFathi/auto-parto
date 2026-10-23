@@ -21,12 +21,11 @@ public class PostgresqlCutoverConfiguration {
             @Value("${auto.parto.persistence.postgresql.files.enabled:false}") boolean filesEnabled,
             @Value("${auto.parto.persistence.postgresql.notification-preferences.enabled:false}") boolean preferencesEnabled,
             @Value("${auto.parto.persistence.postgresql.cutover.api-contracts-ready:false}") boolean apiContractsReady,
-            @Value("${auto.parto.persistence.postgresql.cutover.mongo-disabled:false}") boolean mongoDisabled,
             @Value("${auto.parto.persistence.postgresql.cutover.storage-reconciliation.enabled:false}") boolean storageReconciliationEnabled) {
         if (!postgresqlEnabled || !sellerIdentityEnabled || !buyerIdentityEnabled || !marketplaceEnabled
                 || !walletEnabled || !deviceTokensEnabled || !notificationsEnabled || !filesEnabled
-                || !preferencesEnabled || !apiContractsReady || !mongoDisabled || !storageReconciliationEnabled) {
-            throw new IllegalStateException("PostgreSQL cutover requires every persistence boundary, API contract, and MongoDB shutdown gate");
+                || !preferencesEnabled || !apiContractsReady || !storageReconciliationEnabled) {
+            throw new IllegalStateException("PostgreSQL cutover requires every persistence boundary, API contract, and storage reconciliation gate");
         }
     }
 }

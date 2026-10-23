@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 class DockerComposeConfigurationTest {
 
     @Test
-    void dockerComposeIncludesSpringBootMongoAndRedisWiring() throws IOException {
+    void dockerComposeIncludesSpringBootPostgresqlAndRedisWiring() throws IOException {
         String compose = Files.readString(Path.of("docker-compose.yml"));
 
         assertThat(compose).contains("springboot-app:");
@@ -26,14 +26,14 @@ class DockerComposeConfigurationTest {
                 .contains("no-new-privileges:true")
                 .contains("mem_limit: 1g")
                 .contains("cpus: \"1.0\"");
-        assertThat(compose).contains("SPRING_DATA_MONGODB_URI: ${MONGODB_URI:-mongodb://root:root@mongo:27017/auto-parto?authSource=admin}");
+        assertThat(compose).contains("SPRING_R2DBC_URL: ${APP_POSTGRES_R2DBC_URL:-r2dbc:postgresql://app-postgresql:5432/auto_parto}");
         assertThat(compose).contains("SPRING_DATA_REDIS_HOST: redis");
         assertThat(compose).contains("REDIS_PASSWORD: ${REDIS_PASSWORD:-password}");
         assertThat(compose).contains("JWT_SECRET: ${JWT_SECRET:-MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=}");
         assertThat(compose).contains("command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-password}");
         assertThat(compose).contains("test: redis-cli -a '${REDIS_PASSWORD:-password}' ping");
         assertThat(compose).contains("depends_on:");
-        assertThat(compose).contains("mongo:");
+        assertThat(compose).doesNotContain("mongo:").doesNotContain("MONGODB");
         assertThat(compose).contains("redis:");
     }
 
@@ -44,10 +44,9 @@ class DockerComposeConfigurationTest {
         assertThat(compose).contains("springboot-postgresql-app:");
         assertThat(compose).doesNotContain("container_name: springboot-postgresql-app")
                 .contains("stop_grace_period: 20s");
-        assertThat(compose).contains("SPRING_AUTOCONFIGURE_EXCLUDE:");
-        assertThat(compose).contains("MongoReactiveAutoConfiguration");
+        assertThat(compose).doesNotContain("MongoReactiveAutoConfiguration");
         assertThat(compose).contains("APP_POSTGRES_CUTOVER_ENABLED: \"true\"");
-        assertThat(compose).contains("APP_POSTGRES_MONGO_DISABLED: \"true\"");
+        assertThat(compose).doesNotContain("APP_POSTGRES_MONGO_DISABLED");
         assertThat(compose).contains("condition: service_completed_successfully");
         assertThat(compose).contains("app-postgresql:");
         String auditCompose = Files.readString(Path.of("docker-compose.audit.yml"));

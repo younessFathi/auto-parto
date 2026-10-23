@@ -1,6 +1,6 @@
 # AP-0037 Remove MongoDB Runtime and Compatibility Code
 
-- **Status:** In Progress
+- **Status:** Done
 - **Type:** Technical Enhancement
 - **Feature:** PostgreSQL-only runtime cleanup
 - **Linked Tickets:** [AP-0002](AP-0002-reactive-persistence.md), [AP-0003](AP-0003-development-cutover.md), [AP-0040](AP-0040-remove-dead-runtime-state.md)
@@ -35,4 +35,9 @@ Make PostgreSQL the only application persistence runtime. The project is still i
 - Removed the unused `CustomerJwt` and `PushDeliveryLog` Mongo document classes after confirming they have no production or test callers. Remaining Mongo models stay until their active compatibility callers are removed.
 - The next bounded cleanup slice includes the obsolete Mongo-only offer path; PostgreSQL offer persistence and its API contract remain in scope for regression verification.
 - Removed the obsolete Mongo-only offer path (`PieceOfferService`, `IPieceOfferService`, `PieceOfferDbMapper`, `PieceOffer`, `IPieceOfferRepository`, and `PieceOfferRepository`) and its Mongo-specific tests. The active PostgreSQL `OfferRepository` path remains unchanged.
-- Focused verification passed: `MongoDisabledRepositoryConditionTest` and `MongoIndexesConsistencyTest` (6 tests total), with no remaining references to the removed offer path.
+- Removed the remaining Mongo-backed compatibility services, repositories, models, mappers, authentication strategies, fixtures, and tests. Buyer, seller, piece, file, and notification-preference services now use only their PostgreSQL boundaries and canonical UUID identifiers.
+- Removed the MongoDB starter and Testcontainers module, Mongo configuration and Compose service, Mongo environment examples, and the obsolete Atlas document. Active architecture and cutover documentation now describes PostgreSQL and Redis as the runtime persistence dependencies.
+- Updated deployment and integration test configuration for PostgreSQL-only startup. The storage reconciliation service and readiness gate now require both cutover and storage-reconciliation flags, preventing an orphaned gate when cutover is disabled.
+- Added a test-profile OTP pepper so all PostgreSQL identity repositories can be constructed in application-level integration tests without any secret material.
+- Verification completed on 2026-10-23: `git diff --check`; focused configuration and image tests (21 tests); `./mvnw -B test` (336 tests, 0 failures, 1 intentional skip); and Docker-backed `./mvnw -B verify` (134 integration tests, 0 failures, 1 intentional skip, JaCoCo checks passed).
+- Acceptance is complete: production code has no Spring Data MongoDB dependency, `@Document` model, or Mongo fallback path; Compose starts with PostgreSQL and Redis only; PostgreSQL repository and deployment integration tests pass.

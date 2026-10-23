@@ -5,7 +5,7 @@ import auto.parto.persistence.FileRepository;
 import auto.parto.storage.FileStorage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Flux;
@@ -17,8 +17,8 @@ import java.time.Instant;
 
 /** Verifies that active PostgreSQL file metadata has a matching storage object. */
 @Service
-@ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.cutover", name = "enabled",
-        havingValue = "true")
+@ConditionalOnExpression("${auto.parto.persistence.postgresql.cutover.enabled:false} && "
+        + "${auto.parto.persistence.postgresql.cutover.storage-reconciliation.enabled:false}")
 public final class StorageReconciliationService {
 
     private final FileRepository fileRepository;

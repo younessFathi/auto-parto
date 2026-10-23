@@ -5,7 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.ReactiveHealthIndicator;
 import org.springframework.boot.context.event.ApplicationStartedEvent;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.ApplicationListener;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -17,8 +17,8 @@ import java.util.concurrent.atomic.AtomicReference;
 /** Keeps readiness unhealthy until asynchronous storage reconciliation completes. */
 @Component
 @Slf4j
-@ConditionalOnProperty(prefix = "auto.parto.persistence.postgresql.cutover.storage-reconciliation",
-        name = "enabled", havingValue = "true")
+@ConditionalOnExpression("${auto.parto.persistence.postgresql.cutover.enabled:false} && "
+        + "${auto.parto.persistence.postgresql.cutover.storage-reconciliation.enabled:false}")
 public final class StorageReconciliationStartupGate
         implements ApplicationListener<ApplicationStartedEvent>, ReactiveHealthIndicator {
 

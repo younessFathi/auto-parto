@@ -43,7 +43,6 @@ The project standard now specifies integer minor units, but the current wallet c
 
 A migration must update:
 
-- MongoDB models
 - DTOs
 - Controllers
 - Services
@@ -142,13 +141,13 @@ Spring Security permits `/actuator/health`, but the custom JWT filter's public-e
 
 ### Development defaults
 
-Docker Compose contains development defaults for JWT, Redis, and MongoDB credentials and exposes database ports to the host. This is acceptable only for isolated local development, not production.
+Docker Compose contains development defaults for JWT, Redis, and PostgreSQL credentials and exposes database ports to the host. This is acceptable only for isolated local development, not production.
 
 ### CI coverage and scanning
 
 Tests and JaCoCo are configured, but coverage thresholds are relatively low and CI does not visibly include dependency scanning, secret scanning, or container vulnerability scanning.
 
-### Automatic MongoDB indexes
+### PostgreSQL schema ownership
 
 Automatic index creation is enabled in the main configuration. Production index creation should be deliberate and observable, preferably through a migration or deployment step.
 

@@ -93,7 +93,9 @@ class DeploymentComposeIT {
                     image: %s
                     environment:
                       SPRING_PROFILES_ACTIVE: local
-                      SPRING_DATA_MONGODB_URI: mongodb://root:root@mongo:27017/auto-parto?authSource=admin
+                      SPRING_R2DBC_URL: r2dbc:postgresql://app-postgresql:5432/auto_parto
+                      SPRING_R2DBC_USERNAME: auto_parto_runtime
+                      SPRING_R2DBC_PASSWORD: compose-smoke-test-runtime
                       SPRING_DATA_REDIS_HOST: redis
                       SPRING_DATA_REDIS_PORT: "6379"
                       REDIS_PASSWORD: password
@@ -105,9 +107,7 @@ class DeploymentComposeIT {
                       APP_FILE_STORAGE_PROVIDER: local
                       APP_FILE_STORAGE_LOCAL_ROOT: /tmp/uploads
                       APP_AUDIT_OUTBOX_ENABLED: "false"
-                  mongo:
-                    container_name: !reset null
-                    ports: !reset []
+                      APP_POSTGRES_CUTOVER_ENABLED: "false"
                   redis:
                     container_name: !reset null
                     ports: !reset []

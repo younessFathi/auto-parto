@@ -98,7 +98,7 @@ The target architecture includes an `addresses` aggregate, but the backlog has n
 
 ### F01 Platform and Data
 
-Aligned directionally. Add identifier strategy, MongoDB import boundaries, R2DBC/JDBC separation, and clarify AP-0030 versus AP-0002 ownership.
+Aligned directionally. Keep the canonical identifier strategy and R2DBC/JDBC separation explicit, and clarify AP-0030 versus AP-0002 ownership.
 
 ### F02 Identity and Security
 

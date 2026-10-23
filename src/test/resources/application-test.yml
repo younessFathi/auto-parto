@@ -15,3 +15,7 @@ firebase:
     circuit-breaker:
       failure-threshold: 5
       reset-timeout: 30000
+
+security:
+  otp:
+    pepper: test-only-otp-pepper

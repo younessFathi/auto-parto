@@ -4,16 +4,12 @@ import auto.parto.dto.PagedResponse;
 import auto.parto.dto.PieceDto;
 import auto.parto.enums.SellerType;
 import auto.parto.enums.Status;
-import auto.parto.mapper.PieceDbMapper;
 import auto.parto.persistence.PartRequestRecord;
 import auto.parto.persistence.PartRequestRepository;
-import auto.parto.repository.IPieceRepository;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.CacheEvict;
 import auto.parto.service.iservice.IPieceService;
-import org.springframework.cache.annotation.Caching;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -23,170 +19,20 @@ import java.util.UUID;
 
 @Service
 public class PieceService implements IPieceService {
-    private final IPieceRepository pieceRepository;
-    private final PieceDbMapper pieceDbMapper;
-    private final PartRequestRepository partRequestRepository;
-
-    public PieceService(IPieceRepository pieceRepository, PieceDbMapper pieceDbMapper) {
-        this(pieceRepository, pieceDbMapper, (PartRequestRepository) null);
-    }
-
-    @Autowired
-    public PieceService(ObjectProvider<IPieceRepository> pieceRepositoryProvider, PieceDbMapper pieceDbMapper,
-                        ObjectProvider<PartRequestRepository> partRequestRepositoryProvider) {
-        this(pieceRepositoryProvider.getIfAvailable(), pieceDbMapper, partRequestRepositoryProvider.getIfAvailable());
-    }
-
-    public PieceService(IPieceRepository pieceRepository, PieceDbMapper pieceDbMapper,
-                        PartRequestRepository partRequestRepository) {
-        this.pieceRepository = pieceRepository;
-        this.pieceDbMapper = pieceDbMapper;
-        this.partRequestRepository = partRequestRepository;
-    }
-
-    @Override
-    public Mono<Boolean> checkIfPieceById(String id) {
-        UUID publicId = parseUuid(id);
-        if (partRequestRepository != null && publicId != null) {
-            return partRequestRepository.findByPublicId(publicId).hasElement();
-        }
-        if (pieceRepository == null) return legacyPersistenceUnavailable();
-        return pieceRepository.checkIfPieceById(id);
-    }
-
-    @Override
-    @Caching(evict = {
-            @CacheEvict(value = "pieces", allEntries = true),
-            @CacheEvict(value = "pieceDetails", allEntries = true)
-    })
-    public Mono<PieceDto> create(PieceDto pieceDto) {
-        UUID buyerPublicId = parseUuid(pieceDto.getCustomerId());
-        if (partRequestRepository != null && buyerPublicId != null) {
-            return partRequestRepository.create(buyerPublicId, pieceDto.getName(), pieceDto.getDescription(),
-                            valueOf(pieceDto.getCondition()), valueOf(pieceDto.getCategory()))
-                    .map(this::toDto);
-        }
-        if (pieceRepository == null) return legacyPersistenceUnavailable();
-        return pieceRepository.save(pieceDbMapper.toEntity(pieceDto)).map(pieceDbMapper::toDto);
-    }
-
-    @Override
-    @Caching(evict = {
-            @CacheEvict(value = "pieces", allEntries = true),
-            @CacheEvict(value = "pieceDetails", key = "#pieceDto.id")
-    })
-    public Mono<PieceDto> update(PieceDto pieceDto) {
-        UUID requestPublicId = parseUuid(pieceDto.getId());
-        if (partRequestRepository != null && requestPublicId != null) {
-            validateCanonicalImageIds(pieceDto.getImagesId());
-            // Canonical image ownership is created by the PostgreSQL file upload
-            // transaction. The legacy update endpoint therefore only returns the
-            // request after validating that it cannot introduce legacy IDs.
-            return partRequestRepository.findByPublicId(requestPublicId).map(this::toDto);
-        }
-        if (pieceRepository == null) return legacyPersistenceUnavailable();
-        return pieceRepository.update(pieceDto.getId() , pieceDto.getImagesId()).map(pieceDbMapper::toDto);
-    }
-
-    @Override
-    @Cacheable(value = "pieces" , key = "#id + ':' + #page + ':' + #size")
-    public Mono<PagedResponse<PieceDto>> getAllPiecesByCustomerId(String id, int page, int size) {
-        UUID buyerPublicId = parseUuid(id);
-        if (partRequestRepository != null && buyerPublicId != null) {
-            return partRequestRepository.findByBuyerPublicId(buyerPublicId, page, size)
-                    .map(this::toDto)
-                    .collectList()
-                    .zipWith(partRequestRepository.countByBuyerPublicId(buyerPublicId))
-                    .map(result -> {
-                        PagedResponse<PieceDto> response = new PagedResponse<>();
-                        response.setData(result.getT1());
-                        response.setPage(page);
-                        response.setSize(size);
-                        response.setTotalItems(result.getT2());
-                        return response;
-                    });
-        }
-        if (pieceRepository == null) return legacyPersistenceUnavailable();
-        return pieceRepository.getAllPieces(id , page , size)
-                              .map(pieceDbMapper::toDto)
-                              .collectList()
-                              .zipWith(pieceRepository.getTotalPieces(id))
-                              .map(result -> {
-                                  PagedResponse<PieceDto> response = new PagedResponse<>();
-                                  response.setData(result.getT1());
-                                  response.setPage(page);
-                                  response.setSize(size);
-                                  response.setTotalItems(result.getT2());
-                                  return response;
-                              });
-    }
-
-    @Override
-    @Cacheable(value = "pieceDetails" , key = "#pieceId")
-    public Mono<PieceDto> getPieceDetailByPieceId(String pieceId) {
-        UUID publicId = parseUuid(pieceId);
-        if (partRequestRepository != null && publicId != null) {
-            return partRequestRepository.findByPublicId(publicId).map(this::toDto);
-        }
-        if (pieceRepository == null) return legacyPersistenceUnavailable();
-        return pieceRepository.findById(pieceId).map(pieceDbMapper::toDto);
-    }
-
-    private PieceDto toDto(PartRequestRecord record) {
-        return PieceDto.builder()
-                .id(record.publicId().toString())
-                .customerId(record.buyerUserPublicId().toString())
-                .name(record.name())
-                .description(record.description())
-                .condition(record.condition())
-                .category(record.category())
-                .createAt(record.createdAt() == null ? null : record.createdAt().atZone(ZoneOffset.UTC).toLocalDateTime())
-                .modifiedAt(record.updatedAt() == null ? null : record.updatedAt().atZone(ZoneOffset.UTC).toLocalDateTime())
-                .imagesId(Collections.emptyList())
-                .seeNumber(Math.toIntExact(record.viewCount()))
-                .sellerType(SellerType.NEW)
-                .sellerRank(0D)
-                .status(toStatus(record.status()))
-                .build();
-    }
-
-    private static Status toStatus(String status) {
-        return switch (status) {
-            case "OPEN" -> Status.PENDING;
-            case "MATCHED" -> Status.IN_PROGRESS;
-            case "CLOSED" -> Status.COMPLETED;
-            case "CANCELLED" -> Status.CANCELLED;
-            default -> Status.FAILED;
-        };
-    }
-
-    private static String valueOf(Enum<?> value) {
-        return value == null ? null : value.name();
-    }
-
-    private static UUID parseUuid(String value) {
-        if (value == null || value.isBlank()) return null;
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException ignored) {
-            return null;
-        }
-    }
-
-    private static void validateCanonicalImageIds(java.util.List<String> imageIds) {
-        if (imageIds == null || imageIds.size() > 100) {
-            throw new IllegalArgumentException("imagesId must contain between 0 and 100 canonical IDs");
-        }
-        imageIds.forEach(id -> {
-            try {
-                UUID.fromString(id);
-            } catch (RuntimeException exception) {
-                throw new IllegalArgumentException("canonical image IDs must be UUIDs", exception);
-            }
-        });
-    }
-
-    private static <T> Mono<T> legacyPersistenceUnavailable() {
-        return Mono.error(new IllegalStateException("MongoDB persistence is disabled; use the PostgreSQL marketplace boundary"));
-    }
+    private final PartRequestRepository repository;
+    public PieceService(PartRequestRepository repository) { this.repository = repository; }
+    @Override public Mono<Boolean> checkIfPieceById(String id) { return repository.findByPublicId(requireUuid(id)).hasElement(); }
+    @Override @Caching(evict = {@CacheEvict(value = "pieces", allEntries = true), @CacheEvict(value = "pieceDetails", allEntries = true)})
+    public Mono<PieceDto> create(PieceDto pieceDto) { return repository.create(requireUuid(pieceDto.getCustomerId()), pieceDto.getName(), pieceDto.getDescription(), valueOf(pieceDto.getCondition()), valueOf(pieceDto.getCategory())).map(PieceService::toDto); }
+    @Override @Caching(evict = {@CacheEvict(value = "pieces", allEntries = true), @CacheEvict(value = "pieceDetails", key = "#pieceDto.id")})
+    public Mono<PieceDto> update(PieceDto pieceDto) { validateCanonicalImageIds(pieceDto.getImagesId()); return repository.findByPublicId(requireUuid(pieceDto.getId())).map(PieceService::toDto); }
+    @Override @Cacheable(value = "pieces", key = "#id + ':' + #page + ':' + #size")
+    public Mono<PagedResponse<PieceDto>> getAllPiecesByCustomerId(String id, int page, int size) { UUID buyerId = requireUuid(id); return repository.findByBuyerPublicId(buyerId, page, size).map(PieceService::toDto).collectList().zipWith(repository.countByBuyerPublicId(buyerId)).map(result -> { PagedResponse<PieceDto> response = new PagedResponse<>(); response.setData(result.getT1()); response.setPage(page); response.setSize(size); response.setTotalItems(result.getT2()); return response; }); }
+    @Override @Cacheable(value = "pieceDetails", key = "#pieceId")
+    public Mono<PieceDto> getPieceDetailByPieceId(String pieceId) { return repository.findByPublicId(requireUuid(pieceId)).map(PieceService::toDto); }
+    private static PieceDto toDto(PartRequestRecord record) { return PieceDto.builder().id(record.publicId().toString()).customerId(record.buyerUserPublicId().toString()).name(record.name()).description(record.description()).condition(record.condition()).category(record.category()).createAt(record.createdAt() == null ? null : record.createdAt().atZone(ZoneOffset.UTC).toLocalDateTime()).modifiedAt(record.updatedAt() == null ? null : record.updatedAt().atZone(ZoneOffset.UTC).toLocalDateTime()).imagesId(Collections.emptyList()).seeNumber(Math.toIntExact(record.viewCount())).sellerType(SellerType.NEW).sellerRank(0D).status(toStatus(record.status())).build(); }
+    private static Status toStatus(String status) { return switch (status) { case "OPEN" -> Status.PENDING; case "MATCHED" -> Status.IN_PROGRESS; case "CLOSED" -> Status.COMPLETED; case "CANCELLED" -> Status.CANCELLED; default -> Status.FAILED; }; }
+    private static String valueOf(Enum<?> value) { return value == null ? null : value.name(); }
+    private static UUID requireUuid(String value) { try { return UUID.fromString(value); } catch (RuntimeException e) { throw new IllegalArgumentException("canonical ID must be a UUID", e); } }
+    private static void validateCanonicalImageIds(java.util.List<String> imageIds) { if (imageIds == null || imageIds.size() > 100) throw new IllegalArgumentException("imagesId must contain between 0 and 100 canonical IDs"); imageIds.forEach(id -> { try { UUID.fromString(id); } catch (RuntimeException e) { throw new IllegalArgumentException("canonical image IDs must be UUIDs", e); } }); }
 }

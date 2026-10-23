@@ -4,7 +4,7 @@
 
 Auto-Parto is a reactive backend for a car-parts marketplace. Buyers publish part requests, sellers publish part listings or respond with offers, and the platform manages authentication, wallets, files, and notifications.
 
-The target architecture keeps the existing Spring WebFlux foundation but replaces MongoDB as the primary database with PostgreSQL. This makes identity, money, persistence, and asynchronous delivery explicit and safe.
+The target architecture keeps the existing Spring WebFlux foundation and uses PostgreSQL as the application database. This makes identity, money, persistence, and asynchronous delivery explicit and safe.
 
 ## High-Level Design
 
@@ -273,9 +273,9 @@ Detailed deployment, persistence, storage, and observability guidance is in [`de
 
 Production must not depend on local relative filesystem paths, development passwords, committed credentials, or host-exposed database ports.
 
-## Migration From Current MongoDB Implementation
+## PostgreSQL Persistence
 
-The current codebase uses reactive MongoDB. AP-0002 starts the PostgreSQL migration with R2DBC infrastructure and repository adapters while MongoDB remains active for unmigrated features. Migration must be planned rather than mixed casually into feature work.
+The application uses reactive PostgreSQL through R2DBC repository boundaries. Flyway owns schema changes, and the runtime uses canonical public UUIDs while keeping internal database identifiers private.
 
 1. Define the relational schema and ownership rules.
 2. Add versioned PostgreSQL migrations and repository tests.
@@ -283,10 +283,10 @@ The current codebase uses reactive MongoDB. AP-0002 starts the PostgreSQL migrat
 4. Recreate fixtures and migrate only deliberately selected local data through a one-time idempotent import if needed.
 5. Reconcile imported identity, requests, listings, offers, wallets, and ledger history.
 6. Migrate file metadata while moving binary content to object storage.
-7. Remove MongoDB dependencies after PostgreSQL tests and the development cutover are verified.
+7. Keep PostgreSQL migrations, repository integration tests, and readiness gates in the release verification path.
 
 Live dual-read, dual-write, or controlled cutover is reserved for a future environment containing durable user data.
 
-Do not run MongoDB and PostgreSQL as two independent sources of truth for the same entity without a documented synchronization and recovery strategy.
+Do not introduce a second persistence source of truth for an application entity without a documented synchronization and recovery strategy.
 
 Contribution and architecture review checks are maintained in the root [`AGENTS.md`](../AGENTS.md) so human and AI contributors use one canonical checklist.

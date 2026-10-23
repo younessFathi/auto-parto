@@ -2,7 +2,7 @@
 
 ## Current boundary
 
-This is the completed development cutover path. PostgreSQL hosts the versioned target schema and the active identity/profile, marketplace, wallet, device-token, notification, file-metadata, notification-preferences, and object-storage boundaries. During normal development, legacy repositories remain available as explicit compatibility paths. When `APP_POSTGRES_CUTOVER_ENABLED=true` and `APP_POSTGRES_MONGO_DISABLED=true`, legacy Mongo repository beans are not created and canonical services fail closed instead of writing MongoDB.
+This is the completed PostgreSQL runtime path. PostgreSQL hosts the versioned target schema and the active identity/profile, marketplace, wallet, device-token, notification, file-metadata, notification-preferences, and object-storage boundaries.
 
 The marketplace persistence boundaries are behind `APP_POSTGRES_MARKETPLACE_ENABLED`. They cover PostgreSQL part-request, part-listing, and offer reads and mutations with canonical public UUIDs, bounded owner pagination, target constraints, and optimistic version checks. `PieceService` routes canonical UUID request reads, creation, and image updates through this boundary; image ownership is established by the PostgreSQL file upload transaction and the update path rejects legacy image IDs. Buyer identity checks, provider-subject and phone/email lookup, OTP replacement/failure tracking, activation, and deactivation, plus seller identity reads, OTP replacement/failure tracking, activation/deactivation, and wallet mutations, route through PostgreSQL when their boundaries are enabled; wallet mutations require an `Idempotency-Key` and explicit currency. Authenticated offer creation, actor-scoped reads, and status updates derive ownership from the PostgreSQL target row and return 404 for missing or inaccessible offers. PostgreSQL owns active device-token registration and invalidation while Redis remains the notification delivery projection. The notification record boundary owns durable pending event records, recipient-scoped reads, and transactional pending-to-dispatched transitions. Canonical UUID request-image reads, authenticated buyer request-image uploads, and authenticated seller listing-image uploads route through the PostgreSQL file boundary when `APP_POSTGRES_FILES_ENABLED` is enabled. When cutover is enabled, the storage reconciliation startup gate runs asynchronously after the application starts and keeps the application's health status down until active PostgreSQL file records match the configured object provider. A missing object or reconciliation timeout therefore keeps the deployment unready.
 
@@ -49,13 +49,13 @@ After migration succeeds, run the development identity/profile fixtures:
 docker compose --profile postgres run --rm app-postgresql-fixtures
 ```
 
-Run the application with the completed PostgreSQL-only development cutover profile. This service excludes MongoDB auto-configuration, enables every PostgreSQL boundary and cutover gate, and waits for migration and fixtures. The base deployment keeps the application port internal so replicas can share a network; add the local development override to publish it on host port `8081`:
+Run the application with the completed PostgreSQL development profile. It enables every PostgreSQL boundary and waits for migration and fixtures. The base deployment keeps the application port internal so replicas can share a network; add the local development override to publish it on host port `8081`:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.local.yml --profile postgres up -d springboot-postgresql-app
 ```
 
-The default `springboot-app` service remains the legacy compatibility profile and continues to use MongoDB. The production deployment should place a TLS entry point on the shared Compose network and scale the application service without publishing an instance-specific host port.
+The application service uses PostgreSQL and Redis only. The production deployment should place a TLS entry point on the shared Compose network and scale the application service without publishing an instance-specific host port.
 
 The fixture service is structurally ordered after the Flyway service and connects with the restricted runtime role, not the bootstrap or migration role. It creates deterministic development buyer and seller identities, profiles, marketplace records, a wallet/ledger pair, and one active device token. The script is transactional and idempotent: rerunning it does not duplicate users, profiles, marketplace records, wallet entries, or device tokens. If a deterministic fixture conflicts with existing data, the script exits nonzero and rolls back the run. It intentionally does not seed OTP challenges, files, notifications, or outbox state because those records are transient or require a separate validated object-storage/notification fixture manifest.
 
@@ -84,10 +84,10 @@ For any future PostgreSQL-backed application deployment:
 2. Run the restricted JDBC migration job and require success.
 3. Run the PostgreSQL fixtures for every migrated repository and reconciliation checks against that exact database.
 4. Roll out application code only after both steps pass.
-5. For an explicit application cutover, set `APP_POSTGRES_CUTOVER_ENABLED=true`, `APP_POSTGRES_MONGO_DISABLED=true`, `APP_POSTGRES_CUTOVER_API_CONTRACTS_READY=true`, and `APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_ENABLED=true`; the application may bind while reconciliation runs, but `/actuator/health` remains down until the active file manifest check succeeds. Configure the deployment or load balancer readiness probe to use this unauthenticated endpoint and do not send traffic while it is down.
+5. Set `APP_POSTGRES_CUTOVER_ENABLED=true`, `APP_POSTGRES_CUTOVER_API_CONTRACTS_READY=true`, and `APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_ENABLED=true`; the application may bind while reconciliation runs, but `/actuator/health` remains down until the active file manifest check succeeds. Configure the deployment or load balancer readiness probe to use this unauthenticated endpoint and do not send traffic while it is down.
 6. Enable the PostgreSQL runtime feature only for a build whose required repositories and health checks are PostgreSQL-ready.
 
-The current repository has no production deployment job. When `APP_POSTGRES_CUTOVER_GATE=true` is set in a protected deployment pipeline, the `postgresql-migration-gate` job runs the restricted Flyway migration, the dependent `postgresql-reconciliation-gate` job applies fixtures and reconciliation with the runtime role, and `postgresql-cutover-preflight` requires the verified-backup reference, API readiness, MongoDB shutdown, and storage-reconciliation flags before packaging. A failed migration, fixture conflict, reconciliation mismatch, or preflight failure prevents the package/deploy stages from proceeding. Application startup also refuses `APP_POSTGRES_CUTOVER_ENABLED=true` unless every API contract has been verified and `APP_POSTGRES_MONGO_DISABLED=true` explicitly confirms that MongoDB has been removed from the selected deployment.
+The current repository has no production deployment job. When `APP_POSTGRES_CUTOVER_GATE=true` is set in a protected deployment pipeline, the `postgresql-migration-gate` job runs the restricted Flyway migration, the dependent `postgresql-reconciliation-gate` job applies fixtures and reconciliation with the runtime role, and `postgresql-cutover-preflight` requires the verified-backup reference, API readiness, and storage-reconciliation flags before packaging. A failed migration, fixture conflict, reconciliation mismatch, or preflight failure prevents the package/deploy stages from proceeding.
 
 If migration fails, stop rollout and preserve the database and logs. Fix the migration or use a new forward migration. Application rollback is safe only when the prior application version remains compatible with the expanded schema. Prefer forward-fix for an applied migration; restore a verified backup only under the approved recovery procedure when data integrity requires it. Never downgrade destructively or delete development/production volumes to make a migration pass.
 
@@ -101,7 +101,7 @@ This opt-in check starts the Compose PostgreSQL service, runs the real `flyway/f
 
 ## Completed cutover gates
 
-- All active durable business boundaries use PostgreSQL under the cutover flags, including provider-subject identity lookup and OTP/profile operations. Legacy compatibility methods that are not part of an active controller contract fail closed when MongoDB is disabled.
+- All active durable business boundaries use PostgreSQL, including provider-subject identity lookup and OTP/profile operations.
 - Development uses a deliberate no-import policy. Durable fixtures are recreated in PostgreSQL; transient OTP, notification, outbox, and file-object state is not imported implicitly.
 - SQL reconciliation and the bounded startup storage gate block cutover on fixture, wallet-ledger, unexpected-file-metadata, or missing-object failures.
 - Restricted migration, fixtures, reconciliation, and backup/environment preflight run in dependency order before packaging. Expand-contract migration and forward-fix rollback procedures are documented above.
