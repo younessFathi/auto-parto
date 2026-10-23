@@ -1,48 +1,4 @@
 services:
-  springboot-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: auto-parto-springboot-app:latest
-    expose:
-      - "8080"
-    environment:
-      SPRING_R2DBC_URL: ${APP_POSTGRES_R2DBC_URL:-r2dbc:postgresql://app-postgresql:5432/auto_parto}
-      SPRING_R2DBC_USERNAME: ${APP_POSTGRES_RUNTIME_USER:-auto_parto_runtime}
-      SPRING_R2DBC_PASSWORD: ${APP_POSTGRES_RUNTIME_PASSWORD:-}
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATA_REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-password}
-      JWT_SECRET: ${JWT_SECRET:-MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=}
-      OTP_PEPPER: local-development-pepper
-    restart: unless-stopped
-    init: true
-    stop_grace_period: 20s
-    read_only: true
-    tmpfs:
-      - /tmp
-    pids_limit: 256
-    security_opt:
-      - no-new-privileges:true
-    mem_limit: 1g
-    cpus: "1.0"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    networks:
-      - app-network
-    healthcheck:
-      test: wget -qO- http://localhost:8080/actuator/health || exit 1
-      interval: 30s
-      timeout: 3s
-      start_period: 40s
-      retries: 3
-    depends_on:
-      redis:
-        condition: service_healthy
-
   springboot-postgresql-app:
     build:
       context: .

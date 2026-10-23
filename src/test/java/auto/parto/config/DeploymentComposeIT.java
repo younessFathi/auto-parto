@@ -43,11 +43,11 @@ class DeploymentComposeIT {
                     .contains("cpus: 1")
                     .contains("- /tmp");
 
-            CommandResult started = run(compose, "up", "-d", "--build", "--quiet-pull", "springboot-app");
+            CommandResult started = run(compose, "up", "-d", "--build", "--quiet-pull", "springboot-postgresql-app");
             assertThat(started.exitCode()).as(started.stdout()).isZero();
 
             waitForLiveness(compose);
-            String containerId = run(compose, "ps", "-q", "springboot-app").stdout().trim();
+            String containerId = run(compose, "ps", "-q", "springboot-postgresql-app").stdout().trim();
             assertThat(containerId).isNotBlank();
 
             String inspected = run(List.of("docker", "inspect", "--format", "{{json .}}", containerId)).stdout();
@@ -68,7 +68,7 @@ class DeploymentComposeIT {
         Instant deadline = Instant.now().plus(STARTUP_TIMEOUT);
         CommandResult last = null;
         while (Instant.now().isBefore(deadline)) {
-            last = run(compose, "exec", "-T", "springboot-app", "wget", "-qO-",
+            last = run(compose, "exec", "-T", "springboot-postgresql-app", "wget", "-qO-",
                     "http://localhost:8080/actuator/health/liveness");
             if (last.exitCode() == 0 && last.stdout().contains("\"status\":\"UP\"")) {
                 return;
@@ -76,12 +76,12 @@ class DeploymentComposeIT {
             Thread.sleep(1000L);
         }
         assertThat(last).as("application liveness response").isNotNull();
-        CommandResult logs = run(compose, "logs", "--no-color", "--tail", "100", "springboot-app");
+        CommandResult logs = run(compose, "logs", "--no-color", "--tail", "100", "springboot-postgresql-app");
         throw new AssertionError("Application did not reach liveness: " + last.stdout() + "\n" + logs.stdout());
     }
 
     private static List<String> composeCommand(String projectName, Path overrideFile) {
-        return List.of("docker", "compose", "--project-name", projectName,
+        return List.of("docker", "compose", "--project-name", projectName, "--profile", "postgres",
                 "--file", PROJECT_ROOT.resolve("docker-compose.yml").toString(),
                 "--file", overrideFile.toString());
     }
@@ -89,7 +89,7 @@ class DeploymentComposeIT {
     private static String composeOverride(String imageName) {
         return """
                 services:
-                  springboot-app:
+                  springboot-postgresql-app:
                     image: %s
                     environment:
                       SPRING_PROFILES_ACTIVE: local

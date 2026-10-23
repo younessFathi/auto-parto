@@ -17,7 +17,8 @@ class DockerComposeConfigurationTest {
     void dockerComposeIncludesSpringBootPostgresqlAndRedisWiring() throws IOException {
         String compose = Files.readString(Path.of("docker-compose.yml"));
 
-        assertThat(compose).contains("springboot-app:");
+        assertThat(compose).contains("springboot-postgresql-app:")
+                .doesNotContain("\n  springboot-app:\n");
         assertThat(compose).contains("expose:\n      - \"8080\"")
                 .doesNotContain("container_name: springboot-app")
                 .contains("stop_grace_period: 20s")
@@ -26,7 +27,7 @@ class DockerComposeConfigurationTest {
                 .contains("no-new-privileges:true")
                 .contains("mem_limit: 1g")
                 .contains("cpus: \"1.0\"");
-        assertThat(compose).contains("SPRING_R2DBC_URL: ${APP_POSTGRES_R2DBC_URL:-r2dbc:postgresql://app-postgresql:5432/auto_parto}");
+        assertThat(compose).contains("SPRING_R2DBC_URL: r2dbc:postgresql://app-postgresql:5432/${APP_POSTGRES_DB:-auto_parto}");
         assertThat(compose).contains("SPRING_DATA_REDIS_HOST: redis");
         assertThat(compose).contains("REDIS_PASSWORD: ${REDIS_PASSWORD:-password}");
         assertThat(compose).contains("JWT_SECRET: ${JWT_SECRET:-MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=}");
@@ -100,7 +101,7 @@ class DockerComposeConfigurationTest {
     void localOverridePublishesPortsWithoutPreventingReplicaScaling() throws IOException {
         String localCompose = Files.readString(Path.of("docker-compose.local.yml"));
 
-        assertThat(localCompose).contains("127.0.0.1:8080:8080")
-                .contains("127.0.0.1:8081:8080");
+        assertThat(localCompose).contains("127.0.0.1:8081:8080")
+                .doesNotContain("127.0.0.1:8080:8080");
     }
 }
