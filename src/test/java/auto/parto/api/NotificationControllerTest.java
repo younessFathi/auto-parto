@@ -4,7 +4,6 @@ import auto.parto.dto.NotificationRequest;
 import auto.parto.service.notification.PendingNotificationService;
 import auto.parto.service.notification.ResilientNotificationService;
 import auto.parto.service.notification.ResilientPendingNotificationService;
-import auto.parto.service.notification.SSENotificationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
@@ -40,8 +39,6 @@ class NotificationControllerTest {
     @MockitoBean
     private ResilientPendingNotificationService resilientPendingNotificationService;
 
-    @MockitoBean
-    private SSENotificationService sseNotificationService;
 
     @Test
     @WithMockUser
@@ -59,10 +56,8 @@ class NotificationControllerTest {
         when(resilientNotificationService.registerConnection("user-1")).thenReturn(userSink);
         when(resilientPendingNotificationService.deliverPendingOnConnect("user-1")).thenReturn(Mono.empty());
 
-        Sinks.Many<NotificationRequest> connectionSink = Sinks.many().multicast().onBackpressureBuffer();
-        connectionSink.tryEmitNext(new NotificationRequest("id-1", "user-1", auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "test", System.currentTimeMillis()));
-        connectionSink.tryEmitComplete();
-        when(sseNotificationService.getUserConnections("user-1")).thenReturn(connectionSink);
+        userSink.tryEmitNext(new NotificationRequest("id-1", "user-1", auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "test", System.currentTimeMillis()));
+        userSink.tryEmitComplete();
 
         webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("user-1")))
                 .get()
@@ -99,7 +94,7 @@ class NotificationControllerTest {
         NotificationRequest notification = new NotificationRequest("id-1", "user-1", auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "test", System.currentTimeMillis());
 
         when(resilientNotificationService.hasActiveConnection("user-1")).thenReturn(true);
-        when(resilientNotificationService.sendNotification(any(NotificationRequest.class))).thenReturn(true);
+        when(resilientNotificationService.sendNotification(any(NotificationRequest.class))).thenReturn(Mono.just(true));
 
         webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.admin("admin-1")))
                 .post()

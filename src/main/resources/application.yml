@@ -136,6 +136,9 @@ notification:
     pending-prefix: "notification:pending:"
     ttl-hours: 24
     max-pending-per-user: 100
+    max-scanned-keys: ${APP_NOTIFICATION_REDIS_MAX_SCANNED_KEYS:1000}
+  delivery:
+    recovery-delay-ms: ${APP_NOTIFICATION_RECOVERY_DELAY_MS:30000}
 
 firebase:
   enabled: ${FIREBASE_ENABLED:true}

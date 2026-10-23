@@ -5,7 +5,6 @@ import auto.parto.enums.NotificationStatus;
 import auto.parto.service.notification.PendingNotificationService;
 import auto.parto.service.notification.ResilientNotificationService;
 import auto.parto.service.notification.ResilientPendingNotificationService;
-import auto.parto.service.notification.SSENotificationService;
 import auto.parto.security.CanonicalSecurity;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -33,17 +32,14 @@ public class NotificationController {
     private final ResilientNotificationService resilientNotificationService;
     private final PendingNotificationService pendingNotificationService;
     private final ResilientPendingNotificationService resilientPendingNotificationService;
-    private final SSENotificationService sseNotificationService;
 
     public NotificationController(
             ResilientNotificationService resilientNotificationService,
             PendingNotificationService pendingNotificationService,
-            ResilientPendingNotificationService resilientPendingNotificationService,
-            SSENotificationService sseNotificationService
+            ResilientPendingNotificationService resilientPendingNotificationService
     ) {
         this.resilientNotificationService = resilientNotificationService;
         this.pendingNotificationService = pendingNotificationService;
-        this.sseNotificationService = sseNotificationService;
         this.notificationSink = Sinks.many().multicast().onBackpressureBuffer();
         this.resilientPendingNotificationService = resilientPendingNotificationService;
     }
@@ -56,9 +52,9 @@ public class NotificationController {
                 .mergeWith(heartbeatFlux())
                 .doOnSubscribe(sub -> log.info(NEW_SUBSCRIBER_CONNECTED))
                 .doOnCancel(() -> log.info(SUBSCRIBER_DISCONNECTED))
-                .doOnError(error -> log.error("{} : {}",SSE_CONNECTION_ERROR , error.getMessage()))
+                .doOnError(error -> log.error("{}", SSE_CONNECTION_ERROR))
                 .onErrorResume(error -> {
-                    log.error(SSE_ERROR_RETURNING_EMPTY_FLUX, error);
+                    log.error(SSE_ERROR_RETURNING_EMPTY_FLUX);
                     return Flux.empty();
                 });
     }
@@ -80,19 +76,31 @@ public class NotificationController {
             org.springframework.security.core.Authentication authentication) {
         CanonicalSecurity.requireOwner(authentication, userId, null);
         Sinks.Many<NotificationRequest> userSink = resilientNotificationService.registerConnection(userId);
-        return resilientPendingNotificationService.deliverPendingOnConnect(userId).thenMany(
-            sseNotificationService.getUserConnections(userId)
-                    .asFlux()
-                    .map(buildNotification())
-                )
+        // Subscribe to the sink before recovery so delivery sees an active SSE subscriber. The
+        // recovery publisher remains part of the returned stream and is cancelled with the client.
+        return Flux.defer(() -> userSink.asFlux().publish(sharedSink -> {
+                    Mono<Void> sinkClosed = sharedSink.ignoreElements().then();
+                    Flux<ServerSentEvent<NotificationRequest>> liveNotifications =
+                            sharedSink.map(buildNotification());
+                    Flux<ServerSentEvent<NotificationRequest>> pendingRecovery =
+                            resilientPendingNotificationService.deliverPendingOnConnect(userId)
+                                    .doOnError(error -> log.error("SSE pending recovery failed"))
+                                    .takeUntilOther(sinkClosed)
+                                    .thenMany(Flux.empty());
+                    return Flux.merge(liveNotifications, pendingRecovery);
+                }))
                 .doOnSubscribe(sub -> log.info(USER_SUBSCRIBED_TO_SSE, userId))
                 .doOnCancel(() -> {
                     log.info(USER_SSE_CONNECTION_CLOSED, userId);
-                    resilientNotificationService.unregisterConnection(userId);
+                    resilientNotificationService.unregisterConnection(userId, userSink);
+                })
+                .doOnComplete(() -> {
+                    log.info(USER_SSE_CONNECTION_CLOSED, userId);
+                    resilientNotificationService.unregisterConnection(userId, userSink);
                 })
                 .doOnError(error -> {
-                    log.error(SSE_ERROR_FOR_USER, userId, error.getMessage());
-                    resilientNotificationService.unregisterConnection(userId);
+                    log.error(SSE_ERROR_FOR_USER, userId);
+                    resilientNotificationService.unregisterConnection(userId, userSink);
                 });
     }
 
@@ -117,7 +125,7 @@ public class NotificationController {
         CanonicalSecurity.requireRole(authentication, "ROLE_ADMIN");
         return Mono.fromRunnable(() -> {
             notificationSink.tryEmitNext(notificationRequest);
-            log.info("Broadcast message {} " , notificationRequest);
+            log.info("Broadcast notification accepted");
         });
     }
 
@@ -136,14 +144,20 @@ public class NotificationController {
                         log.debug(USER_HAS_ACTIVE_CONNECTION_ATTEMPTING_DIRECT_DELIVERY, userId);
 
                         // User is online - try direct delivery
-                        boolean delivered = resilientNotificationService.sendNotification(notificationRequest);
-
-                        if (delivered) {
-                            log.info(NOTIFICATION_SUCCESSFULLY_DELIVERED_TO_VIA_SSE, userId);
-                            return Mono.just(ResponseEntity.ok(createSuccessResponse(userId)));
-                        }
-
-                        log.warn(DIRECT_DELIVERY_FAILED_FOR_FALLING_BACK_TO_STORAGE, userId);
+                        return resilientNotificationService.sendNotification(notificationRequest)
+                                .flatMap(delivered -> {
+                                    if (delivered) {
+                                        log.info(NOTIFICATION_SUCCESSFULLY_DELIVERED_TO_VIA_SSE, userId);
+                                        return Mono.just(ResponseEntity.ok(createSuccessResponse(userId)));
+                                    }
+                                    log.warn(DIRECT_DELIVERY_FAILED_FOR_FALLING_BACK_TO_STORAGE, userId);
+                                    return pendingNotificationService.addPendingNotification(notificationRequest)
+                                            .map(isStored -> isStored
+                                                    ? ResponseEntity.status(HttpStatus.ACCEPTED)
+                                                        .body(createPendingResponse(userId))
+                                                    : ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                                        .body(createErrorResponse(userId, STORAGE_FAILED)));
+                                });
                     } else {
                         log.debug(USER_IS_OFFLINE_STORING_NOTIFICATION, userId);
                     }
@@ -163,9 +177,9 @@ public class NotificationController {
                             });
                 })
                 .onErrorResume(error -> {
-                    log.error(ERROR_SENDING_NOTIFICATION_TO, userId, error.getMessage(), error);
+                    log.error(ERROR_SENDING_NOTIFICATION_TO, userId);
                     return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                            .body(createErrorResponse(userId, error.getMessage())));
+                            .body(createErrorResponse(userId, STORAGE_FAILED)));
                 })
                 .defaultIfEmpty(ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(createErrorResponse(userId, INVALID_NOTIFICATION_REQUEST)));

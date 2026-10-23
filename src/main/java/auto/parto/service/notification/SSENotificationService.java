@@ -135,6 +135,17 @@ public class SSENotificationService {
         });
     }
 
+    public void unregisterConnection(String userId, Sinks.Many<NotificationRequest> expectedConnection) {
+        userConnections.computeIfPresent(userId, (k, current) -> {
+            if (current != expectedConnection) {
+                return current;
+            }
+            current.emitComplete(Sinks.EmitFailureHandler.FAIL_FAST);
+            log.info("SSE connection removed for user: {}", userId);
+            return null;
+        });
+    }
+
     /**
      * Check if user has active SSE connection
      */

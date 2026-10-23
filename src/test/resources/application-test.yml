@@ -12,9 +12,13 @@ firebase:
     retry:
       max-attempts: 1
       backoff-delay: 100
-    circuit-breaker:
-      failure-threshold: 5
-      reset-timeout: 30000
+      circuit-breaker:
+        failure-threshold: 5
+        reset-timeout: 30000
+
+notification:
+  delivery:
+    recovery-delay-ms: 60000
 
 security:
   otp:

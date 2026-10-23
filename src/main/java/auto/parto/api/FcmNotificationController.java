@@ -98,7 +98,7 @@ public class FcmNotificationController {
                                         log.error("Error sending notification to user {}: {}",
                                                 request.getUserId(), error.getMessage(), error);
                                         return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                                .body(FcmDeliveryResult.failed(request.getUserId(), error.getMessage())));
+                                                .body(FcmDeliveryResult.failed(request.getUserId(), "PROVIDER_UNAVAILABLE")));
                                     });
                         });
     }
@@ -322,7 +322,7 @@ public class FcmNotificationController {
                             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                                     .body(Map.of(
                                             "status", "DOWN",
-                                            "error", e.getMessage(),
+                                            "error", "PROVIDER_UNAVAILABLE",
                                             "timestamp", LocalDateTime.now()
                                     ));
                         }

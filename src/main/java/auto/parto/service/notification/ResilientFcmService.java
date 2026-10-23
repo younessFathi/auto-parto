@@ -29,7 +29,6 @@ public class ResilientFcmService {
     private final DeviceTokenService deviceTokenService;
     private final CircuitBreaker circuitBreaker;
     private final RetryTemplate retryTemplate;
-    private final PushNotificationQueue pushQueue;
 
     @Value("${firebase.messaging.timeout:10s}")
     private Duration fcmTimeout;
@@ -49,7 +48,7 @@ public class ResilientFcmService {
                 .flatMap(tokens -> sendToAllTokens(userId, tokens, notification))
                 // 4. Handle "No Tokens" gracefully (don't retry, just report failure)
                 .onErrorResume(NoActiveTokensException.class, e -> {
-                    log.warn("No active tokens found for user {}" , e.getMessage());
+                    log.warn("No active notification tokens found");
                     return Mono.just(FcmDeliveryResult.builder()
                             .userId(userId)
                             .success(false)
@@ -61,9 +60,8 @@ public class ResilientFcmService {
                 })
                 // 5. Handle unexpected errors (Queue for retry)
                 .onErrorResume(e -> {
-                    log.error("Failed to send FCM to user {}: {}", userId, e.getMessage());
-                    return pushQueue.enqueueForRetry(userId, notification)
-                            .thenReturn(FcmDeliveryResult.failed(userId, e.getMessage()));
+                    log.error("Failed to send FCM to user {}", userId);
+                    return Mono.just(FcmDeliveryResult.failed(userId, "PROVIDER_UNAVAILABLE"));
                 });
     }
 
@@ -105,7 +103,7 @@ public class ResilientFcmService {
                 .flatMap(userId -> sendToUser(userId, notification)
                         .map(result -> new BatchFcmResult.UserDeliveryResult(userId, result, null))
                         .onErrorResume(e -> Mono.just(
-                                new BatchFcmResult.UserDeliveryResult(userId, FcmDeliveryResult.failed(userId, e.getMessage()), null)
+                                new BatchFcmResult.UserDeliveryResult(userId, FcmDeliveryResult.failed(userId, "PROVIDER_UNAVAILABLE"), null)
                         ))
                 )
                 .collectList()
@@ -162,19 +160,19 @@ public class ResilientFcmService {
                 .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
                 .onErrorResume(throwable -> {
                     // Circuit open or non-retryable error
-                    log.error("FCM circuit open or failed for token: {}, error: {}",
-                            deviceTokenService.maskToken(token), throwable.getMessage());
+                    log.error("FCM circuit open or failed for token: {}",
+                            deviceTokenService.maskToken(token));
 
                     // Handle invalid token
                     if (isInvalidTokenError(throwable)) {
                         Mono<Void> invalidation = deviceTokenService.markTokenInvalid(token);
                         return (invalidation == null ? Mono.<Void>empty() : invalidation)
                                 .onErrorResume(invalidationError -> Mono.empty())
-                                .thenReturn(FcmDeliveryResult.failed(token, throwable.getMessage()));
+                                .thenReturn(FcmDeliveryResult.failed(token, "PROVIDER_UNAVAILABLE"));
                     }
 
                     // FIX: Added .getMessage() to fix the syntax error "throwable."
-                    return Mono.just(FcmDeliveryResult.failed(token, throwable.getMessage()));
+                    return Mono.just(FcmDeliveryResult.failed(token, "PROVIDER_UNAVAILABLE"));
                 });
     }
 

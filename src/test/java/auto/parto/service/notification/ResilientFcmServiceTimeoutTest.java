@@ -26,16 +26,13 @@ class ResilientFcmServiceTimeoutTest {
     private DeviceTokenService deviceTokenService;
     @Mock
     private RetryTemplate retryTemplate;
-    @Mock
-    private PushNotificationQueue pushQueue;
-
     private ResilientFcmService service;
     private CircuitBreaker circuitBreaker;
 
     @BeforeEach
     void setUp() {
         circuitBreaker = CircuitBreaker.ofDefaults("fcm-test");
-        service = new ResilientFcmService(firebaseMessaging, deviceTokenService, circuitBreaker, retryTemplate, pushQueue);
+        service = new ResilientFcmService(firebaseMessaging, deviceTokenService, circuitBreaker, retryTemplate);
         ReflectionTestUtils.setField(service, "fcmTimeout", Duration.ofMillis(50));
     }
 

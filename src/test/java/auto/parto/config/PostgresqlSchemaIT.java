@@ -33,7 +33,7 @@ class PostgresqlSchemaIT {
                 .locations("classpath:db/migration")
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(11);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(12);
         assertThat(flyway.migrate().migrationsExecuted).isZero();
 
         try (Connection connection = POSTGRES.createConnection("")) {
@@ -73,6 +73,7 @@ class PostgresqlSchemaIT {
             assertThat(indexExists(connection, "part_listings", "part_listings_matching_category_condition_idx")).isTrue();
             assertThat(indexExists(connection, "part_listings", "part_listings_matching_full_idx")).isTrue();
             assertThat(indexExists(connection, "files", "files_pending_recovery_idx")).isTrue();
+            assertThat(indexExists(connection, "notifications", "notifications_delivery_claim_idx")).isTrue();
 
             assertThat(constraintExists(connection, "offers", "offers_target_chk")).isTrue();
             assertThat(constraintExists(connection, "offers", "offers_request_owner_fk")).isTrue();
@@ -84,6 +85,8 @@ class PostgresqlSchemaIT {
             assertThat(constraintExists(connection, "outbox_deliveries", "outbox_deliveries_lease_chk")).isTrue();
             assertThat(constraintExists(connection, "outbox_deliveries", "outbox_deliveries_event_destination_uidx")).isTrue();
             assertThat(constraintExists(connection, "notification_attempts", "notification_attempts_status_chk")).isTrue();
+            assertThat(constraintExists(connection, "notifications", "notifications_attempt_count_chk")).isTrue();
+            assertThat(constraintExists(connection, "notifications", "notifications_lease_chk")).isTrue();
             assertThat(constraintExists(connection, "device_tokens", "device_tokens_invalidated_at_chk")).isTrue();
             assertThat(constraintExists(connection, "part_listings", "part_listings_business_status_chk")).isTrue();
             assertThat(constraintExists(connection, "part_listings", "part_listings_delivery_status_chk")).isTrue();

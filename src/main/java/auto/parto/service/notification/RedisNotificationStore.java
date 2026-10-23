@@ -11,6 +11,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -34,18 +35,21 @@ public class RedisNotificationStore {
     private final String pendingPrefix;
     private final int ttlHours;
     private final int maxPendingPerUser;
+    private final int maxScannedKeys;
     private static final Duration TOKEN_TTL = Duration.ofDays(60); // Expire inactive tokens
 
     public RedisNotificationStore(ReactiveRedisTemplate<String, String> redisTemplate,
                                   ObjectMapper objectMapper,
                                   @Value("${notification.redis.pending-prefix:notification:pending:}") String pendingPrefix,
                                   @Value("${notification.redis.ttl-hours:24}") int ttlHours,
-                                  @Value("${notification.redis.max-pending-per-user:100}") int maxPendingPerUser) {
+                                  @Value("${notification.redis.max-pending-per-user:100}") int maxPendingPerUser,
+                                  @Value("${notification.redis.max-scanned-keys:1000}") int maxScannedKeys) {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
         this.pendingPrefix = pendingPrefix;
         this.ttlHours = ttlHours;
         this.maxPendingPerUser = maxPendingPerUser;
+        this.maxScannedKeys = maxScannedKeys;
     }
 
     // Initialize with JavaTimeModule for LocalDateTime support
@@ -88,8 +92,7 @@ public class RedisNotificationStore {
                     }
                 })
                 .onErrorResume(e -> {
-                    log.error("Failed to store pending notification for {} in Redis: {}",
-                            userId, e.getMessage());
+                    log.error("Failed to store pending notification projection in Redis");
                     return Mono.just(false);
                 });
     }
@@ -101,19 +104,10 @@ public class RedisNotificationStore {
         String key = buildPendingKey(userId);
 
         return redisTemplate.opsForList()
-                .range(key, 0, -1) // Get all items
-                .flatMapSequential(json -> deserializeNotification(json))
-                .collectList()
-                .flatMapMany(notifications -> {
-                    if (!notifications.isEmpty()) {
-                        log.info("Retrieved {} pending notifications from Redis for {}",
-                                notifications.size(), userId);
-                    }
-                    return Flux.fromIterable(notifications);
-                })
+                .range(key, 0, maxPendingPerUser - 1)
+                .flatMapSequential(this::deserializeNotification)
                 .onErrorResume(e -> {
-                    log.error("Failed to retrieve pending notifications for {}: {}",
-                            userId, e.getMessage());
+                    log.error("Failed to retrieve pending notifications from projection");
                     return Flux.empty();
                 });
     }
@@ -132,10 +126,17 @@ public class RedisNotificationStore {
                     }
                 })
                 .onErrorResume(e -> {
-                    log.error("Failed to clear pending notifications for {}: {}",
-                            userId, e.getMessage());
+                    log.error("Failed to clear pending notification projection");
                     return Mono.just(0L);
                 });
+    }
+
+    /** Replaces the bounded projection so repeated recovery cannot duplicate entries. */
+    public Mono<Void> replacePendingNotifications(String userId, Flux<NotificationRequest> notifications) {
+        String key = buildPendingKey(userId);
+        return redisTemplate.delete(key)
+                .thenMany(notifications.concatMap(notification -> storePending(userId, notification)))
+                .then();
     }
 
     /**
@@ -148,7 +149,7 @@ public class RedisNotificationStore {
                 .size(key)
                 .defaultIfEmpty(0L)
                 .onErrorResume(e -> {
-                    log.error("Failed to get pending count for {}: {}", userId, e.getMessage());
+                    log.error("Failed to get pending notification projection count");
                     return Mono.just(0L);
                 });
     }
@@ -160,15 +161,12 @@ public class RedisNotificationStore {
         String key = buildPendingKey(userId);
 
         return redisTemplate.opsForList()
-                .range(key, 0, -1)
-                .collectList()
-                .flatMap(items -> Flux.fromIterable(items)
-                        .flatMap(json -> deserializeNotification(json).map(notif -> Map.entry(json, notif)))
-                        .filter(entry -> entry.getValue() != null && entry.getValue().id().equals(notificationId))
-                        .next()
-                        .flatMap(entry -> redisTemplate.opsForList().remove(key, 1, entry.getKey()))
-                        .defaultIfEmpty(0L)
-                );
+                .range(key, 0, maxPendingPerUser - 1)
+                .flatMap(json -> deserializeNotification(json).map(notif -> Map.entry(json, notif)))
+                .filter(entry -> entry.getValue() != null && entry.getValue().id().equals(notificationId))
+                .next()
+                .flatMap(entry -> redisTemplate.opsForList().remove(key, 1, entry.getKey()))
+                .defaultIfEmpty(0L);
     }
 
     /**
@@ -177,7 +175,7 @@ public class RedisNotificationStore {
     public Mono<Map<String, ?>> getPendingStats() {
         String pattern = pendingPrefix + "*";
 
-        return redisTemplate.keys(pattern)
+        return scanKeys(pattern)
                 .collectList()
                 .flatMap(keys -> {
                     if (keys.isEmpty()) {
@@ -203,8 +201,8 @@ public class RedisNotificationStore {
                             ));
                 })
                 .onErrorResume(e -> {
-                    log.error("Failed to get pending stats: {}", e.getMessage());
-                    return Mono.just(Map.of("error", e.getMessage()));
+                    log.error("Failed to get pending projection stats");
+                    return Mono.just(Map.of("totalUsers", 0L, "totalNotifications", 0L));
                 });
     }
 
@@ -215,7 +213,7 @@ public class RedisNotificationStore {
     public Mono<Void> cleanupExpiredNotifications() {
         String pattern = pendingPrefix + "*";
 
-        return redisTemplate.keys(pattern)
+        return scanKeys(pattern)
                 .flatMap(key -> {
                     // Check TTL for each key
                     return redisTemplate.getExpire(key)
@@ -227,7 +225,7 @@ public class RedisNotificationStore {
                 })
                 .then()
                 .doOnSuccess(v -> log.info("Expired notifications cleanup completed"))
-                .doOnError(e -> log.error("Cleanup failed: {}", e.getMessage()));
+                .doOnError(e -> log.error("Cleanup failed"));
     }
 
     // Helper methods
@@ -240,18 +238,25 @@ public class RedisNotificationStore {
         try {
             return objectMapper.writeValueAsString(notification);
         } catch (JsonProcessingException e) {
-            log.error("Failed to serialize notification: {}", e.getMessage());
+            log.error("Failed to serialize notification");
             return null;
         }
     }
 
     private Mono<NotificationRequest> deserializeNotification(String json) {
-        log.info("deserializeNotification {}" , json);
         return Mono.fromCallable(() -> objectMapper.readValue(json, NotificationRequest.class))
                 .onErrorResume(e -> {
-                    log.error("Failed to deserialize notification JSON: {}", e.getMessage());
+                    log.error("Failed to deserialize notification projection");
                     return Mono.empty();
                 });
+    }
+
+    private Flux<String> scanKeys(String pattern) {
+        return redisTemplate.scan(ScanOptions.scanOptions()
+                        .match(pattern)
+                        .count(Math.min(maxScannedKeys, 1000))
+                        .build())
+                .take(maxScannedKeys);
     }
 
     public String maskToken(String token) {

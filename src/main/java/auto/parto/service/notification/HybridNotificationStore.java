@@ -4,8 +4,6 @@ import auto.parto.dto.NotificationRequest;
 import auto.parto.persistence.NotificationRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.ObjectProvider;
@@ -13,28 +11,27 @@ import org.springframework.beans.factory.annotation.Autowired;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.UUID;
 import java.util.Collection;
+import java.time.Duration;
+import java.time.Instant;
 
 @Component
 @Slf4j
 public class HybridNotificationStore {
 
+    public record ClaimedNotification(UUID publicId, NotificationRequest notification) {
+    }
+
     private final RedisNotificationStore redisStore;
     private final NotificationRepository postgresqlRepository;
     private final ObjectMapper objectMapper;
-
-    // Memory cache for hot data (recently accessed)
-    private final Cache<String, List<NotificationRequest>> memoryCache;
 
     public HybridNotificationStore(RedisNotificationStore redisStore) {
         this.redisStore = redisStore;
         this.postgresqlRepository = null;
         this.objectMapper = null;
-        this.memoryCache = createMemoryCache();
     }
 
     @Autowired
@@ -44,86 +41,41 @@ public class HybridNotificationStore {
         this.redisStore = redisStore;
         this.postgresqlRepository = postgresqlRepositories.getIfAvailable();
         this.objectMapper = objectMapper;
-
-        this.memoryCache = createMemoryCache();
-
-    }
-
-    private Cache<String, List<NotificationRequest>> createMemoryCache() {
-        return Caffeine.newBuilder()
-                .maximumSize(1000) // Cache 1000 users
-                .expireAfterWrite(10, TimeUnit.MINUTES) // 10 minute TTL
-                .expireAfterAccess(5, TimeUnit.MINUTES) // 5 minutes since last access
-                .build();
     }
 
     public Mono<Boolean> storePending(NotificationRequest notification) {
         String userId = notification.userId();
-        // Clear memory cache for this user
-        memoryCache.invalidate(userId);
-
         if (postgresqlRepository == null) {
-            return redisStore.storePending(userId, notification);
+            return Mono.just(false);
         }
         return parseUserId(userId)
                 .flatMap(owner -> serialize(notification)
                         .flatMap(payload -> postgresqlRepository.enqueue(owner,
                                 notification.type().name(), payload))
-                        .flatMap(record -> redisStore.storePending(userId, notification)))
+                        // PostgreSQL is authoritative; Redis is only a best-effort projection.
+                        .flatMap(record -> redisStore.storePending(userId, notification)
+                                .onErrorReturn(false)
+                                .thenReturn(true)))
                 .defaultIfEmpty(false);
     }
 
     public Flux<NotificationRequest> getPendingNotifications(String userId) {
-        // Check memory cache first
-        List<NotificationRequest> cached = memoryCache.getIfPresent(userId);
-        if (cached != null && !cached.isEmpty()) {
-            log.debug("Cache hit for user {}: {} notifications", userId, cached.size());
-            return Flux.fromIterable(cached);
-        }
-
-        if (postgresqlRepository != null) {
-            return parseUserId(userId)
-                    .flatMapMany(owner -> postgresqlRepository.findPendingForRecipient(owner, 100)
-                            .flatMap(this::deserialize)
-                            .collectList()
-                            .doOnNext(notifications -> {
-                                if (!notifications.isEmpty()) memoryCache.put(userId, notifications);
-                            })
-                            .flatMapMany(Flux::fromIterable))
-                    .onErrorResume(error -> {
-                        log.error("Failed to retrieve pending notifications from PostgreSQL for {}: {}",
-                                userId, error.getMessage());
-                        return Flux.empty();
-                    });
-        }
-
-        // Cache miss - get from Redis
-        log.info("Retrieving pending notifications from Redis");
-        return redisStore.getPendingNotifications(userId)
-                .collectList()
-                .flatMapMany(notifications -> {
-                    // Store in cache
-                    if (!notifications.isEmpty()) {
-                        memoryCache.put(userId, notifications);
-                    }
-                    return Flux.fromIterable(notifications);
-                });
+        if (postgresqlRepository == null) return Flux.empty();
+        return parseUserId(userId)
+                .flatMapMany(owner -> postgresqlRepository.findPendingForRecipient(owner, 100)
+                        .flatMap(this::deserialize))
+                .onErrorResume(error -> Flux.empty());
     }
 
     public Mono<Long> clearPendingNotifications(String userId) {
-        // Clear both cache and Redis
-        memoryCache.invalidate(userId);
-        if (postgresqlRepository != null) {
-            return parseUserId(userId)
-                    .flatMap(postgresqlRepository::markPendingForRecipient)
-                    .defaultIfEmpty(0L)
-                    .flatMap(marked -> redisStore.clearPendingNotifications(userId).thenReturn(marked));
-        }
-        return redisStore.clearPendingNotifications(userId);
+        if (postgresqlRepository == null) return Mono.just(0L);
+        return parseUserId(userId)
+                .flatMap(postgresqlRepository::markPendingForRecipient)
+                .defaultIfEmpty(0L)
+                .flatMap(marked -> redisStore.clearPendingNotifications(userId).thenReturn(marked));
     }
 
     public Mono<Long> clearPendingNotifications(String userId, Collection<String> notificationIds) {
-        memoryCache.invalidate(userId);
         if (notificationIds == null || notificationIds.isEmpty()) return Mono.just(0L);
         if (postgresqlRepository != null) {
             return parseUserId(userId)
@@ -133,7 +85,7 @@ public class HybridNotificationStore {
                     .count()
                     .flatMap(marked -> removeRedisNotifications(userId, notificationIds).thenReturn(marked));
         }
-        return removeRedisNotifications(userId, notificationIds);
+        return Mono.just(0L);
     }
 
     private Mono<Long> removeRedisNotifications(String userId, Collection<String> notificationIds) {
@@ -171,7 +123,7 @@ public class HybridNotificationStore {
                             "totalNotifications", result.getT1(),
                             "usersWithPending", result.getT2()));
         }
-        return redisStore.getPendingStats();
+        return Mono.just(Map.of("totalUsers", 0L, "totalNotifications", 0L));
     }
 
     public Flux<String> getPendingRecipientIds(UUID afterRecipientPublicId, int limit) {
@@ -179,21 +131,45 @@ public class HybridNotificationStore {
             return postgresqlRepository.findPendingRecipientIds(afterRecipientPublicId, limit)
                     .map(UUID::toString);
         }
-        return redisStore.getPendingStats()
-                .flatMapMany(stats -> {
-                    Object value = stats.get("usersWithPending");
-                    if (!(value instanceof Collection<?> users)) {
-                        return Flux.empty();
-                    }
-                    return Flux.fromIterable(users)
-                            .map(Object::toString)
-                            .flatMap(this::parseUserId)
-                            .filter(id -> afterRecipientPublicId == null
-                                    || id.compareTo(afterRecipientPublicId) > 0)
-                            .sort()
-                            .take(limit)
-                            .map(UUID::toString);
-                });
+        return Flux.empty();
+    }
+
+    public Flux<ClaimedNotification> claimPendingNotifications(String userId, String claimOwner,
+                                                                Instant now, Duration leaseDuration, int limit) {
+        if (postgresqlRepository == null) return Flux.empty();
+        return parseUserId(userId)
+                .flatMapMany(owner -> postgresqlRepository
+                        .claimPendingForRecipient(owner, claimOwner, now, leaseDuration, limit)
+                        .flatMap(record -> deserialize(record)
+                                .map(notification -> new ClaimedNotification(record.publicId(), notification))));
+    }
+
+    public Mono<Void> rebuildProjection(String userId) {
+        if (postgresqlRepository == null) return Mono.empty();
+        return parseUserId(userId)
+                .flatMap(owner -> redisStore.replacePendingNotifications(userId,
+                        postgresqlRepository.findPendingForRecipient(owner, 100)
+                                .flatMap(this::deserialize)))
+                .then();
+    }
+
+    public Mono<Boolean> acknowledgeDelivery(UUID notificationPublicId, String claimOwner) {
+        if (postgresqlRepository == null || notificationPublicId == null) return Mono.just(false);
+        return postgresqlRepository.acknowledgeDelivery(notificationPublicId, claimOwner);
+    }
+
+    public Mono<Boolean> scheduleRetry(UUID notificationPublicId, String claimOwner,
+                                       Instant nextAttemptAt, String failureCode, int maxAttempts) {
+        if (postgresqlRepository == null || notificationPublicId == null) return Mono.just(false);
+        return postgresqlRepository.scheduleRetry(notificationPublicId, claimOwner,
+                nextAttemptAt, failureCode, maxAttempts);
+    }
+
+    public Mono<Void> recordAttempt(UUID notificationPublicId, String channel, String status,
+                                    String providerReference, String failureReason) {
+        if (postgresqlRepository == null) return Mono.empty();
+        return postgresqlRepository.recordAttempt(notificationPublicId, channel, status,
+                providerReference, failureReason).then();
     }
 
 }

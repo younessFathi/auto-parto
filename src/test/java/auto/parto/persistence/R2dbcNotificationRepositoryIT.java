@@ -12,8 +12,11 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.test.StepVerifier;
+import reactor.core.publisher.Mono;
 
 import java.util.UUID;
+import java.time.Duration;
+import java.time.Instant;
 
 import static io.r2dbc.spi.ConnectionFactoryOptions.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -194,6 +197,62 @@ class R2dbcNotificationRepositoryIT {
                 .verifyComplete();
         StepVerifier.create(repository.findPendingRecipientIds(100).filter(owner::equals))
                 .expectNext(owner).verifyComplete();
+    }
+
+    @Test
+    void concurrentClaimsHaveOneWinnerAndLeaseExpiryAllowsRecovery() {
+        UUID owner = UUID.randomUUID();
+        StepVerifier.create(insertUser(owner)
+                        .then(repository.enqueue(owner, "CLAIM", "{}"))
+                        .flatMap(notification -> {
+                            Instant now = Instant.now().plusSeconds(1);
+                            return Mono.zip(
+                                repository.claimPendingForRecipient(owner, "worker-1", now,
+                                        Duration.ofMinutes(1), 1).collectList(),
+                                repository.claimPendingForRecipient(owner, "worker-2", now,
+                                        Duration.ofMinutes(1), 1).collectList());
+                        }))
+                .assertNext(result -> assertThat(result.getT1().size() + result.getT2().size()).isEqualTo(1))
+                .verifyComplete();
+
+        StepVerifier.create(repository.claimPendingForRecipient(owner, "worker-2", Instant.now().plusSeconds(120),
+                                Duration.ofMinutes(1), 1))
+                .expectNextCount(1)
+                .verifyComplete();
+    }
+
+    @Test
+    void retryStateIsDurableAndReachesTerminalExhaustion() {
+        UUID owner = UUID.randomUUID();
+        StepVerifier.create(insertUser(owner)
+                        .then(repository.enqueue(owner, "RETRY", "{}"))
+                        .flatMap(notification -> repository.claimPendingForRecipient(owner, "worker-retry",
+                                        Instant.now(), Duration.ofMinutes(1), 1)
+                                .single()
+                                .flatMap(claimed -> repository.scheduleRetry(claimed.publicId(), "worker-retry",
+                                        Instant.now().plusSeconds(30), "DELIVERY_UNAVAILABLE", 1))))
+                .expectNext(true)
+                .verifyComplete();
+
+        StepVerifier.create(databaseClient.sql("""
+                        SELECT status, attempt_count, last_failure_code, lease_owner
+                        FROM notifications WHERE event_type = 'RETRY'
+                        ORDER BY id DESC LIMIT 1
+                        """)
+                        .map((row, metadata) -> java.util.List.of(row.get("status", String.class),
+                                row.get("attempt_count", Integer.class), row.get("last_failure_code", String.class)))
+                        .one())
+                .assertNext(row -> assertThat(row).containsExactly("EXHAUSTED", 1,
+                        "DELIVERY_UNAVAILABLE"))
+                .verifyComplete();
+    }
+
+    @Test
+    void claimLimitIsBounded() {
+        assertThatThrownBy(() -> repository.claimPendingForRecipient(UUID.randomUUID(), "worker", Instant.now(),
+                Duration.ofSeconds(1), 101))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("limit must be between 1 and 100");
     }
 
     private reactor.core.publisher.Mono<Void> insertUser(UUID publicId) {

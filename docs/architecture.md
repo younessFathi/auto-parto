@@ -215,6 +215,14 @@ Requirements:
 - Protect user-specific notification endpoints with ownership checks.
 - For multiple application instances, use shared state or a dedicated broker for connection and delivery coordination.
 
+PostgreSQL is the authority for notification intent, delivery state, attempts, leases,
+retry timing, failure classification, and exhaustion. The `notifications` table uses
+bounded claims with `FOR UPDATE SKIP LOCKED`; delivery claims record the attempt count,
+next attempt time, lease owner and expiry, and a controlled failure code. The current
+retry policy allows three attempts before durable exhaustion. Redis is only a bounded,
+expiring projection that accelerates delivery and is rebuilt from PostgreSQL after Redis
+loss or application restart. There are no JVM-local queues and no Redis-only retry authority.
+
 SSE delivery semantics are explicit and channel-specific. Durable event state is separate from transport-attempt state:
 
 - Durable event: `PENDING`, `DISPATCHED`, `EXHAUSTED`.

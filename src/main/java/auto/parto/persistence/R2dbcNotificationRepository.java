@@ -9,6 +9,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Set;
 import java.util.UUID;
 
@@ -224,6 +225,94 @@ public class R2dbcNotificationRepository implements NotificationRepository {
                 .as(transactions::transactional);
     }
 
+    @Override
+    public Flux<NotificationRecord> claimPendingForRecipient(UUID recipientUserPublicId, String claimOwner,
+                                                              Instant now, Duration leaseDuration, int limit) {
+        requirePublicId(recipientUserPublicId);
+        requireText(claimOwner, "claimOwner");
+        requireLimit(limit);
+        if (leaseDuration == null || leaseDuration.isNegative() || leaseDuration.isZero()) {
+            throw new IllegalArgumentException("leaseDuration must be positive");
+        }
+        Instant leaseExpiresAt = now.plus(leaseDuration);
+        return databaseClient.sql("""
+                        WITH candidates AS (
+                            SELECT notification.id
+                            FROM notifications notification
+                            JOIN app_users owner ON owner.id = notification.recipient_user_id
+                            WHERE owner.public_id = :recipientPublicId
+                              AND notification.status = 'PENDING'
+                              AND notification.next_attempt_at <= :now
+                              AND (notification.lease_expires_at IS NULL
+                                   OR notification.lease_expires_at <= :now)
+                            ORDER BY notification.created_at, notification.id
+                            FOR UPDATE SKIP LOCKED
+                            LIMIT :limit
+                        )
+                        UPDATE notifications notification
+                        SET lease_owner = :claimOwner, lease_expires_at = :leaseExpiresAt,
+                            updated_at = CURRENT_TIMESTAMP
+                        FROM candidates
+                        WHERE notification.id = candidates.id
+                        RETURNING notification.public_id
+                        """)
+                .bind("recipientPublicId", recipientUserPublicId)
+                .bind("claimOwner", claimOwner)
+                .bind("now", now)
+                .bind("leaseExpiresAt", leaseExpiresAt)
+                .bind("limit", limit)
+                .map((row, metadata) -> row.get("public_id", UUID.class))
+                .all()
+                .flatMap(this::findByPublicId)
+                .as(transactions::transactional);
+    }
+
+    @Override
+    public Mono<Boolean> acknowledgeDelivery(UUID notificationPublicId, String claimOwner) {
+        requirePublicId(notificationPublicId);
+        requireText(claimOwner, "claimOwner");
+        return databaseClient.sql("""
+                        UPDATE notifications
+                        SET status = 'DISPATCHED', lease_owner = NULL, lease_expires_at = NULL,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE public_id = :publicId AND status = 'PENDING'
+                          AND lease_owner = :claimOwner AND lease_expires_at > CURRENT_TIMESTAMP
+                        """)
+                .bind("publicId", notificationPublicId)
+                .bind("claimOwner", claimOwner)
+                .fetch().rowsUpdated()
+                .map(rows -> rows == 1)
+                .as(transactions::transactional);
+    }
+
+    @Override
+    public Mono<Boolean> scheduleRetry(UUID notificationPublicId, String claimOwner, Instant nextAttemptAt,
+                                       String failureCode, int maxAttempts) {
+        requirePublicId(notificationPublicId);
+        requireText(claimOwner, "claimOwner");
+        requireText(failureCode, "failureCode");
+        if (maxAttempts < 1 || maxAttempts > 10) throw new IllegalArgumentException("maxAttempts must be between 1 and 10");
+        return databaseClient.sql("""
+                        UPDATE notifications
+                        SET attempt_count = attempt_count + 1,
+                            status = CASE WHEN attempt_count + 1 >= :maxAttempts THEN 'EXHAUSTED' ELSE 'PENDING' END,
+                            next_attempt_at = :nextAttemptAt,
+                            last_failure_code = :failureCode,
+                            lease_owner = NULL, lease_expires_at = NULL,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE public_id = :publicId AND status = 'PENDING'
+                          AND lease_owner = :claimOwner AND lease_expires_at > CURRENT_TIMESTAMP
+                        """)
+                .bind("maxAttempts", maxAttempts)
+                .bind("nextAttemptAt", nextAttemptAt)
+                .bind("failureCode", failureCode)
+                .bind("publicId", notificationPublicId)
+                .bind("claimOwner", claimOwner)
+                .fetch().rowsUpdated()
+                .map(rows -> rows == 1)
+                .as(transactions::transactional);
+    }
+
     private Mono<NotificationRecord> findByPublicId(UUID publicId) {
         return databaseClient.sql(SELECT + " WHERE notification.public_id = :publicId")
                 .bind("publicId", publicId)
@@ -244,5 +333,9 @@ public class R2dbcNotificationRepository implements NotificationRepository {
 
     private static void requireText(String value, String name) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " is required");
+    }
+
+    private static void requireLimit(int limit) {
+        if (limit < 1 || limit > 100) throw new IllegalArgumentException("limit must be between 1 and 100");
     }
 }
