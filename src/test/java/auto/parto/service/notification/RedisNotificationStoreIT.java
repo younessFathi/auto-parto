@@ -2,9 +2,12 @@ package auto.parto.service.notification;
 
 import auto.parto.config.BaseIntegrationTest;
 import auto.parto.dto.RegisterTokenRequest;
+import auto.parto.dto.NotificationRequest;
+import auto.parto.enums.NotificationType;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import reactor.test.StepVerifier;
+import reactor.core.publisher.Flux;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -31,6 +34,25 @@ class RedisNotificationStoreIT extends BaseIntegrationTest {
                 .assertNext(tokens -> assertThat(tokens)
                         .containsExactlyInAnyOrder(first.getToken(), second.getToken()))
                 .verifyComplete();
+    }
+
+    @Test
+    void replacingPendingProjectionIsIdempotentAndBounded() {
+        String userId = UUID.randomUUID().toString();
+        NotificationRequest first = notification("notification-1", userId);
+        NotificationRequest second = notification("notification-2", userId);
+
+        StepVerifier.create(store.replacePendingNotifications(userId, Flux.just(first, second))
+                        .then(store.replacePendingNotifications(userId, Flux.just(first, second)))
+                        .thenMany(store.getPendingNotifications(userId).collectList()))
+                .assertNext(notifications -> assertThat(notifications)
+                        .extracting(NotificationRequest::id)
+                        .containsExactly("notification-1", "notification-2"))
+                .verifyComplete();
+    }
+
+    private static NotificationRequest notification(String id, String userId) {
+        return new NotificationRequest(id, userId, NotificationType.NEW_SEARCH_POSTED, "safe", 1L);
     }
 
     private static DeviceTokenService.DeviceToken token(String value) {

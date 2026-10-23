@@ -1,6 +1,6 @@
 # AP-0042 Complete Notification Delivery Reliability
 
-- **Status:** Done
+- **Status:** In Progress
 - **Type:** Technical Enhancement
 - **Feature:** [Notifications and Redis](../features/F05-notifications-and-redis.md)
 - **Linked Tickets:** [AP-0012](AP-0012-notification-outbox.md), [AP-0013](AP-0013-outbox-processing.md), [AP-0016](AP-0016-redis-projections.md), [AP-0028](AP-0028-provider-isolation.md)
@@ -24,13 +24,16 @@ classification codes without notification payloads or provider exception text.
 
 - [x] A notification is acknowledged as stored only after the durable PostgreSQL operation succeeds.
 - [x] Every asynchronous persistence chain is subscribed by an owned lifecycle or returned to its caller.
-- [x] Retry, replay, projection bounds, and shutdown behavior remain bounded and are documented.
+- [ ] Retry, replay, projection bounds, and shutdown behavior remain bounded and are documented.
 - [x] Endpoint responses use the established safe error contract when storage or provider delivery fails.
-- [x] Unit, HTTP, and container-backed tests cover persistence failure, Redis failure, concurrent claims, retry exhaustion, duplicate-safe acknowledgement, and migration/index behavior.
+- [ ] Unit, HTTP, and container-backed tests cover persistence failure, Redis failure, concurrent claims, retry exhaustion, duplicate-safe acknowledgement, offline preservation, scheduled recovery, and idempotent projection replacement.
 
 ## Verification
 
 Focused unit tests cover persistence result propagation, reactive delivery, projection
-failure, and FCM failure classification. PostgreSQL/Testcontainers coverage verifies
-bounded claims, lease recovery, deterministic retry exhaustion, and schema migration.
-Redis integration coverage verifies bounded projection reads and recovery behavior.
+failure, offline recovery guards, and FCM failure classification. PostgreSQL/Testcontainers
+coverage verifies bounded claims, lease recovery, deterministic retry exhaustion, and
+schema migration. Redis integration coverage verifies bounded projection reads and
+idempotent projection replacement. A Spring context test verifies scheduled recovery is
+active. AP-0042 remains In Progress until the complete offline and scheduled recovery
+contract is reviewed.

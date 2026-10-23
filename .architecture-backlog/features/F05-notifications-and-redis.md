@@ -2,12 +2,12 @@
 
 Persist notification intent durably in PostgreSQL and use Redis as a bounded, rebuildable delivery projection.
 
-**Status:** Done
+**Status:** In Progress
 
 - [AP-0012](../tickets/AP-0012-notification-outbox.md): Persist transactional notification outbox records. **Done**
 - [AP-0013](../tickets/AP-0013-outbox-processing.md): Process outbox work with bounded leases and retries. **Done**
 - [AP-0016](../tickets/AP-0016-redis-projections.md): Maintain Redis delivery projections and recovery. **Done**
-- [AP-0042](../tickets/AP-0042-notification-delivery-reliability.md): Complete durable notification delivery and recovery reliability. **Done**
+- [AP-0042](../tickets/AP-0042-notification-delivery-reliability.md): Complete durable notification delivery and recovery reliability. **In Progress**
 
 ## Retired or absorbed references
 
@@ -15,4 +15,4 @@ AP-0014, AP-0015, and AP-0038 were never created as active tickets. Device-token
 
 ## Completion Tracking
 
-PostgreSQL owns durable notification records, delivery claims, attempts, leases, retry timing, failure classifications, and exhaustion. Redis provides bounded, expiring projections and delivery acceleration; it is rebuilt from PostgreSQL after loss or restart and is never the only recoverable copy. AP-0042 completes the pending notification delivery reliability scope, including safe persistence outcomes, bounded claims, retry exhaustion, and projection recovery.
+PostgreSQL owns durable notification records, delivery claims, attempts, leases, retry timing, failure classifications, and exhaustion. Redis provides bounded, expiring projections and delivery acceleration; it is rebuilt from PostgreSQL after loss or restart and is never the only recoverable copy. AP-0042 has completed the persistence and claim foundations; offline SSE preservation, enabled scheduled recovery, and idempotent projection replacement remain open until their follow-up tests pass.

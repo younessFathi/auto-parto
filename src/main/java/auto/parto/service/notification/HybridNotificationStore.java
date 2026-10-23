@@ -12,7 +12,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.UUID;
 import java.util.Collection;
 import java.time.Duration;
@@ -148,10 +147,9 @@ public class HybridNotificationStore {
     public Mono<Void> rebuildProjection(String userId) {
         if (postgresqlRepository == null) return Mono.empty();
         return parseUserId(userId)
-                .flatMapMany(owner -> postgresqlRepository.findPendingForRecipient(owner, 100))
-                .flatMap(record -> deserialize(record)
-                        .flatMap(notification -> redisStore.storePending(userId, notification)
-                                .onErrorReturn(false)))
+                .flatMap(owner -> redisStore.replacePendingNotifications(userId,
+                        postgresqlRepository.findPendingForRecipient(owner, 100)
+                                .flatMap(this::deserialize)))
                 .then();
     }
 

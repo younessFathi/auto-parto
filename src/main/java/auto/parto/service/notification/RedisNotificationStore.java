@@ -131,6 +131,14 @@ public class RedisNotificationStore {
                 });
     }
 
+    /** Replaces the bounded projection so repeated recovery cannot duplicate entries. */
+    public Mono<Void> replacePendingNotifications(String userId, Flux<NotificationRequest> notifications) {
+        String key = buildPendingKey(userId);
+        return redisTemplate.delete(key)
+                .thenMany(notifications.concatMap(notification -> storePending(userId, notification)))
+                .then();
+    }
+
     /**
      * Get count of pending notifications
      */

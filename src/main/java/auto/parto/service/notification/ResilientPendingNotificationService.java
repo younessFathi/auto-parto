@@ -44,7 +44,7 @@ public class ResilientPendingNotificationService {
 
     /** Claims a bounded batch and records each outcome in PostgreSQL before releasing the lease. */
     public Mono<Integer> deliverPendingOnConnect(String userId) {
-        return claimAndDeliver(userId);
+        return claimAndDeliver(userId, false);
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -86,6 +86,13 @@ public class ResilientPendingNotificationService {
     }
 
     private Mono<Integer> claimAndDeliver(String userId) {
+        return claimAndDeliver(userId, true);
+    }
+
+    private Mono<Integer> claimAndDeliver(String userId, boolean requireActiveConnection) {
+        if (requireActiveConnection && !sseService.hasActiveConnection(userId)) {
+            return Mono.just(0);
+        }
         return notificationStore.rebuildProjection(userId)
                 .thenMany(notificationStore.claimPendingNotifications(userId, workerId, Instant.now(), CLAIM_LEASE,
                         RECOVERY_BATCH_SIZE))

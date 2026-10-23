@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.concurrent.atomic.AtomicBoolean;
 import static auto.parto.utils.Constants.Notification.*;
 
 
@@ -80,11 +81,18 @@ public class NotificationController {
             org.springframework.security.core.Authentication authentication) {
         CanonicalSecurity.requireOwner(authentication, userId, null);
         Sinks.Many<NotificationRequest> userSink = resilientNotificationService.registerConnection(userId);
-        return resilientPendingNotificationService.deliverPendingOnConnect(userId).thenMany(
-            sseNotificationService.getUserConnections(userId)
+        AtomicBoolean recoveryStarted = new AtomicBoolean();
+        // The connection owns this subscription. Demand means the SSE sink has an active subscriber,
+        // so pending rows can be claimed without treating an offline user as a failed delivery.
+        return sseNotificationService.getUserConnections(userId)
                     .asFlux()
                     .map(buildNotification())
-                )
+                    .doOnRequest(requested -> {
+                        if (requested > 0 && recoveryStarted.compareAndSet(false, true)) {
+                            resilientPendingNotificationService.deliverPendingOnConnect(userId)
+                                    .subscribe(ignored -> { }, error -> log.error("SSE pending recovery failed"));
+                        }
+                    })
                 .doOnSubscribe(sub -> log.info(USER_SUBSCRIBED_TO_SSE, userId))
                 .doOnCancel(() -> {
                     log.info(USER_SSE_CONNECTION_CLOSED, userId);
