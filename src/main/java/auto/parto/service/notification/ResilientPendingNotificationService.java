@@ -2,193 +2,117 @@ package auto.parto.service.notification;
 
 import auto.parto.dto.NotificationRequest;
 import auto.parto.service.BasicCircuitBreaker;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
 import java.time.Duration;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
+import java.time.Instant;
 import java.util.UUID;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class ResilientPendingNotificationService {
 
     private static final int RECOVERY_BATCH_SIZE = 100;
+    private static final int MAX_ATTEMPTS = 3;
+    private static final Duration CLAIM_LEASE = Duration.ofSeconds(30);
+    private static final Duration RETRY_DELAY = Duration.ofSeconds(30);
 
     private final HybridNotificationStore notificationStore;
     private final SSENotificationService sseService;
     private final BasicCircuitBreaker circuitBreaker;
+    private final String workerId = "notification-worker-" + UUID.randomUUID();
 
-    // Memory queue for recently failed deliveries (circuit breaker open)
-    private final Map<String, Queue<NotificationRequest>> memoryFallback = new ConcurrentHashMap<>();
+    public ResilientPendingNotificationService(HybridNotificationStore notificationStore,
+                                                SSENotificationService sseService,
+                                                BasicCircuitBreaker circuitBreaker) {
+        this.notificationStore = notificationStore;
+        this.sseService = sseService;
+        this.circuitBreaker = circuitBreaker;
+    }
 
-    /**
-     * Store notification with resilience strategy
-     */
+    /** PostgreSQL enqueue is the only accepted durable write; Redis outage is not a fallback. */
     public Mono<Boolean> storeNotification(NotificationRequest notification) {
-        String userId = notification.userId();
-        // 1. Try Redis storage (primary)
-        return notificationStore.storePending(notification)
-                .flatMap(redisSuccess -> {
-                    if (redisSuccess) {
-                        return Mono.just(true);
-                    }
-
-                    // 2. Redis failed, use memory fallback
-                    log.warn("Redis storage failed for user {}, using memory fallback", userId);
-                    return storeInMemoryFallback(userId, notification)
-                            .map(memorySuccess -> {
-                                if (!memorySuccess) {
-                                    log.error("ALL storage failed for notification: {}", notification.id());
-                                }
-                                return memorySuccess;
-                            });
-                });
+        return notificationStore.storePending(notification);
     }
 
-    /**
-     * Deliver pending notifications when user connects
-     */
+    /** Claims a bounded batch and records each outcome in PostgreSQL before releasing the lease. */
     public Mono<Integer> deliverPendingOnConnect(String userId) {
-        return notificationStore.getPendingNotifications(userId)
-                .flatMapSequential(notification -> attemptDeliveryWithRetry(userId, notification)
-                        .filter(Boolean::booleanValue)
-                        .map(success -> notification))
-                .collectList()
-                .zipWhen(successfulDeliveries ->
-                        successfulDeliveries.isEmpty() ?
-                                Mono.just(0L) :
-                                notificationStore.clearPendingNotifications(userId,
-                                        successfulDeliveries.stream().map(NotificationRequest::id)
-                                                .filter(Objects::nonNull).toList())
-                )
-                .map(tuple -> {
-                    List<NotificationRequest> successfulDeliveries = tuple.getT1();
-                    return successfulDeliveries.size();
-                });
+        return claimAndDeliver(userId);
     }
-    /**
-     * Emergency recovery: Load all pending notifications on server restart
-     */
+
     @EventListener(ApplicationReadyEvent.class)
     public void recoverOnStartup() {
-        log.info("Starting notification recovery on server startup...");
-
-        notificationStore.getPendingStats()
-                .flatMap(stats -> {
-                    Long totalNotifications = (Long) stats.get("totalNotifications");
-                    Long totalUsers = (Long) stats.get("totalUsers");
-
-                    log.info("Found {} pending notifications for {} users",
-                            totalNotifications, totalUsers);
-
-                    if (totalNotifications == null || totalNotifications == 0) {
-                        return Mono.<Void>empty();
-                    }
-
-                    return recoverRecipientPage(null);
-                })
-                .doOnSuccess(v -> log.info("Notification recovery completed"))
-                .doOnError(e -> log.error("Recovery failed: {}", e.getMessage()))
-                .subscribe();
+        recoverPending().subscribe(
+                ignored -> { },
+                error -> log.error("Notification recovery failed"),
+                () -> log.info("Notification recovery completed"));
     }
 
-    private Mono<Void> recoverRecipientPage(UUID afterRecipientPublicId) {
+    /** The scheduled lifecycle owns this subscription; no request path discards a reactive chain. */
+    @Scheduled(fixedDelayString = "${notification.delivery.recovery-delay-ms:30000}")
+    public void recoverDueNotifications() {
+        recoverPending().subscribe(
+                ignored -> { },
+                error -> log.error("Scheduled notification recovery failed"));
+    }
+
+    private Mono<Integer> recoverPending() {
+        return notificationStore.getPendingStats()
+                .flatMapMany(stats -> {
+                    Object total = stats.get("totalNotifications");
+                    if (!(total instanceof Number number) || number.longValue() == 0) return Flux.empty();
+                    return recoverRecipientPage(null);
+                })
+                .reduce(0, Integer::sum);
+    }
+
+    private Flux<Integer> recoverRecipientPage(UUID afterRecipientPublicId) {
         return notificationStore.getPendingRecipientIds(afterRecipientPublicId, RECOVERY_BATCH_SIZE)
                 .collectList()
-                .flatMap(users -> {
-                    if (users.isEmpty()) {
-                        return Mono.empty();
-                    }
-                    UUID nextCursor = UUID.fromString(users.getLast());
-                    return Flux.fromIterable(users)
-                            .flatMapSequential(this::deliverPendingOnConnect)
-                            .then(recoverRecipientPage(nextCursor));
+                .flatMapMany(recipients -> {
+                    if (recipients.isEmpty()) return Flux.empty();
+                    UUID nextCursor = UUID.fromString(recipients.getLast());
+                    return Flux.fromIterable(recipients)
+                            .flatMapSequential(this::claimAndDeliver, 1, 1)
+                            .concatWith(recoverRecipientPage(nextCursor));
                 });
     }
 
-    // Private helper methods
-
-    private Mono<Boolean> storeInMemoryFallback(String userId, NotificationRequest notification) {
-        return Mono.fromCallable(() -> {
-            memoryFallback.compute(userId, (key, queue) -> {
-                if (queue == null) {
-                    queue = new LinkedList<>();
-                }
-
-                // Limit memory usage
-                if (queue.size() >= 50) {
-                    queue.poll();
-                    log.warn("Memory fallback queue full for {}, removed oldest", userId);
-                }
-
-                queue.offer(notification);
-                return queue;
-            });
-
-            // Schedule sync to Redis (when it's back up)
-            scheduleRedisSync(userId);
-
-            return true;
-        });
+    private Mono<Integer> claimAndDeliver(String userId) {
+        return notificationStore.rebuildProjection(userId)
+                .thenMany(notificationStore.claimPendingNotifications(userId, workerId, Instant.now(), CLAIM_LEASE,
+                        RECOVERY_BATCH_SIZE))
+                .flatMapSequential(this::deliverClaimed, 1, 1)
+                .filter(Boolean::booleanValue)
+                .count()
+                .map(Long::intValue);
     }
 
-    private void scheduleRedisSync(String userId) {
-        Mono.delay(Duration.ofMinutes(1))
-                .flatMap(tick -> {
-                    Queue<NotificationRequest> queue = memoryFallback.get(userId);
-                    if (queue == null || queue.isEmpty()) {
-                        return Mono.empty();
-                    }
-
-                    // Try to move memory items to Redis
-                    return Flux.fromIterable(queue)
-                            .flatMap(notificationStore::storePending)
-                            .collectList()
-                            .doOnSuccess(results -> {
-                                long successCount = results.stream().filter(Boolean::booleanValue).count();
-                                if (successCount > 0) {
-                                    log.info("Synced {} notifications from memory to Redis for {}",
-                                            successCount, userId);
-                                    // Clear successfully synced items
-                                    memoryFallback.remove(userId);
-                                }
-                            });
-                })
-                .subscribe();
-    }
-
-    private Mono<Boolean> attemptDeliveryWithRetry(String userId, NotificationRequest notification) {
-        log.info("Delivering pending notifications");
+    private Mono<Boolean> deliverClaimed(HybridNotificationStore.ClaimedNotification claimed) {
+        NotificationRequest notification = claimed.notification();
+        String userId = notification.userId();
         return Mono.defer(() -> {
             boolean delivered = sseService.sendViaSSE(userId, notification);
             if (delivered) {
                 circuitBreaker.recordSuccess(userId);
-                return Mono.just(true);
-            } else {
-                circuitBreaker.recordFailure(userId);
-
-                // Retry once after delay
-                return Mono.delay(Duration.ofSeconds(2))
-                        .flatMap(tick -> {
-                            boolean retryDelivered = sseService.sendViaSSE(userId, notification);
-                            if (retryDelivered) {
-                                circuitBreaker.recordSuccess(userId);
-                            }
-                            return Mono.just(retryDelivered);
-                        })
-                        .defaultIfEmpty(false);
+                return notificationStore.recordAttempt(claimed.publicId(), "SSE", "WRITTEN", null, null)
+                        .then(notificationStore.acknowledgeDelivery(claimed.publicId(), workerId));
             }
-        });
+            circuitBreaker.recordFailure(userId);
+            return notificationStore.recordAttempt(claimed.publicId(), "SSE", "FAILED", null,
+                            "DELIVERY_UNAVAILABLE")
+                    .then(notificationStore.scheduleRetry(claimed.publicId(), workerId,
+                            Instant.now().plus(RETRY_DELAY), "DELIVERY_UNAVAILABLE", MAX_ATTEMPTS));
+        }).onErrorResume(error -> notificationStore.recordAttempt(claimed.publicId(), "SSE", "FAILED", null,
+                        "DELIVERY_ERROR")
+                .then(notificationStore.scheduleRetry(claimed.publicId(), workerId,
+                        Instant.now().plus(RETRY_DELAY), "DELIVERY_ERROR", MAX_ATTEMPTS)));
     }
 }

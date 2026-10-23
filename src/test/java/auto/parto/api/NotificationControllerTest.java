@@ -99,7 +99,7 @@ class NotificationControllerTest {
         NotificationRequest notification = new NotificationRequest("id-1", "user-1", auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "test", System.currentTimeMillis());
 
         when(resilientNotificationService.hasActiveConnection("user-1")).thenReturn(true);
-        when(resilientNotificationService.sendNotification(any(NotificationRequest.class))).thenReturn(true);
+        when(resilientNotificationService.sendNotification(any(NotificationRequest.class))).thenReturn(Mono.just(true));
 
         webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.admin("admin-1")))
                 .post()

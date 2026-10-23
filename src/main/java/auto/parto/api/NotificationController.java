@@ -56,9 +56,9 @@ public class NotificationController {
                 .mergeWith(heartbeatFlux())
                 .doOnSubscribe(sub -> log.info(NEW_SUBSCRIBER_CONNECTED))
                 .doOnCancel(() -> log.info(SUBSCRIBER_DISCONNECTED))
-                .doOnError(error -> log.error("{} : {}",SSE_CONNECTION_ERROR , error.getMessage()))
+                .doOnError(error -> log.error("{}", SSE_CONNECTION_ERROR))
                 .onErrorResume(error -> {
-                    log.error(SSE_ERROR_RETURNING_EMPTY_FLUX, error);
+                    log.error(SSE_ERROR_RETURNING_EMPTY_FLUX);
                     return Flux.empty();
                 });
     }
@@ -91,7 +91,7 @@ public class NotificationController {
                     resilientNotificationService.unregisterConnection(userId);
                 })
                 .doOnError(error -> {
-                    log.error(SSE_ERROR_FOR_USER, userId, error.getMessage());
+                    log.error(SSE_ERROR_FOR_USER, userId);
                     resilientNotificationService.unregisterConnection(userId);
                 });
     }
@@ -117,7 +117,7 @@ public class NotificationController {
         CanonicalSecurity.requireRole(authentication, "ROLE_ADMIN");
         return Mono.fromRunnable(() -> {
             notificationSink.tryEmitNext(notificationRequest);
-            log.info("Broadcast message {} " , notificationRequest);
+            log.info("Broadcast notification accepted");
         });
     }
 
@@ -136,14 +136,20 @@ public class NotificationController {
                         log.debug(USER_HAS_ACTIVE_CONNECTION_ATTEMPTING_DIRECT_DELIVERY, userId);
 
                         // User is online - try direct delivery
-                        boolean delivered = resilientNotificationService.sendNotification(notificationRequest);
-
-                        if (delivered) {
-                            log.info(NOTIFICATION_SUCCESSFULLY_DELIVERED_TO_VIA_SSE, userId);
-                            return Mono.just(ResponseEntity.ok(createSuccessResponse(userId)));
-                        }
-
-                        log.warn(DIRECT_DELIVERY_FAILED_FOR_FALLING_BACK_TO_STORAGE, userId);
+                        return resilientNotificationService.sendNotification(notificationRequest)
+                                .flatMap(delivered -> {
+                                    if (delivered) {
+                                        log.info(NOTIFICATION_SUCCESSFULLY_DELIVERED_TO_VIA_SSE, userId);
+                                        return Mono.just(ResponseEntity.ok(createSuccessResponse(userId)));
+                                    }
+                                    log.warn(DIRECT_DELIVERY_FAILED_FOR_FALLING_BACK_TO_STORAGE, userId);
+                                    return pendingNotificationService.addPendingNotification(notificationRequest)
+                                            .map(isStored -> isStored
+                                                    ? ResponseEntity.status(HttpStatus.ACCEPTED)
+                                                        .body(createPendingResponse(userId))
+                                                    : ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                                        .body(createErrorResponse(userId, STORAGE_FAILED)));
+                                });
                     } else {
                         log.debug(USER_IS_OFFLINE_STORING_NOTIFICATION, userId);
                     }
@@ -163,9 +169,9 @@ public class NotificationController {
                             });
                 })
                 .onErrorResume(error -> {
-                    log.error(ERROR_SENDING_NOTIFICATION_TO, userId, error.getMessage(), error);
+                    log.error(ERROR_SENDING_NOTIFICATION_TO, userId);
                     return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                            .body(createErrorResponse(userId, error.getMessage())));
+                            .body(createErrorResponse(userId, STORAGE_FAILED)));
                 })
                 .defaultIfEmpty(ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(createErrorResponse(userId, INVALID_NOTIFICATION_REQUEST)));

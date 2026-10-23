@@ -124,6 +124,17 @@ class PostgresqlMigrationResourceTest {
     }
 
     @Test
+    void notificationDeliveryMigrationAddsDurableClaimAndRetryState() throws IOException {
+        String sql = readResource("/db/migration/V12__make_notification_delivery_claimable.sql");
+
+        assertThat(sql).contains("attempt_count INTEGER NOT NULL DEFAULT 0")
+                .contains("next_attempt_at TIMESTAMPTZ")
+                .contains("lease_owner VARCHAR(255)")
+                .contains("notifications_delivery_claim_idx")
+                .contains("notifications_lease_chk");
+    }
+
+    @Test
     void partListingStatusMigrationSeparatesLifecycleStates() throws IOException {
         String sql = readResource("/db/migration/V6__separate_part_listing_statuses.sql");
 

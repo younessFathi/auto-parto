@@ -4,6 +4,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
+import java.time.Duration;
+import java.time.Instant;
 
 public interface NotificationRepository {
 
@@ -27,4 +29,12 @@ public interface NotificationRepository {
 
     Mono<NotificationAttemptRecord> recordAttempt(UUID notificationPublicId, String channel, String status,
                                                   String providerReference, String failureReason);
+
+    Flux<NotificationRecord> claimPendingForRecipient(UUID recipientUserPublicId, String claimOwner,
+                                                       Instant now, Duration leaseDuration, int limit);
+
+    Mono<Boolean> acknowledgeDelivery(UUID notificationPublicId, String claimOwner);
+
+    Mono<Boolean> scheduleRetry(UUID notificationPublicId, String claimOwner, Instant nextAttemptAt,
+                                String failureCode, int maxAttempts);
 }

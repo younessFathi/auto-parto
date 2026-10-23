@@ -51,7 +51,7 @@ public class FcmDeliveryResult {
                 .userId(userId)
                 .success(false)
                 .status("FAILED")
-                .error(error)
+                .error("PROVIDER_UNAVAILABLE")
                 .totalTokens(0)
                 .successfulTokens(0)
                 .build();

@@ -5,6 +5,7 @@ import auto.parto.service.BasicCircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
 @Service
@@ -14,29 +15,21 @@ public class ResilientNotificationService {
 
     private final BasicCircuitBreaker circuitBreaker;
     private final SSENotificationService sseNotificationService;
-    private final PendingNotificationService pendingNotificationService;
 
-    public boolean sendNotification(NotificationRequest notification) {
+    public Mono<Boolean> sendNotification(NotificationRequest notification) {
         String userId = notification.userId();
-        boolean delivered = false;
-        try {
-            delivered = sseNotificationService.sendViaSSE(userId, notification);
-
+        return Mono.defer(() -> {
+            boolean delivered = sseNotificationService.sendViaSSE(userId, notification);
             if (delivered) {
                 circuitBreaker.recordSuccess(userId);
-            } else {
-                circuitBreaker.recordFailure(userId);
-                pendingNotificationService.addPendingNotification(notification);
-                // TODO: use other way to send notification
-                // TODO: Think to use scheduler to send failed notifications
+                return Mono.just(true);
             }
-        } catch (Exception e) {
             circuitBreaker.recordFailure(userId);
-            pendingNotificationService.addPendingNotification(notification);
-            // TODO: use other way to send notification
-            // TODO: Think to use scheduler to send failed notifications
-        }
-        return delivered;
+            return Mono.just(false);
+        }).onErrorResume(error -> {
+            circuitBreaker.recordFailure(userId);
+            return Mono.just(false);
+        });
     }
 
     public Sinks.Many<NotificationRequest> registerConnection(String userId) {

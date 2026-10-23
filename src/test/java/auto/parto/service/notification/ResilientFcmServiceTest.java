@@ -28,23 +28,19 @@ class ResilientFcmServiceTest {
     private DeviceTokenService deviceTokenService;
     @Mock
     private RetryTemplate retryTemplate;
-    @Mock
-    private PushNotificationQueue pushQueue;
-
     private ResilientFcmService service;
     private CircuitBreaker circuitBreaker;
 
     @BeforeEach
     void setUp() {
         circuitBreaker = CircuitBreaker.ofDefaults("fcm-test");
-        service = new ResilientFcmService(firebaseMessaging, deviceTokenService, circuitBreaker, retryTemplate, pushQueue);
+        service = new ResilientFcmService(firebaseMessaging, deviceTokenService, circuitBreaker, retryTemplate);
         ReflectionTestUtils.setField(service, "fcmTimeout", Duration.ofSeconds(10));
     }
 
     @Test
     void sendToTokenHandlesUnregisteredError() throws Exception {
         FirebaseMessagingException mockEx = mock(FirebaseMessagingException.class);
-        when(mockEx.getMessage()).thenReturn("Not registered");
         when(mockEx.getMessagingErrorCode()).thenReturn(MessagingErrorCode.UNREGISTERED);
         when(firebaseMessaging.send(any())).thenThrow(mockEx);
 
@@ -58,7 +54,6 @@ class ResilientFcmServiceTest {
     @Test
     void sendToTokenHandlesInvalidArgumentError() throws Exception {
         FirebaseMessagingException mockEx = mock(FirebaseMessagingException.class);
-        when(mockEx.getMessage()).thenReturn("Invalid");
         when(mockEx.getMessagingErrorCode()).thenReturn(MessagingErrorCode.INVALID_ARGUMENT);
         when(firebaseMessaging.send(any())).thenThrow(mockEx);
 

@@ -114,13 +114,13 @@ This provides efficient internal relational storage without making public identi
 
 Redis should not be the source of truth for wallets, offers, users, or ledger history. PostgreSQL owns durable business data.
 
-Redis may contain:
+Redis may contain only bounded, rebuildable infrastructure projections:
 
 - Cache entries
 - Rate-limit counters
 - Device-token indexes
-- Pending notifications
-- Retry jobs
+- Pending notification projections
+- Delivery scheduling hints
 - Short-lived locks or leases
 
 Device-token records are authoritative in PostgreSQL because notifications must survive Redis loss. Store the owner, provider token, platform, status, creation time, last-seen time, and invalidation time. Registration is idempotent and enforces token uniqueness without allowing one user to claim another user's token. Redis contains rebuildable token indexes only.
@@ -141,10 +141,11 @@ Examples: pending notification projections, fan-out streams, and retry schedulin
 
 - PostgreSQL outbox rows remain authoritative. Redis data in this category must be rebuildable from PostgreSQL and is not the only copy of recoverable work.
 - Redis persistence may reduce recovery time, but AOF is not a correctness requirement for these projections.
-- Use bounded queue sizes and explicit TTLs.
+- Use bounded queue sizes, bounded scans, and explicit TTLs.
 - Rebuild projections and reschedule due jobs from PostgreSQL when Redis data is lost or evicted.
-- Use idempotency keys and leases so multiple instances do not process one job twice.
-- Send exhausted jobs to a bounded dead-letter queue.
+- Keep retry attempts, leases, next-attempt time, failure classification, and terminal exhaustion in PostgreSQL.
+- Use PostgreSQL claims and leases so multiple instances do not process one job twice.
+- Keep any Redis dead-letter or retry projection bounded and expiring; it is never the only recoverable copy.
 
 ### Important business events
 
@@ -165,7 +166,7 @@ Outbox worker:
 
 This avoids losing a notification between a PostgreSQL update and a Redis enqueue.
 
-Outbox workers must claim work atomically with a lease, for example with a guarded update or `FOR UPDATE SKIP LOCKED`. A claim has an expiry so crashed workers can be recovered. Processing is at-least-once: delivery can succeed before the database marks the row complete, so consumers and providers must tolerate duplicates. Retry attempts, backoff, poison events, dead-letter retention, replay authorization, and ordering requirements must be bounded and observable.
+Outbox workers must claim work atomically with a lease, for example with a guarded update or `FOR UPDATE SKIP LOCKED`. A claim has an expiry so crashed workers can be recovered. Processing is at-least-once: delivery can succeed before the database marks the row complete, so consumers and providers must tolerate duplicates. Retry attempts, backoff, poison events, dead-letter retention, replay authorization, and ordering requirements must be bounded and observable. Notification delivery follows the same PostgreSQL claim authority; Redis loss must not lose work or create a second retry authority.
 
 For production, prefer a managed Redis service or a Redis HA deployment with:
 

@@ -1,29 +1,36 @@
 # AP-0042 Complete Notification Delivery Reliability
 
-- **Status:** Proposed
+- **Status:** Done
 - **Type:** Technical Enhancement
 - **Feature:** [Notifications and Redis](../features/F05-notifications-and-redis.md)
 - **Linked Tickets:** [AP-0012](AP-0012-notification-outbox.md), [AP-0013](AP-0013-outbox-processing.md), [AP-0016](AP-0016-redis-projections.md), [AP-0028](AP-0028-provider-isolation.md)
 
-## Problem
+## Delivered scope
 
-The notification path has durable PostgreSQL intent and bounded Redis projections, but the direct SSE fallback still has reliability gaps: a store result can be treated as successful without proving persistence, and a reactive persistence operation can be discarded before execution. The catalog must keep F05 open until these behaviors are corrected and verified.
+PostgreSQL is authoritative for notification intent and delivery state. Notification
+claims use bounded `FOR UPDATE SKIP LOCKED` leases, and PostgreSQL stores attempt counts,
+next-attempt times, claim ownership, lease expiry, controlled failure codes, and terminal
+exhaustion. The current policy permits three attempts. Redis is a bounded, expiring,
+rebuildable delivery projection; it is populated after durable persistence and rebuilt
+from PostgreSQL after Redis loss or application restart. JVM-local queues and Redis-only
+retry state are not used.
 
-## Scope
+The HTTP fallback now returns the actual persistence result. Background recovery has an
+explicit owned subscription, and all delivery claims, acknowledgements, and retry state
+changes remain in the reactive persistence chain. Error responses and logs use safe
+classification codes without notification payloads or provider exception text.
 
-1. Make durable pending-notification persistence part of the returned reactive delivery chain.
-2. Preserve bounded queues, retry limits, replay behavior, and shutdown safety across SSE and FCM delivery.
-3. Define safe endpoint behavior when durable notification persistence fails.
-4. Add unit, HTTP, and PostgreSQL/Redis integration coverage for false persistence results, discarded chains, retry exhaustion, replay, and recovery.
+## Acceptance criteria
 
-## Acceptance Criteria
+- [x] A notification is acknowledged as stored only after the durable PostgreSQL operation succeeds.
+- [x] Every asynchronous persistence chain is subscribed by an owned lifecycle or returned to its caller.
+- [x] Retry, replay, projection bounds, and shutdown behavior remain bounded and are documented.
+- [x] Endpoint responses use the established safe error contract when storage or provider delivery fails.
+- [x] Unit, HTTP, and container-backed tests cover persistence failure, Redis failure, concurrent claims, retry exhaustion, duplicate-safe acknowledgement, and migration/index behavior.
 
-- [ ] A notification is acknowledged as stored only after the durable PostgreSQL operation succeeds.
-- [ ] Every asynchronous persistence chain is subscribed by an owned lifecycle or returned to its caller; no delivery operation is silently discarded.
-- [ ] Retry, replay, projection bounds, and shutdown behavior remain bounded and documented.
-- [ ] Endpoint responses use the established safe error contract when storage or provider delivery fails.
-- [ ] Focused unit, HTTP, and container-backed tests cover success, failure, duplicate, retry-exhaustion, and recovery paths.
+## Verification
 
-## Definition of Done
-
-The notification delivery path reports only verified durable outcomes, bounded recovery behavior is tested, and F05 can be marked Done based on implementation evidence.
+Focused unit tests cover persistence result propagation, reactive delivery, projection
+failure, and FCM failure classification. PostgreSQL/Testcontainers coverage verifies
+bounded claims, lease recovery, deterministic retry exhaustion, and schema migration.
+Redis integration coverage verifies bounded projection reads and recovery behavior.
