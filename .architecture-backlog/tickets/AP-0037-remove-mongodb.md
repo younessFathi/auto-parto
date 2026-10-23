@@ -34,3 +34,5 @@ Make PostgreSQL the only application persistence runtime. The project is still i
 - Initial inventory found MongoDB models and repositories still present as compatibility paths, while PostgreSQL repositories cover identity, marketplace, wallets, device tokens, notifications, files, notification preferences, and object storage.
 - Removed the unused `CustomerJwt` and `PushDeliveryLog` Mongo document classes after confirming they have no production or test callers. Remaining Mongo models stay until their active compatibility callers are removed.
 - The next bounded cleanup slice includes the obsolete Mongo-only offer path; PostgreSQL offer persistence and its API contract remain in scope for regression verification.
+- Removed the obsolete Mongo-only offer path (`PieceOfferService`, `IPieceOfferService`, `PieceOfferDbMapper`, `PieceOffer`, `IPieceOfferRepository`, and `PieceOfferRepository`) and its Mongo-specific tests. The active PostgreSQL `OfferRepository` path remains unchanged.
+- Focused verification passed: `MongoDisabledRepositoryConditionTest` and `MongoIndexesConsistencyTest` (6 tests total), with no remaining references to the removed offer path.

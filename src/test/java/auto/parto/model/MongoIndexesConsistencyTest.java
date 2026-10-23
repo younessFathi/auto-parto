@@ -24,17 +24,6 @@ class MongoIndexesConsistencyTest {
     }
 
     @Test
-    void pieceOfferDefinesPieceAndCustomerStatusIndexesForOfferQueries() {
-        CompoundIndexes indexes = PieceOffer.class.getAnnotation(CompoundIndexes.class);
-        assertThat(indexes).isNotNull();
-
-        assertThat(Arrays.stream(indexes.value()).map(CompoundIndex::name))
-                .contains("offer_piece_created_idx", "offer_customer_status_idx");
-        assertThat(Arrays.stream(indexes.value()).map(CompoundIndex::def))
-                .contains("{'pieceId': 1, 'createAt': -1}", "{'customerId': 1, 'status': 1}");
-    }
-
-    @Test
     void buyerDefinesIndexesOnCommonQueryFields() {
         assertThat(getField(Buyer.class, "email").getAnnotation(Indexed.class)).isNotNull();
         assertThat(getField(Buyer.class, "phoneNumber").getAnnotation(Indexed.class)).isNotNull();
