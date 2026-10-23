@@ -82,15 +82,19 @@ public class NotificationController {
                             userSink.asFlux().map(buildNotification()),
                             resilientPendingNotificationService.deliverPendingOnConnect(userId)
                                     .doOnError(error -> log.error("SSE pending recovery failed"))
-                                    .then(Mono.never())))
+                                    .then(Mono.<ServerSentEvent<NotificationRequest>>empty())))
                 .doOnSubscribe(sub -> log.info(USER_SUBSCRIBED_TO_SSE, userId))
                 .doOnCancel(() -> {
                     log.info(USER_SSE_CONNECTION_CLOSED, userId);
-                    resilientNotificationService.unregisterConnection(userId);
+                    resilientNotificationService.unregisterConnection(userId, userSink);
+                })
+                .doOnComplete(() -> {
+                    log.info(USER_SSE_CONNECTION_CLOSED, userId);
+                    resilientNotificationService.unregisterConnection(userId, userSink);
                 })
                 .doOnError(error -> {
                     log.error(SSE_ERROR_FOR_USER, userId);
-                    resilientNotificationService.unregisterConnection(userId);
+                    resilientNotificationService.unregisterConnection(userId, userSink);
                 });
     }
 

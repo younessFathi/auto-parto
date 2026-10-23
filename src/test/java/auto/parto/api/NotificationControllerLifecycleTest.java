@@ -52,4 +52,25 @@ class NotificationControllerLifecycleTest {
         assertThat(recovery.wasSubscribed()).isTrue();
         assertThat(recovery.wasCancelled()).isTrue();
     }
+
+    @Test
+    void subscribeToUser_completesAndCleansUpWhenTheRegisteredSinkIsReplaced() {
+        String userId = "user-1";
+        Sinks.Many<auto.parto.dto.NotificationRequest> oldSink =
+                Sinks.many().unicast().onBackpressureBuffer();
+        when(resilientNotificationService.registerConnection(userId)).thenReturn(oldSink);
+        when(resilientPendingNotificationService.deliverPendingOnConnect(userId))
+                .thenReturn(Mono.just(0));
+
+        NotificationController controller = new NotificationController(
+                resilientNotificationService, pendingNotificationService,
+                resilientPendingNotificationService);
+
+        StepVerifier.create(controller.subscribeToUser(userId, CanonicalTestAuthentication.buyer(userId)))
+                .thenRequest(1)
+                .then(() -> oldSink.tryEmitComplete())
+                .verifyComplete();
+
+        verify(resilientNotificationService).unregisterConnection(userId, oldSink);
+    }
 }

@@ -41,6 +41,10 @@ public class ResilientNotificationService {
         sseNotificationService.unregisterConnection(userId);
     }
 
+    public void unregisterConnection(String userId, Sinks.Many<NotificationRequest> expectedConnection) {
+        sseNotificationService.unregisterConnection(userId, expectedConnection);
+    }
+
     public boolean hasActiveConnection(String userId) {
         return sseNotificationService.hasActiveConnection(userId);
     }

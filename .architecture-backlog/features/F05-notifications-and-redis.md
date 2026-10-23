@@ -15,4 +15,4 @@ AP-0014, AP-0015, and AP-0038 were never created as active tickets. Device-token
 
 ## Completion Tracking
 
-PostgreSQL owns durable notification records, delivery claims, attempts, leases, retry timing, failure classifications, and exhaustion. Redis provides bounded, expiring projections and delivery acceleration; it is rebuilt from PostgreSQL after loss or restart and is never the only recoverable copy. AP-0042 now covers offline SSE preservation, enabled scheduled recovery, idempotent projection replacement, and cancellation-owned connection recovery; the feature remains In Progress pending owner review.
+PostgreSQL owns durable notification records, delivery claims, attempts, leases, retry timing, failure classifications, and exhaustion. Redis provides bounded, expiring projections and delivery acceleration; it is rebuilt from PostgreSQL after loss or restart and is never the only recoverable copy. AP-0042 now covers offline SSE preservation, enabled scheduled recovery, idempotent projection replacement, cancellation-owned recovery, and completion of replaced SSE connections; the feature remains In Progress pending owner review.
