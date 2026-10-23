@@ -78,11 +78,17 @@ public class NotificationController {
         Sinks.Many<NotificationRequest> userSink = resilientNotificationService.registerConnection(userId);
         // Subscribe to the sink before recovery so delivery sees an active SSE subscriber. The
         // recovery publisher remains part of the returned stream and is cancelled with the client.
-        return Flux.defer(() -> Flux.merge(
-                            userSink.asFlux().map(buildNotification()),
+        return Flux.defer(() -> userSink.asFlux().publish(sharedSink -> {
+                    Mono<Void> sinkClosed = sharedSink.ignoreElements().then();
+                    Flux<ServerSentEvent<NotificationRequest>> liveNotifications =
+                            sharedSink.map(buildNotification());
+                    Flux<ServerSentEvent<NotificationRequest>> pendingRecovery =
                             resilientPendingNotificationService.deliverPendingOnConnect(userId)
                                     .doOnError(error -> log.error("SSE pending recovery failed"))
-                                    .then(Mono.<ServerSentEvent<NotificationRequest>>empty())))
+                                    .takeUntilOther(sinkClosed)
+                                    .thenMany(Flux.empty());
+                    return Flux.merge(liveNotifications, pendingRecovery);
+                }))
                 .doOnSubscribe(sub -> log.info(USER_SUBSCRIBED_TO_SSE, userId))
                 .doOnCancel(() -> {
                     log.info(USER_SSE_CONNECTION_CLOSED, userId);

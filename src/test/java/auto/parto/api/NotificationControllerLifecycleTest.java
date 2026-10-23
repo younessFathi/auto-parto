@@ -51,6 +51,7 @@ class NotificationControllerLifecycleTest {
         verify(resilientPendingNotificationService).deliverPendingOnConnect(userId);
         assertThat(recovery.wasSubscribed()).isTrue();
         assertThat(recovery.wasCancelled()).isTrue();
+        verify(resilientNotificationService).unregisterConnection(userId, userSink);
     }
 
     @Test
@@ -72,5 +73,87 @@ class NotificationControllerLifecycleTest {
                 .verifyComplete();
 
         verify(resilientNotificationService).unregisterConnection(userId, oldSink);
+    }
+
+    @Test
+    void subscribeToUser_keepsStreamOpenAfterRecoveryUntilSinkCompletes() {
+        String userId = "user-1";
+        Sinks.Many<auto.parto.dto.NotificationRequest> userSink =
+                Sinks.many().unicast().onBackpressureBuffer();
+        PublisherProbe<Integer> recovery = PublisherProbe.of(Mono.just(0));
+        when(resilientNotificationService.registerConnection(userId)).thenReturn(userSink);
+        when(resilientPendingNotificationService.deliverPendingOnConnect(userId))
+                .thenReturn(recovery.mono());
+
+        NotificationController controller = new NotificationController(
+                resilientNotificationService, pendingNotificationService,
+                resilientPendingNotificationService);
+
+        StepVerifier.create(controller.subscribeToUser(userId, CanonicalTestAuthentication.buyer(userId)))
+                .thenRequest(1)
+                .thenAwait(Duration.ofMillis(50))
+                .then(() -> assertThat(recovery.wasSubscribed()).isTrue())
+                .then(() -> userSink.tryEmitComplete())
+                .verifyComplete();
+
+        verify(resilientNotificationService).unregisterConnection(userId, userSink);
+    }
+
+    @Test
+    void subscribeToUser_cancelsRecoveryWhenOldSinkIsReplacedAndKeepsReplacement() {
+        String userId = "user-1";
+        Sinks.Many<auto.parto.dto.NotificationRequest> oldSink =
+                Sinks.many().unicast().onBackpressureBuffer();
+        Sinks.Many<auto.parto.dto.NotificationRequest> replacementSink =
+                Sinks.many().unicast().onBackpressureBuffer();
+        PublisherProbe<Integer> recovery = PublisherProbe.of(Mono.never());
+        when(resilientNotificationService.registerConnection(userId))
+                .thenReturn(oldSink, replacementSink);
+        when(resilientPendingNotificationService.deliverPendingOnConnect(userId))
+                .thenReturn(recovery.mono(), Mono.just(0));
+
+        NotificationController controller = new NotificationController(
+                resilientNotificationService, pendingNotificationService,
+                resilientPendingNotificationService);
+        StepVerifier.create(controller.subscribeToUser(userId, CanonicalTestAuthentication.buyer(userId)))
+                .thenRequest(1)
+                .thenAwait(Duration.ofMillis(50))
+                .then(() -> controller.subscribeToUser(userId, CanonicalTestAuthentication.buyer(userId)))
+                .then(() -> oldSink.tryEmitComplete())
+                .verifyComplete();
+
+        assertThat(recovery.wasSubscribed()).isTrue();
+        assertThat(recovery.wasCancelled()).isTrue();
+        verify(resilientNotificationService, org.mockito.Mockito.times(2)).registerConnection(userId);
+        verify(resilientNotificationService).unregisterConnection(userId, oldSink);
+        verify(resilientNotificationService, org.mockito.Mockito.never())
+                .unregisterConnection(userId, replacementSink);
+    }
+
+    @Test
+    void subscribeToUser_cleansUpSafelyWhenRecoveryFails() {
+        String userId = "user-1";
+        Sinks.Many<auto.parto.dto.NotificationRequest> oldSink =
+                Sinks.many().unicast().onBackpressureBuffer();
+        Sinks.Many<auto.parto.dto.NotificationRequest> replacementSink =
+                Sinks.many().unicast().onBackpressureBuffer();
+        when(resilientNotificationService.registerConnection(userId))
+                .thenReturn(oldSink, replacementSink);
+        when(resilientPendingNotificationService.deliverPendingOnConnect(userId))
+                .thenReturn(Mono.error(new IllegalStateException("recovery failed")), Mono.just(0));
+
+        NotificationController controller = new NotificationController(
+                resilientNotificationService, pendingNotificationService,
+                resilientPendingNotificationService);
+
+        StepVerifier.create(controller.subscribeToUser(userId, CanonicalTestAuthentication.buyer(userId)))
+                .thenRequest(1)
+                .expectError(IllegalStateException.class)
+                .verify();
+        controller.subscribeToUser(userId, CanonicalTestAuthentication.buyer(userId));
+
+        verify(resilientNotificationService).unregisterConnection(userId, oldSink);
+        verify(resilientNotificationService, org.mockito.Mockito.never())
+                .unregisterConnection(userId, replacementSink);
     }
 }

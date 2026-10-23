@@ -31,8 +31,9 @@ classification codes without notification payloads or provider exception text.
 ## Verification
 
 Focused unit and HTTP tests cover persistence result propagation, reactive delivery,
-SSE cancellation ownership, server-side sink completion on reconnect, projection failure,
-offline recovery guards, and FCM failure classification. PostgreSQL/Testcontainers
+SSE cancellation ownership, server-side sink completion on reconnect, cancellation of
+in-flight recovery on sink replacement, projection failure, offline recovery guards, and
+FCM failure classification. PostgreSQL/Testcontainers
 coverage verifies bounded claims, lease recovery, deterministic retry exhaustion, and
 schema migration. Redis integration coverage verifies bounded projection reads and
 idempotent projection replacement. A Spring context test verifies scheduled recovery is
