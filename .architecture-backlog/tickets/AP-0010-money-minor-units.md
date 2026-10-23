@@ -27,7 +27,7 @@ Represent every balance and price as integer minor units plus ISO currency witho
 - Converted legacy wallet and piece-offer models/DTOs to minor-unit fields and removed floating-point prices from notification request DTOs.
 - Validated supported currency codes at PostgreSQL wallet, listing, and offer repository boundaries.
 - Added unit coverage for precision, currency mismatch, negative values, and overflow, plus PostgreSQL/Testcontainers coverage for unsupported currency rejection.
-- Addressed review findings by rejecting the `Long.MIN_VALUE` Mongo debit edge case, restoring the schema test to the four migrations that exist, removing unused notification price fields without currency context, and adding Mongo/Testcontainers coverage for the debit guard.
+- Addressed review findings by rejecting the `Long.MIN_VALUE` debit edge case, restoring the schema test to the four migrations that exist, removing unused notification price fields without currency context, and adding PostgreSQL/Testcontainers coverage for the debit guard.
 - Added [`docs/money.md`](../../docs/money.md) describing the representation and compatibility boundary.
 
 ## Definition of Done

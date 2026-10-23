@@ -12,4 +12,4 @@ Create one canonical identity model and enforce authentication, roles, ownership
 
 ## Completion Tracking
 
-AP-0004, AP-0005, AP-0006, AP-0031, and AP-0032 are implemented and verified. F02 provides canonical principals, authenticated ownership derivation, consistent role and ownership authorization, hashed and bounded OTP challenges on PostgreSQL and Mongo paths, fail-closed authentication rate limiting, generic OTP errors, and end-to-end security-chain coverage.
+AP-0004, AP-0005, AP-0006, AP-0031, and AP-0032 are implemented and verified. F02 provides canonical principals, authenticated ownership derivation, consistent role and ownership authorization, hashed and bounded OTP challenges on PostgreSQL, fail-closed authentication rate limiting, generic OTP errors, and end-to-end security-chain coverage.

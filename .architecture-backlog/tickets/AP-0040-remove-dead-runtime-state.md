@@ -3,7 +3,7 @@
 - **Status:** Done
 - **Type:** Technical Enhancement
 - **Feature:** [Runtime Cleanup](../features/F12-runtime-cleanup.md)
-- **Linked Tickets:** [AP-0037](AP-0037-remove-mongodb.md), [AP-0038](AP-0038-provider-neutral-device-tokens.md), [AP-0023](AP-0023-telemetry-health.md)
+- **Linked Tickets:** [AP-0037](AP-0037-remove-mongodb.md), [AP-0002](AP-0002-reactive-persistence.md), [AP-0023](AP-0023-telemetry-health.md)
 
 ## Description
 
@@ -13,7 +13,7 @@ Remove verified dead runtime state and obsolete helpers that obscure the Postgre
 
 1. Remove the unused JVM-local device-token map from `DeviceTokenService`; PostgreSQL remains authoritative and Redis remains a rebuildable projection.
 2. Remove helpers and imports that have no callers after the map removal.
-3. Search for additional candidates only after each bounded cleanup increment, and do not remove active MongoDB compatibility paths under this ticket; AP-0037 owns that migration.
+3. Search for additional candidates only after each bounded cleanup increment; AP-0037 has completed the MongoDB removal, so no MongoDB compatibility path is preserved by this ticket.
 4. Preserve token ownership, invalidation ordering, Redis recovery, authorization, and provider behavior.
 
 ## Acceptance Criteria
@@ -27,5 +27,5 @@ Remove verified dead runtime state and obsolete helpers that obscure the Postgre
 
 ## Implementation Tracking
 
-- Removed the unused `DeviceTokenService.userTokens` map and its unreferenced device-comparison helper. Invalidation now uses the authoritative PostgreSQL path followed by best-effort Redis cleanup, with the Redis-only compatibility path preserved until AP-0037/AP-0038 complete their separate contracts.
+- Removed the unused `DeviceTokenService.userTokens` map and its unreferenced device-comparison helper. Invalidation now uses the authoritative PostgreSQL path followed by best-effort Redis cleanup, Redis remains a rebuildable projection.
 - Verification completed: `./mvnw -B test` passed 387 tests with 1 skip; `./mvnw -B verify` passed 152 integration/container tests with 1 skip and all JaCoCo checks; `git diff --check` passed.
