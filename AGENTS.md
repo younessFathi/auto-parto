@@ -8,15 +8,16 @@ Read it before inspecting or changing the codebase.
 Auto-Parto is a Java 21 Spring Boot WebFlux backend for a car-parts marketplace.
 It uses:
 
-- MongoDB for buyers, sellers, pieces, offers, wallets, addresses, and files.
-- Redis for caching, rate limiting, device tokens, pending notifications, and retry queues.
+- PostgreSQL through Spring R2DBC for identity, profiles, marketplace data, wallets, ledger entries, files, device tokens, notification records, preferences, and durable outbox state.
+- A separate PostgreSQL resource for high-volume audit history and audit delivery.
+- Redis for rate limiting, rebuildable projections, pending notification delivery, and bounded retry queues.
 - JWT/Google authentication, OTP verification, and role-based authorization.
 - Firebase Cloud Messaging and Server-Sent Events for notifications.
-- Maven, Docker, Docker Compose, and GitLab CI.
+- Maven, Docker, Docker Compose, and GitHub Actions.
 
 ## Project Lifecycle Status
 
-The project is in active development. There are no production users and no production data, including no MongoDB user records, to migrate or preserve. Assess migration and rollout findings proportionately: retain data-integrity and production-readiness safeguards in the design, but do not treat hypothetical migration impact as a current production incident.
+The project is in active development. There are no production users or production data to migrate or preserve. PostgreSQL is the only application persistence runtime; assess migration and rollout findings proportionately while retaining data-integrity and production-readiness safeguards.
 
 ## Before Making Changes
 
@@ -39,10 +40,10 @@ Use a feature-first, ticket-by-ticket workflow:
 
 - `src/main/java/auto/parto/api/`: HTTP and SSE controllers.
 - `src/main/java/auto/parto/service/`: business services.
-- `src/main/java/auto/parto/repository/`: repository interfaces and MongoDB implementations.
-- `src/main/java/auto/parto/model/`: MongoDB domain models.
+- `src/main/java/auto/parto/persistence/`: PostgreSQL/R2DBC repository ports, records, and adapters.
+- `src/main/java/auto/parto/audit/`: audit outbox and separate audit PostgreSQL adapters.
 - `src/main/java/auto/parto/dto/`: request and response objects.
-- `src/main/java/auto/parto/mapper/`: MapStruct and database mappings.
+- `src/main/java/auto/parto/mapper/`: MapStruct and persistence-to-DTO mappings where needed.
 - `src/main/java/auto/parto/config/`: security, Redis, Firebase, executor, and application configuration.
 - `src/main/java/auto/parto/service/notification/`: FCM, SSE, Redis notification storage, and retry logic.
 - `src/test/`: unit, controller, security, repository, and integration tests.
@@ -58,7 +59,7 @@ Treat `production-readiness/` as archived reference material. Do not create, upd
 - Use Java 21 features only when they improve clarity.
 - Prefer constructor injection. Use `final` dependencies where practical.
 - Keep controllers thin. Put business rules in services and persistence logic in repositories.
-- Use DTOs at API boundaries. Do not expose MongoDB models directly from controllers.
+- Use DTOs at API boundaries. Do not expose PostgreSQL records or internal database identifiers directly from controllers.
 - Use MapStruct for existing entity/DTO mappings instead of duplicating mapping code.
 - Follow existing package and naming conventions.
 - Prefer small methods with one responsibility.
@@ -99,14 +100,14 @@ Treat `production-readiness/` as archived reference material. Do not create, upd
 
 ## Data and Distributed-System Rules
 
-- Use atomic MongoDB updates for balances, counters, and state transitions.
+- Use PostgreSQL transactions, row locks, guarded updates, and constraints for balances, counters, and state transitions.
 - Add idempotency for operations that can be retried or repeated, especially wallet and notification operations.
 - For money movement, preserve an auditable transaction history; do not rely only on the current balance.
 - Design Redis multi-step operations for concurrency. Prefer atomic Redis commands, transactions, or Lua scripts.
 - Do not load an entire Redis collection or sorted set into application memory without a strict bound.
 - Ensure queued work can recover after an application restart.
 - Consider duplicate delivery, retry exhaustion, dead-letter handling, and multi-instance deployment for notifications.
-- Add or update MongoDB indexes when adding new query patterns.
+- Add or update PostgreSQL indexes and migrations when adding new query patterns.
 - Do not enable automatic schema/index behavior in production without understanding its operational impact.
 
 ## API and Error Handling
@@ -123,7 +124,7 @@ For every behavior change:
 
 - Add or update a focused unit test.
 - Add a controller/security test for authorization or HTTP behavior changes.
-- Add an integration test for MongoDB, Redis, concurrency, retry, or startup-recovery behavior when relevant.
+- Add an integration test for PostgreSQL, Redis, concurrency, retry, or startup-recovery behavior when relevant.
 - Test success, validation failure, missing data, unauthorized access, and dependency failure paths.
 - Test retry and duplicate-request behavior for asynchronous operations.
 - Do not weaken or delete a test merely to make the build pass.
@@ -147,7 +148,7 @@ If Docker is unavailable, report that integration tests could not run. Do not cl
 - Keep secrets out of `application*.yml`; use environment variables or secret management.
 - Keep local, test, and production behavior separated by Spring profiles.
 - Do not use development passwords or JWT keys in production defaults.
-- Do not expose MongoDB or Redis ports in production deployment configuration unless explicitly required.
+- Do not expose PostgreSQL or Redis ports in production deployment configuration unless explicitly required.
 - Preserve non-root container execution and resource limits.
 - Health checks must work without requiring an application JWT, or the security exception must be tested explicitly.
 - New configuration values need safe defaults for tests and clear production validation.

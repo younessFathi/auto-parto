@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress.
+Done.
 
 ## Goal
 
@@ -22,9 +22,10 @@ Move repository CI from GitLab CI to GitHub Actions while preserving build, unit
 2. Test reports are retained for one day and package output is not uploaded as a CI artifact.
 3. Manual cutover execution validates required secrets before running Flyway, fixtures, reconciliation, and preflight checks.
 4. GitHub Actions workflow configuration has focused automated coverage.
-5. GitHub Actions is validated before GitLab CI is retired.
+5. GitHub Actions is validated as the active CI path; GitLab CI is historical and retired.
 
 ## Implementation Tracking
 
 - Added `.github/workflows/ci.yml` with the preserved Maven and PostgreSQL gate stages.
 - Added `GithubActionsWorkflowTest` for workflow structure, report retention, and gate configuration.
+- GitHub Actions is the active CI path; the former GitLab workflow is historical and is not part of the release path.

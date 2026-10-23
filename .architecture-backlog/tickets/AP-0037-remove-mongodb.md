@@ -3,7 +3,11 @@
 - **Status:** Done
 - **Type:** Technical Enhancement
 - **Feature:** PostgreSQL-only runtime cleanup
-- **Linked Tickets:** [AP-0002](AP-0002-reactive-persistence.md), [AP-0003](AP-0003-development-cutover.md), [AP-0040](AP-0040-remove-dead-runtime-state.md)
+- **Linked Tickets:** [AP-0002](AP-0002-reactive-persistence.md), [AP-0002](AP-0002-reactive-persistence.md), [AP-0040](AP-0040-remove-dead-runtime-state.md)
+
+## Historical implementation record
+
+This ticket records the completed PostgreSQL cutover. References to MongoDB below describe the removed implementation and are historical; the current runtime has no MongoDB fallback.
 
 ## Goal
 

@@ -33,8 +33,8 @@ Firebase, email provider, object storage
 
 - `api`: HTTP and SSE transport only. Controllers validate input, obtain the authenticated identity, call an application service, and map the result to an API response.
 - `service`: Business use cases such as creating a part request or listing, making an offer, changing a wallet balance, validating an OTP, and sending a notification.
-- `repository`: Persistence operations. SQL and database-specific details must stay here.
-- `model`: Relational persistence entities and persistence-oriented fields.
+- `persistence`: PostgreSQL/R2DBC repository ports, records, and SQL adapters. Database-specific details must stay here.
+- `audit`: Durable audit outbox and separate audit PostgreSQL adapters.
 - `dto`: API request and response contracts. DTOs must not expose persistence implementation details.
 - `mapper`: MapStruct mappings between persistence entities and DTOs.
 - `config`: Security, Redis, Firebase, executors, profiles, and application infrastructure.
@@ -95,7 +95,7 @@ Rules:
 - Record an immutable transaction or ledger entry for every balance change.
 - Support an idempotency key for retried deposits, withdrawals, and payments.
 
-The current code uses `BigDecimal` in parts of the wallet implementation. A migration to minor-unit `long` values must update models, DTOs, repositories, mappings, tests, and API documentation together.
+The canonical wallet and marketplace persistence boundary uses `long` minor units with an explicit currency. `Money` accepts decimal text or `BigDecimal` only at conversion boundaries, validates the currency scale and exactness, and converts before PostgreSQL persistence; arithmetic and stored balances remain integer-based. Any future API change should preserve this boundary and update DTO and documentation contracts together.
 
 ## PostgreSQL Design
 
@@ -280,12 +280,12 @@ The application uses reactive PostgreSQL through R2DBC repository boundaries. Fl
 1. Define the relational schema and ownership rules.
 2. Add versioned PostgreSQL migrations and repository tests.
 3. Implement PostgreSQL repositories behind the existing service contracts.
-4. Recreate fixtures and migrate only deliberately selected local data through a one-time idempotent import if needed.
-5. Reconcile imported identity, requests, listings, offers, wallets, and ledger history.
-6. Migrate file metadata while moving binary content to object storage.
+4. Recreate deterministic development fixtures; no legacy database importer is part of the current runtime.
+5. Reconcile identity, requests, listings, offers, wallets, and ledger history in the target PostgreSQL resource.
+6. Keep file metadata in PostgreSQL while binary content is stored through the provider-neutral object-storage boundary.
 7. Keep PostgreSQL migrations, repository integration tests, and readiness gates in the release verification path.
 
-Live dual-read, dual-write, or controlled cutover is reserved for a future environment containing durable user data.
+Live dual-read and dual-write are not part of the current runtime. PostgreSQL is authoritative for all application business data.
 
 Do not introduce a second persistence source of truth for an application entity without a documented synchronization and recovery strategy.
 
