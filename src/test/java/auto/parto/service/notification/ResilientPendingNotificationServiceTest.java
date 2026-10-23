@@ -34,7 +34,7 @@ class ResilientPendingNotificationServiceTest {
     private ResilientPendingNotificationService service;
 
     @Test
-    void recoverOnStartupSubscribesAndProcessesPendingNotifications() throws Exception {
+    void recoverOnStartupSubscribesAndProcessesPendingNotifications() {
         String userId = "00000000-0000-0000-0000-000000000001";
         Map<String, Object> stats = Map.of(
                 "totalNotifications", 2L,
@@ -49,15 +49,14 @@ class ResilientPendingNotificationServiceTest {
 
         service.recoverOnStartup();
 
-        Thread.sleep(300);
-        verify(notificationStore).getPendingStats();
-        verify(notificationStore, org.mockito.Mockito.timeout(2_000)).claimPendingNotifications(
+        verify(notificationStore, org.mockito.Mockito.timeout(1_000)).getPendingStats();
+        verify(notificationStore, org.mockito.Mockito.timeout(1_000)).claimPendingNotifications(
                 org.mockito.ArgumentMatchers.eq(userId), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(100));
     }
 
     @Test
-    void recoverOnStartupProcessesRecipientsBeyondOneBatch() throws Exception {
+    void recoverOnStartupProcessesRecipientsBeyondOneBatch() {
         List<String> recipients = java.util.stream.IntStream.range(0, 101)
                 .mapToObj(index -> UUID.nameUUIDFromBytes(("recipient-" + index).getBytes()).toString())
                 .sorted()
@@ -76,14 +75,13 @@ class ResilientPendingNotificationServiceTest {
 
         service.recoverOnStartup();
 
-        Thread.sleep(500);
-        verify(notificationStore).claimPendingNotifications(
+        verify(notificationStore, org.mockito.Mockito.timeout(1_000)).claimPendingNotifications(
                 org.mockito.ArgumentMatchers.eq(recipients.get(100)), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(100));
     }
 
     @Test
-    void recoverOnStartupSkipsWhenNoPendingNotifications() throws Exception {
+    void recoverOnStartupSkipsWhenNoPendingNotifications() {
         Map<String, Object> stats = Map.of(
                 "totalNotifications", 0L,
                 "totalUsers", 0L
@@ -92,12 +90,11 @@ class ResilientPendingNotificationServiceTest {
 
         service.recoverOnStartup();
 
-        Thread.sleep(300);
-        verify(notificationStore).getPendingStats();
+        verify(notificationStore, org.mockito.Mockito.timeout(1_000)).getPendingStats();
     }
 
     @Test
-    void scheduledRecoverySkipsOfflineRecipientsWithoutClaimingOrExhausting() throws Exception {
+    void scheduledRecoverySkipsOfflineRecipientsWithoutClaimingOrExhausting() {
         String userId = "00000000-0000-0000-0000-000000000009";
         when(notificationStore.getPendingStats()).thenReturn(Mono.just(Map.of("totalNotifications", 1L)));
         when(notificationStore.getPendingRecipientIds(null, 100)).thenReturn(Flux.just(userId));
@@ -106,7 +103,7 @@ class ResilientPendingNotificationServiceTest {
 
         service.recoverDueNotifications();
 
-        Thread.sleep(300);
+        verify(notificationStore, org.mockito.Mockito.timeout(1_000)).getPendingRecipientIds(null, 100);
         verify(notificationStore, org.mockito.Mockito.never()).claimPendingNotifications(
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyInt());

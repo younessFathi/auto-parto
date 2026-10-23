@@ -1,5 +1,6 @@
 package auto.parto.service.notification;
 
+import auto.parto.AutoPartoApplication;
 import auto.parto.service.BasicCircuitBreaker;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Bean;
@@ -15,6 +16,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringJUnitConfig(NotificationSchedulingTest.Config.class)
 @TestPropertySource(properties = {
@@ -22,6 +24,11 @@ import static org.mockito.Mockito.when;
         "notification.timeout=30"
 })
 class NotificationSchedulingTest {
+
+    @Test
+    void productionApplicationEnablesScheduling() {
+        assertThat(AutoPartoApplication.class.isAnnotationPresent(EnableScheduling.class)).isTrue();
+    }
 
     @org.springframework.beans.factory.annotation.Autowired
     private HybridNotificationStore notificationStore;

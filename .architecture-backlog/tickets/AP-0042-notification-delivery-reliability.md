@@ -24,16 +24,16 @@ classification codes without notification payloads or provider exception text.
 
 - [x] A notification is acknowledged as stored only after the durable PostgreSQL operation succeeds.
 - [x] Every asynchronous persistence chain is subscribed by an owned lifecycle or returned to its caller.
-- [ ] Retry, replay, projection bounds, and shutdown behavior remain bounded and are documented.
+- [x] Retry, replay, projection bounds, and shutdown behavior remain bounded and are documented.
 - [x] Endpoint responses use the established safe error contract when storage or provider delivery fails.
-- [ ] Unit, HTTP, and container-backed tests cover persistence failure, Redis failure, concurrent claims, retry exhaustion, duplicate-safe acknowledgement, offline preservation, scheduled recovery, and idempotent projection replacement.
+- [x] Unit, HTTP, and container-backed tests cover persistence failure, Redis failure, concurrent claims, retry exhaustion, duplicate-safe acknowledgement, offline preservation, scheduled recovery, SSE cancellation ownership, and idempotent projection replacement.
 
 ## Verification
 
-Focused unit tests cover persistence result propagation, reactive delivery, projection
-failure, offline recovery guards, and FCM failure classification. PostgreSQL/Testcontainers
-coverage verifies bounded claims, lease recovery, deterministic retry exhaustion, and
-schema migration. Redis integration coverage verifies bounded projection reads and
-idempotent projection replacement. A Spring context test verifies scheduled recovery is
-active. AP-0042 remains In Progress until the complete offline and scheduled recovery
-contract is reviewed.
+Focused unit and HTTP tests cover persistence result propagation, reactive delivery,
+SSE cancellation ownership, projection failure, offline recovery guards, and FCM failure
+classification. PostgreSQL/Testcontainers coverage verifies bounded claims, lease
+recovery, deterministic retry exhaustion, and schema migration. Redis integration coverage
+verifies bounded projection reads and idempotent projection replacement. A Spring context
+test verifies scheduled recovery is active. The implementation is complete pending the
+feature owner’s review and status transition.

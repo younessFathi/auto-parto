@@ -5,7 +5,6 @@ import auto.parto.enums.NotificationStatus;
 import auto.parto.service.notification.PendingNotificationService;
 import auto.parto.service.notification.ResilientNotificationService;
 import auto.parto.service.notification.ResilientPendingNotificationService;
-import auto.parto.service.notification.SSENotificationService;
 import auto.parto.security.CanonicalSecurity;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -21,7 +20,6 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
-import java.util.concurrent.atomic.AtomicBoolean;
 import static auto.parto.utils.Constants.Notification.*;
 
 
@@ -34,17 +32,14 @@ public class NotificationController {
     private final ResilientNotificationService resilientNotificationService;
     private final PendingNotificationService pendingNotificationService;
     private final ResilientPendingNotificationService resilientPendingNotificationService;
-    private final SSENotificationService sseNotificationService;
 
     public NotificationController(
             ResilientNotificationService resilientNotificationService,
             PendingNotificationService pendingNotificationService,
-            ResilientPendingNotificationService resilientPendingNotificationService,
-            SSENotificationService sseNotificationService
+            ResilientPendingNotificationService resilientPendingNotificationService
     ) {
         this.resilientNotificationService = resilientNotificationService;
         this.pendingNotificationService = pendingNotificationService;
-        this.sseNotificationService = sseNotificationService;
         this.notificationSink = Sinks.many().multicast().onBackpressureBuffer();
         this.resilientPendingNotificationService = resilientPendingNotificationService;
     }
@@ -81,18 +76,13 @@ public class NotificationController {
             org.springframework.security.core.Authentication authentication) {
         CanonicalSecurity.requireOwner(authentication, userId, null);
         Sinks.Many<NotificationRequest> userSink = resilientNotificationService.registerConnection(userId);
-        AtomicBoolean recoveryStarted = new AtomicBoolean();
-        // The connection owns this subscription. Demand means the SSE sink has an active subscriber,
-        // so pending rows can be claimed without treating an offline user as a failed delivery.
-        return sseNotificationService.getUserConnections(userId)
-                    .asFlux()
-                    .map(buildNotification())
-                    .doOnRequest(requested -> {
-                        if (requested > 0 && recoveryStarted.compareAndSet(false, true)) {
+        // Subscribe to the sink before recovery so delivery sees an active SSE subscriber. The
+        // recovery publisher remains part of the returned stream and is cancelled with the client.
+        return Flux.defer(() -> Flux.merge(
+                            userSink.asFlux().map(buildNotification()),
                             resilientPendingNotificationService.deliverPendingOnConnect(userId)
-                                    .subscribe(ignored -> { }, error -> log.error("SSE pending recovery failed"));
-                        }
-                    })
+                                    .doOnError(error -> log.error("SSE pending recovery failed"))
+                                    .then(Mono.never())))
                 .doOnSubscribe(sub -> log.info(USER_SUBSCRIBED_TO_SSE, userId))
                 .doOnCancel(() -> {
                     log.info(USER_SSE_CONNECTION_CLOSED, userId);
