@@ -4,6 +4,7 @@ import auto.parto.dto.NotificationRequest;
 import auto.parto.service.notification.PendingNotificationService;
 import auto.parto.service.notification.ResilientNotificationService;
 import auto.parto.service.notification.ResilientPendingNotificationService;
+import auto.parto.service.notification.SseNotificationEvent;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
@@ -52,11 +53,14 @@ class NotificationControllerTest {
 
     @Test
     void subscribeToUser_returnsSseStream() {
-        Sinks.Many<NotificationRequest> userSink = Sinks.many().multicast().onBackpressureBuffer();
+        Sinks.Many<SseNotificationEvent> userSink = Sinks.many().multicast().onBackpressureBuffer();
         when(resilientNotificationService.registerConnection("user-1")).thenReturn(userSink);
         when(resilientPendingNotificationService.deliverPendingOnConnect("user-1")).thenReturn(Mono.empty());
 
-        userSink.tryEmitNext(new NotificationRequest("id-1", "user-1", auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "test", System.currentTimeMillis()));
+        userSink.tryEmitNext(new SseNotificationEvent(
+                java.util.UUID.randomUUID(),
+                new NotificationRequest("id-1", "user-1", auto.parto.enums.NotificationType.NEW_SEARCH_POSTED,
+                        "test", System.currentTimeMillis())));
         userSink.tryEmitComplete();
 
         webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("user-1")))

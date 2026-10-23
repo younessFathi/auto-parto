@@ -3,6 +3,7 @@ package auto.parto.api;
 import auto.parto.service.notification.PendingNotificationService;
 import auto.parto.service.notification.ResilientNotificationService;
 import auto.parto.service.notification.ResilientPendingNotificationService;
+import auto.parto.service.notification.SseNotificationEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -31,7 +32,7 @@ class NotificationControllerLifecycleTest {
     @Test
     void subscribeToUser_cancelsPendingRecoveryWithTheSseConnection() {
         String userId = "user-1";
-        Sinks.Many<auto.parto.dto.NotificationRequest> userSink =
+        Sinks.Many<SseNotificationEvent> userSink =
                 Sinks.many().unicast().onBackpressureBuffer();
         PublisherProbe<Integer> recovery = PublisherProbe.of(Mono.never());
         when(resilientNotificationService.registerConnection(userId)).thenReturn(userSink);
@@ -57,7 +58,7 @@ class NotificationControllerLifecycleTest {
     @Test
     void subscribeToUser_completesAndCleansUpWhenTheRegisteredSinkIsReplaced() {
         String userId = "user-1";
-        Sinks.Many<auto.parto.dto.NotificationRequest> oldSink =
+        Sinks.Many<SseNotificationEvent> oldSink =
                 Sinks.many().unicast().onBackpressureBuffer();
         when(resilientNotificationService.registerConnection(userId)).thenReturn(oldSink);
         when(resilientPendingNotificationService.deliverPendingOnConnect(userId))
@@ -78,7 +79,7 @@ class NotificationControllerLifecycleTest {
     @Test
     void subscribeToUser_keepsStreamOpenAfterRecoveryUntilSinkCompletes() {
         String userId = "user-1";
-        Sinks.Many<auto.parto.dto.NotificationRequest> userSink =
+        Sinks.Many<SseNotificationEvent> userSink =
                 Sinks.many().unicast().onBackpressureBuffer();
         PublisherProbe<Integer> recovery = PublisherProbe.of(Mono.just(0));
         when(resilientNotificationService.registerConnection(userId)).thenReturn(userSink);
@@ -102,9 +103,9 @@ class NotificationControllerLifecycleTest {
     @Test
     void subscribeToUser_cancelsRecoveryWhenOldSinkIsReplacedAndKeepsReplacement() {
         String userId = "user-1";
-        Sinks.Many<auto.parto.dto.NotificationRequest> oldSink =
+        Sinks.Many<SseNotificationEvent> oldSink =
                 Sinks.many().unicast().onBackpressureBuffer();
-        Sinks.Many<auto.parto.dto.NotificationRequest> replacementSink =
+        Sinks.Many<SseNotificationEvent> replacementSink =
                 Sinks.many().unicast().onBackpressureBuffer();
         PublisherProbe<Integer> recovery = PublisherProbe.of(Mono.never());
         when(resilientNotificationService.registerConnection(userId))
@@ -133,9 +134,9 @@ class NotificationControllerLifecycleTest {
     @Test
     void subscribeToUser_cleansUpSafelyWhenRecoveryFails() {
         String userId = "user-1";
-        Sinks.Many<auto.parto.dto.NotificationRequest> oldSink =
+        Sinks.Many<SseNotificationEvent> oldSink =
                 Sinks.many().unicast().onBackpressureBuffer();
-        Sinks.Many<auto.parto.dto.NotificationRequest> replacementSink =
+        Sinks.Many<SseNotificationEvent> replacementSink =
                 Sinks.many().unicast().onBackpressureBuffer();
         when(resilientNotificationService.registerConnection(userId))
                 .thenReturn(oldSink, replacementSink);

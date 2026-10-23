@@ -140,6 +140,29 @@ public class R2dbcNotificationRepository implements NotificationRepository {
     }
 
     @Override
+    public Flux<NotificationRecord> findForRecipientAfter(UUID recipientUserPublicId,
+                                                           UUID afterNotificationPublicId,
+                                                           int limit) {
+        requirePublicId(recipientUserPublicId);
+        requirePublicId(afterNotificationPublicId);
+        if (limit < 1 || limit > 100) throw new IllegalArgumentException("limit must be between 1 and 100");
+        return databaseClient.sql(SELECT + """
+                        JOIN notifications cursor_notification
+                          ON cursor_notification.public_id = :afterNotificationPublicId
+                        WHERE owner.public_id = :recipientPublicId
+                          AND (notification.created_at, notification.public_id)
+                              > (cursor_notification.created_at, cursor_notification.public_id)
+                        ORDER BY notification.created_at, notification.public_id
+                        LIMIT :limit
+                        """)
+                .bind("recipientPublicId", recipientUserPublicId)
+                .bind("afterNotificationPublicId", afterNotificationPublicId)
+                .bind("limit", limit)
+                .map((row, metadata) -> map(row))
+                .all();
+    }
+
+    @Override
     public Mono<Long> markPendingForRecipient(UUID recipientUserPublicId) {
         requirePublicId(recipientUserPublicId);
         return databaseClient.sql("""

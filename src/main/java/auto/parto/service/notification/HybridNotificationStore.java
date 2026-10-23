@@ -144,6 +144,20 @@ public class HybridNotificationStore {
                                 .map(notification -> new ClaimedNotification(record.publicId(), notification))));
     }
 
+    public Flux<ClaimedNotification> replayNotifications(String userId, UUID afterEventId, int limit) {
+        if (postgresqlRepository == null || afterEventId == null || limit < 1 || limit > 100) {
+            return Flux.empty();
+        }
+        return parseUserId(userId)
+                .flatMapMany(owner -> postgresqlRepository.findForRecipientAfter(owner, afterEventId, limit)
+                        .flatMap(record -> deserialize(record)
+                                .map(notification -> new ClaimedNotification(record.publicId(), notification))))
+                .onErrorResume(error -> {
+                    log.warn("SSE notification replay is unavailable");
+                    return Flux.empty();
+                });
+    }
+
     public Mono<Void> rebuildProjection(String userId) {
         if (postgresqlRepository == null) return Mono.empty();
         return parseUserId(userId)

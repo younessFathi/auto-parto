@@ -32,7 +32,7 @@ public class ResilientNotificationService {
         });
     }
 
-    public Sinks.Many<NotificationRequest> registerConnection(String userId) {
+    public Sinks.Many<SseNotificationEvent> registerConnection(String userId) {
         circuitBreaker.recordSuccess(userId);
         return sseNotificationService.registerConnection(userId);
     }
@@ -41,7 +41,7 @@ public class ResilientNotificationService {
         sseNotificationService.unregisterConnection(userId);
     }
 
-    public void unregisterConnection(String userId, Sinks.Many<NotificationRequest> expectedConnection) {
+    public void unregisterConnection(String userId, Sinks.Many<SseNotificationEvent> expectedConnection) {
         sseNotificationService.unregisterConnection(userId, expectedConnection);
     }
 

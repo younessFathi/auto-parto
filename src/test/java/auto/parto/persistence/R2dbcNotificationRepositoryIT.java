@@ -175,6 +175,29 @@ class R2dbcNotificationRepositoryIT {
     }
 
     @Test
+    void replaysAfterCursorWithStableUuidTieBreaker() {
+        UUID owner = UUID.randomUUID();
+        insertUser(owner).then(repository.enqueue(owner, "REPLAY_ONE", "{}"))
+                .then(repository.enqueue(owner, "REPLAY_TWO", "{}"))
+                .block();
+        var records = repository.findPendingForRecipient(owner, 100)
+                .filter(record -> record.eventType().startsWith("REPLAY_"))
+                .collectList().block();
+        records.sort(java.util.Comparator.comparing(NotificationRecord::publicId));
+        databaseClient.sql("UPDATE notifications SET created_at = TIMESTAMP '2020-01-01 00:00:00+00' WHERE event_type LIKE 'REPLAY_%'")
+                .fetch().rowsUpdated().block();
+        records = repository.findPendingForRecipient(owner, 100)
+                .filter(record -> record.eventType().startsWith("REPLAY_"))
+                .collectList().block();
+        records.sort(java.util.Comparator.comparing(NotificationRecord::publicId));
+
+        var actual = repository.findForRecipientAfter(owner, records.getFirst().publicId(), 100)
+                .map(NotificationRecord::publicId).collectList().block();
+        assertThat(actual).containsExactlyElementsOf(records.subList(1, records.size()).stream()
+                .map(NotificationRecord::publicId).toList());
+    }
+
+    @Test
     void marksOnlyTheDeliveredNotificationId() {
         UUID owner = UUID.randomUUID();
         StepVerifier.create(insertUser(owner)

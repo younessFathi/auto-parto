@@ -21,6 +21,9 @@ public interface NotificationRepository {
 
     Flux<NotificationRecord> findPendingForRecipient(UUID recipientUserPublicId, int limit);
 
+    Flux<NotificationRecord> findForRecipientAfter(UUID recipientUserPublicId, UUID afterNotificationPublicId,
+                                                    int limit);
+
     Mono<Long> markPendingForRecipient(UUID recipientUserPublicId);
 
     Mono<Boolean> markPendingForRecipientAndId(UUID recipientUserPublicId, String notificationId);
