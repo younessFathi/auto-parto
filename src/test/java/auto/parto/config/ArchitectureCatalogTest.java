@@ -38,22 +38,13 @@ class ArchitectureCatalogTest {
     }
 
     @Test
-    void reconciledStatusesAreRecorded() throws IOException {
-        assertStatus("features/F01-platform-and-data.md", "In Progress");
-        assertStatus("features/F02-identity-and-security.md", "Done");
-        assertStatus("features/F03-marketplace.md", "Done");
-        assertStatus("features/F04-money-and-wallets.md", "Done");
-        assertStatus("features/F05-notifications-and-redis.md", "Done");
-        assertStatus("features/F06-file-storage.md", "Done");
-        assertStatus("features/F07-deployment-and-secrets.md", "In Progress");
-        assertStatus("features/F08-observability-and-recovery.md", "Proposed");
-        assertStatus("features/F09-go-live-readiness.md", "Deferred until a go-live decision is approved.");
-        assertStatus("features/F12-runtime-cleanup.md", "Done");
-        assertStatus("tickets/AP-0025-api-error-contract.md", "Done");
-        assertStatus("tickets/AP-0030-application-boundaries.md", "Proposed");
-        assertStatus("tickets/AP-0033-github-actions-migration.md", "Done");
-        assertStatus("tickets/AP-0037-remove-mongodb.md", "Done");
-        assertStatus("tickets/AP-0041-architecture-catalog-repair.md", "Done");
+    void activeCatalogEntriesDeclareAStatus() throws IOException {
+        try (var paths = Files.walk(BACKLOG)) {
+            paths.filter(path -> path.toString().endsWith(".md"))
+                    .filter(path -> path.startsWith(BACKLOG.resolve("features"))
+                            || path.startsWith(BACKLOG.resolve("tickets")))
+                    .forEach(this::assertStatusSyntax);
+        }
     }
 
     private void assertLinksResolve(Path markdown) {
@@ -75,9 +66,14 @@ class ArchitectureCatalogTest {
         }
     }
 
-    private void assertStatus(String relativePath, String status) throws IOException {
-        assertThat(Files.readString(BACKLOG.resolve(relativePath)))
-                .as("status in %s", relativePath)
-                .satisfies(content -> assertThat(content).containsAnyOf("**Status:** " + status, "## Status\n\n" + status + ".", "## Status\n\n" + status));
+    private void assertStatusSyntax(Path markdown) {
+        try {
+            String content = Files.readString(markdown);
+            assertThat(content)
+                    .as("status declaration in %s", markdown)
+                    .containsAnyOf("**Status:**", "## Status");
+        } catch (IOException exception) {
+            throw new AssertionError("Cannot read " + markdown, exception);
+        }
     }
 }

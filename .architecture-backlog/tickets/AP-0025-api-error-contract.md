@@ -1,6 +1,6 @@
 # AP-0025 Standardize API Error Contract
 
-- **Status:** Done
+- **Status:** In Progress
 - **Type:** Technical Enhancement
 - **Feature:** [Platform and Data](../features/F01-platform-and-data.md)
 - **Linked Tickets:** [AP-0004](AP-0004-canonical-authentication.md), [AP-0005](AP-0005-prevent-identity-impersonation.md)
@@ -32,3 +32,4 @@ The whole ticket is implemented, every acceptance criterion is satisfied, every 
 - Added unit, WebFlux contract, and PostgreSQL/Redis Testcontainers coverage.
 - Updated PostgreSQL migration integration assertions to match the three migrations present on main.
 - Added [`docs/api-error-contract.md`](../../docs/api-error-contract.md) with the response shape and status/code mapping.
+- Remaining work: remove raw internal error text from all endpoint responses and add endpoint-level regression coverage before marking the ticket Done.

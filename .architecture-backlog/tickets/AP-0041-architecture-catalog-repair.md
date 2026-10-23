@@ -22,7 +22,7 @@ The active architecture catalog still contained MongoDB-era runtime statements, 
 - [x] Active guide, architecture, feature, and ticket text describes PostgreSQL/R2DBC as the current application persistence runtime.
 - [x] F01, F05, and F12 are linked from the backlog index and all active Markdown links resolve.
 - [x] Missing ticket references are repaired or explicitly described as absorbed/retired.
-- [x] F02, F03, F04, F06, F07, F08, F09, F12, AP-0025, AP-0030, AP-0033, and AP-0037 have current status and dependency text.
+- [x] F02, F03, F04, F06, F07, F08, F09, F12, AP-0025, AP-0030, AP-0033, and AP-0037 have current status and dependency text, including explicit follow-up ownership for unfinished work.
 - [x] Historical reviews and traces are unchanged.
 - [x] `ArchitectureCatalogTest` covers active link resolution and the reconciled status set.
 - [x] `git diff --check` and the focused catalog test pass.
