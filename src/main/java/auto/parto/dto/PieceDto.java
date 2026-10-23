@@ -49,5 +49,3 @@ public class PieceDto {
     @Schema(accessMode = Schema.AccessMode.READ_ONLY)
     private Status status;
 }
-// TODO: hetzner vps coolfy deployement
-// TODO: mongodb for dev env

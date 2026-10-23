@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 import java.io.IOException;
@@ -17,6 +18,7 @@ import java.nio.file.Path;
 
 @WebFluxTest(controllers = ImageController.class)
 @Import(TestConfig.class)
+@TestPropertySource(properties = "auto.parto.persistence.postgresql.files.enabled=false")
 class ImageControllerTest {
 
     private static Path tempDir;

@@ -297,7 +297,7 @@ Configuration should be separated by profile:
 
 Runtime application-database access uses R2DBC. Audit publishing uses a bounded non-blocking client or isolated bounded scheduler when the driver is blocking. Application and audit schema migrations use separate restricted JDBC migration jobs, run in deployment order before the corresponding workers and application rollout. Use expand-contract migrations when application versions overlap.
 
-The development PostgreSQL migration job, identity/profile fixture job, reconciliation procedure, and fail-stop cutover path are documented in [`postgresql-development-cutover.md`](postgresql-development-cutover.md). The audit PostgreSQL service is intentionally supplied through `docker-compose.audit.yml`, so an application-only PostgreSQL command does not require audit credentials. The completed development cutover runs through the PostgreSQL-only Compose application profile; the default application service remains a MongoDB compatibility profile until a separately approved protected deployment removes that compatibility path.
+The PostgreSQL migration job, identity/profile fixture job, reconciliation procedure, and readiness gates are documented in [`postgresql-development-cutover.md`](postgresql-development-cutover.md). The audit PostgreSQL service is intentionally supplied through `docker-compose.audit.yml`, so an application-only PostgreSQL command does not require audit credentials.
 
 Applications must fail safely when required production secrets are missing. They must not silently use development credentials.
 

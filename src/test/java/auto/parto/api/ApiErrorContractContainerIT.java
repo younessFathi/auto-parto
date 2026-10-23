@@ -41,7 +41,7 @@ class ApiErrorContractContainerIT extends BaseIntegrationTest {
     }
 
     @Test
-    void returnsSafeErrorContractThroughMongoRedisBackedApplication() {
+    void returnsSafeErrorContractThroughPostgresqlRedisBackedApplication() {
         webTestClient.get()
                 .uri("/pieces/customer-1?page=-1&size=10")
                 .header("Authorization", "Bearer " + canonicalToken())

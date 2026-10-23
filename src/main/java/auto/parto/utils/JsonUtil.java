@@ -1,8 +1,5 @@
 package auto.parto.utils;
 
-import auto.parto.dto.PieceDto;
-import auto.parto.dto.PieceOfferDto;
-import auto.parto.model.Piece;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;

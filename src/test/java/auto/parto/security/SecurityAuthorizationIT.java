@@ -2,8 +2,7 @@ package auto.parto.security;
 
 import auto.parto.config.BaseIntegrationTest;
 import auto.parto.config.FirebaseHealthIndicator;
-import auto.parto.model.NotificationPreferences;
-import auto.parto.repository.NotificationPreferencesRepository;
+import auto.parto.persistence.NotificationPreferencesRepository;
 import auto.parto.service.SellerService;
 import auto.parto.service.notification.BatchFcmResult;
 import auto.parto.service.notification.DeviceTokenService;
@@ -32,6 +31,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -56,7 +56,7 @@ class SecurityAuthorizationIT extends BaseIntegrationTest {
     @Autowired
     private WebTestClient webTestClient;
 
-    @Autowired
+    @MockitoBean
     private NotificationPreferencesRepository preferencesRepository;
 
     @MockitoBean
@@ -82,8 +82,8 @@ class SecurityAuthorizationIT extends BaseIntegrationTest {
 
     @BeforeEach
     void clearPreferences() {
-        preferencesRepository.deleteAll().block();
         when(firebaseHealthIndicator.health()).thenReturn(Mono.just(Health.up().build()));
+        when(preferencesRepository.findByUserPublicId(any(UUID.class))).thenReturn(Mono.empty());
     }
 
     @Test
@@ -307,31 +307,14 @@ class SecurityAuthorizationIT extends BaseIntegrationTest {
     }
 
     @Test
-    void preferenceRouteUsesCanonicalIdAndMigratesLegacyEmailRecord() {
-        NotificationPreferences legacy = NotificationPreferences.builder()
-                .userId("buyer@example.test")
-                .emailEnabled(true)
-                .pushEnabled(false)
-                .smsEnabled(true)
-                .newOfferEnabled(false)
-                .priceAlertEnabled(true)
-                .searchMatchEnabled(false)
-                .orderUpdateEnabled(true)
-                .marketingEnabled(false)
-                .build();
-        preferencesRepository.save(legacy).block();
-
-        requestPreferences(canonicalToken("buyer-public-id", "buyer@example.test", "BUYER"))
+    void preferenceRouteUsesCanonicalId() {
+        String buyerId = "11111111-1111-4111-8111-111111111111";
+        requestPreferences(canonicalToken(buyerId, "buyer@example.test", "BUYER"))
                 .expectStatus().isOk()
                 .expectBody()
-                .jsonPath("$.userId").isEqualTo("buyer-public-id")
-                .jsonPath("$.pushEnabled").isEqualTo(false)
-                .jsonPath("$.searchMatchEnabled").isEqualTo(false);
-
-        NotificationPreferences migrated = preferencesRepository.findByUserId("buyer-public-id").block();
-        assertThat(migrated).isNotNull();
-        assertThat(migrated.getUserId()).isEqualTo("buyer-public-id");
-        assertThat(preferencesRepository.findByUserId("buyer@example.test").block()).isNull();
+                .jsonPath("$.userId").isEqualTo(buyerId)
+                .jsonPath("$.pushEnabled").isEqualTo(true)
+                .jsonPath("$.emailEnabled").isEqualTo(true);
     }
 
     private WebTestClient.ResponseSpec requestPreferences(String token) {

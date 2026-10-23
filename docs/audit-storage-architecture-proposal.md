@@ -308,7 +308,7 @@ The first four implementation steps now have a repository foundation:
 - Publisher orchestration: the reactive `auto.parto.audit` port and publisher classes implement bounded claiming, at-least-once delivery, duplicate acknowledgement, retry, exhaustion, replay, and reconciliation behavior.
 - Deployment resource: the opt-in Docker Compose `postgres`/`audit` profiles define separate application and audit PostgreSQL resources with separate credentials and volumes.
 
-The PostgreSQL R2DBC outbox adapter, audit-database adapter, deployment migration jobs, and Docker-backed integration execution remain the next runtime step. They are intentionally not wired into the current MongoDB application until the AP-0002 persistence migration begins.
+The PostgreSQL R2DBC outbox adapter, audit-database adapter, deployment migration jobs, and Docker-backed integration execution are wired into the PostgreSQL application runtime.
 
 ## Final Operating Rules
 

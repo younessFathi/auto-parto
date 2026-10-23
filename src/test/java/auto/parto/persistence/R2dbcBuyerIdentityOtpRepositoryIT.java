@@ -40,7 +40,7 @@ class R2dbcBuyerIdentityOtpRepositoryIT {
     }
 
     @Test
-    void findsBuyerIdentityByPhoneNumberWithoutLoadingMongoData() {
+    void findsBuyerIdentityByPhoneNumberWithoutLoadingLegacyData() {
         String email = "buyer-" + UUID.randomUUID() + "@example.test";
         String phone = "+212" + UUID.randomUUID().toString().replace("-", "").substring(0, 9);
         StepVerifier.create(repository.create(email, "Ada", "Lovelace", phone, "123456",

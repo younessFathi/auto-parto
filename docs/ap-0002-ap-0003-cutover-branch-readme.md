@@ -4,7 +4,7 @@ This document explains the work delivered by `feat/ap-0002-ap-0003-postgresql-cu
 
 ## Goal
 
-AP-0002 introduces reactive PostgreSQL persistence behind repository boundaries. AP-0003 uses those boundaries to provide a repeatable development cutover from MongoDB to PostgreSQL.
+AP-0002 introduced reactive PostgreSQL persistence behind repository boundaries. AP-0003 completed the application cutover to PostgreSQL.
 
 The branch was designed around four constraints:
 
@@ -25,7 +25,7 @@ This keeps SQL details out of services and allows each aggregate to move indepen
 
 Buyer and seller identity, profile, provider-subject lookup, OTP replacement and validation, activation, and deactivation paths were routed to PostgreSQL when their flags are enabled. Buyer-only configuration also enables the shared R2DBC transaction infrastructure so it cannot expose partially configured beans.
 
-Identity mutations use reactive transactions, bounded OTP attempts, hashed OTP values, and explicit empty results for missing users. The existing Mongo compatibility paths remain available only outside the explicit Mongo-disabled cutover.
+Identity mutations use reactive transactions, bounded OTP attempts, hashed OTP values, and explicit empty results for missing users.
 
 ### 3. Marketplace persistence
 
@@ -74,9 +74,9 @@ This prevents arbitrary content with an image filename from reaching local or ob
 
 ### 7. PostgreSQL-only cutover profile
 
-The Compose PostgreSQL profile was completed so the application can run without MongoDB auto-configuration. It enables the PostgreSQL boundaries, waits for Flyway migrations and deterministic fixtures, disables external Firebase dependencies for local use, and exposes an unauthenticated actuator health endpoint.
+The Compose PostgreSQL profile is the application runtime. It enables the PostgreSQL boundaries, waits for Flyway migrations and deterministic fixtures, disables external Firebase dependencies for local use, and exposes an unauthenticated actuator health endpoint.
 
-The cutover context suppresses legacy Mongo repository beans and fails closed on unsupported compatibility contracts. This makes accidental Mongo writes visible during PostgreSQL-only development.
+The runtime fails closed on unsupported persistence contracts. This makes accidental writes outside PostgreSQL visible during development.
 
 ### 8. Migrations, roles, and fixtures
 
@@ -112,7 +112,6 @@ The main cutover flags are:
 | Flag | Purpose |
 |---|---|
 | `APP_POSTGRES_CUTOVER_ENABLED` | Enables explicit PostgreSQL cutover behavior. |
-| `APP_POSTGRES_MONGO_DISABLED` | Suppresses MongoDB compatibility repositories. |
 | `APP_POSTGRES_CUTOVER_API_CONTRACTS_READY` | Confirms the selected API contracts are ready for cutover. |
 | `APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_ENABLED` | Enables the storage reconciliation health gate. |
 | `APP_POSTGRES_MARKETPLACE_ENABLED` | Enables request, listing, and offer PostgreSQL paths. |
@@ -149,7 +148,7 @@ The branch was built in small reviewable increments:
 9. `3706c5e` — add the durable provider-neutral file storage boundary.
 10. `1fd7c14` — route canonical file batches to PostgreSQL.
 11. `5ee4320` — finish canonical PostgreSQL request boundaries.
-12. `fff8741` — enforce the Mongo-disabled PostgreSQL cutover.
+12. `fff8741` — enforce the PostgreSQL cutover.
 13. `938033f` — add the PostgreSQL storage reconciliation gate.
 14. `36cd92a` — route identity service methods to PostgreSQL.
 15. `cd53b0f` — complete the combined AP-0002/AP-0003 cutover scope.

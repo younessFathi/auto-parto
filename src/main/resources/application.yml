@@ -12,9 +12,6 @@ spring:
   codec:
     max-in-memory-size: ${APP_MAX_IN_MEMORY_SIZE:1MB}
   data:
-    mongodb:
-      uri: ${MONGODB_URI:mongodb://localhost:27017/auto-parto}
-      auto-index-creation: true
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
@@ -57,33 +54,32 @@ auto:
   parto:
     persistence:
       postgresql:
-        enabled: ${APP_POSTGRES_R2DBC_ENABLED:${APP_POSTGRES_IDENTITY_ENABLED:${APP_POSTGRES_BUYER_IDENTITY_ENABLED:false}}}
+        enabled: ${APP_POSTGRES_R2DBC_ENABLED:true}
         cutover:
-          enabled: ${APP_POSTGRES_CUTOVER_ENABLED:false}
-          api-contracts-ready: ${APP_POSTGRES_CUTOVER_API_CONTRACTS_READY:false}
-          mongo-disabled: ${APP_POSTGRES_MONGO_DISABLED:false}
+          enabled: ${APP_POSTGRES_CUTOVER_ENABLED:true}
+          api-contracts-ready: ${APP_POSTGRES_CUTOVER_API_CONTRACTS_READY:true}
           storage-reconciliation:
-            enabled: ${APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_ENABLED:false}
+            enabled: ${APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_ENABLED:true}
             max-files: ${APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_MAX_FILES:1000}
             delete-orphans: ${APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_DELETE_ORPHANS:false}
             pending-timeout: ${APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_PENDING_TIMEOUT:1h}
             timeout: ${APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_TIMEOUT:30s}
         identity:
-          enabled: ${APP_POSTGRES_IDENTITY_ENABLED:false}
+          enabled: ${APP_POSTGRES_IDENTITY_ENABLED:true}
         buyer-identity:
-          enabled: ${APP_POSTGRES_BUYER_IDENTITY_ENABLED:false}
+          enabled: ${APP_POSTGRES_BUYER_IDENTITY_ENABLED:true}
         marketplace:
-          enabled: ${APP_POSTGRES_MARKETPLACE_ENABLED:false}
+          enabled: ${APP_POSTGRES_MARKETPLACE_ENABLED:true}
         wallet:
-          enabled: ${APP_POSTGRES_WALLET_ENABLED:false}
+          enabled: ${APP_POSTGRES_WALLET_ENABLED:true}
         device-tokens:
-          enabled: ${APP_POSTGRES_DEVICE_TOKENS_ENABLED:false}
+          enabled: ${APP_POSTGRES_DEVICE_TOKENS_ENABLED:true}
         notifications:
-          enabled: ${APP_POSTGRES_NOTIFICATIONS_ENABLED:false}
+          enabled: ${APP_POSTGRES_NOTIFICATIONS_ENABLED:true}
         files:
-          enabled: ${APP_POSTGRES_FILES_ENABLED:false}
+          enabled: ${APP_POSTGRES_FILES_ENABLED:true}
         notification-preferences:
-          enabled: ${APP_POSTGRES_NOTIFICATION_PREFERENCES_ENABLED:false}
+          enabled: ${APP_POSTGRES_NOTIFICATION_PREFERENCES_ENABLED:true}
     audit:
       enabled: ${APP_AUDIT_OUTBOX_ENABLED:false}
       r2dbc-url: ${AUDIT_POSTGRES_R2DBC_URL:r2dbc:postgresql://localhost:5432/auto_parto_audit}

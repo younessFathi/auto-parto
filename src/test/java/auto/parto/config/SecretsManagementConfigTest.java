@@ -28,7 +28,7 @@ class SecretsManagementConfigTest {
 
         assertThat(content)
                 .contains("SPRING_PROFILES_ACTIVE")
-                .contains("MONGODB_URI")
+                .contains("APP_POSTGRES_R2DBC_URL")
                 .contains("REDIS_HOST")
                 .contains("REDIS_PORT")
                 .contains("REDIS_PASSWORD")
@@ -62,7 +62,6 @@ class SecretsManagementConfigTest {
 
         assertThat(content)
                 .doesNotContain("root:root")
-                .doesNotContain("mongodb://root:root@")
                 .doesNotContain("password: root");
     }
 }

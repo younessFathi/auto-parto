@@ -29,7 +29,7 @@ The JWT signing secret is required through `JWT_SECRET` and must be a Base64-enc
 
 ## OTP verification
 
-The active email OTP flow binds each challenge to the `LOGIN` purpose and the requested email identity. OTP values are stored only as one-way hashes: the PostgreSQL identity path uses the configured HMAC pepper, while the legacy Mongo path uses a per-challenge salted PBKDF2 hash. Challenges have an explicit expiry, can be consumed only once, and are consumed with an atomic state transition. Failed verification attempts are updated atomically and lock the challenge after the bounded failure threshold.
+The active email OTP flow binds each challenge to the `LOGIN` purpose and the requested email identity. OTP values are stored only as one-way hashes using the configured HMAC pepper. Challenges have an explicit expiry, can be consumed only once, and are consumed with an atomic state transition. Failed verification attempts are updated atomically and lock the challenge after the bounded failure threshold.
 
 OTP requests and validation requests require a valid email and a six-digit code. Buyer challenge issuance is keyed by the canonical email identity; a phone number supplied with the request cannot redirect or replace another buyer's challenge. Challenge fields, hashes, and codes are excluded from API responses and are not written to application logs. The existing PostgreSQL audit triggers record security-relevant challenge changes without exposing the OTP value.
 

@@ -27,7 +27,6 @@ class ProductionConfigValidationTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("jwt.secretKey")
                 .hasMessageContaining("resend.api-key")
-                .hasMessageContaining("spring.data.mongodb.uri")
                 .hasMessageContaining("spring.data.redis.password");
     }
 
@@ -37,7 +36,6 @@ class ProductionConfigValidationTest {
         environment.setActiveProfiles("prod");
         environment.setProperty("jwt.secretKey", "jwt-secret");
         environment.setProperty("resend.api-key", "resend");
-        environment.setProperty("spring.data.mongodb.uri", "mongodb://mongo:27017/auto-parto");
         environment.setProperty("spring.data.redis.password", "redis-secret");
 
         ProductionConfigValidation validation = new ProductionConfigValidation(environment);
@@ -45,14 +43,12 @@ class ProductionConfigValidationTest {
     }
 
     @Test
-    void allowsProductionWithoutMongoWhenPostgresqlCutoverDisablesIt() {
+    void allowsProductionWithPostgresqlOnlyConfiguration() {
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles("prod");
         environment.setProperty("jwt.secretKey", "jwt-secret");
         environment.setProperty("resend.api-key", "resend");
         environment.setProperty("spring.data.redis.password", "redis-secret");
-        environment.setProperty("auto.parto.persistence.postgresql.cutover.mongo-disabled", "true");
-
         assertThatCode(new ProductionConfigValidation(environment)::afterPropertiesSet).doesNotThrowAnyException();
     }
 }
