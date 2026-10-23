@@ -12,7 +12,7 @@ Make PostgreSQL the only application persistence runtime. The project is still i
 ## Scope
 
 1. Confirm every active controller and service path uses a PostgreSQL repository boundary.
-2. Remove MongoDB fallback branches, repository interfaces and implementations, MongoDB models, mappers, configuration, dependencies, fixtures, and tests that no longer have callers.
+2. Remove MongoDB fallback branches, including the obsolete Mongo-only offer path (`PieceOfferService` and its repository/model support), together with repository interfaces and implementations, MongoDB models, mappers, configuration, dependencies, fixtures, and tests that no longer have callers.
 3. Remove MongoDB from Compose, application configuration, CI, and active documentation.
 4. Preserve audit, notification, storage, authorization, ownership, retry, and readiness behavior during the removal.
 5. Keep PostgreSQL/Testcontainers coverage for each removed boundary and add a startup test proving the application no longer creates MongoDB infrastructure.
@@ -22,6 +22,7 @@ Make PostgreSQL the only application persistence runtime. The project is still i
 - The application starts and serves all supported contracts with PostgreSQL and Redis only.
 - No production application code imports Spring Data MongoDB or uses `@Document`.
 - No service silently falls back to MongoDB when a PostgreSQL boundary is unavailable.
+- The obsolete Mongo-only offer path is removed; active offer behavior uses the PostgreSQL `OfferRepository` boundary.
 - MongoDB dependencies, configuration, Compose services, and active documentation are removed.
 - Focused unit and integration coverage protects each migrated path and dependency-failure behavior.
 - `git diff --check`, `./mvnw -B clean test`, and `./mvnw -B verify` pass with Docker available.
@@ -32,3 +33,4 @@ Make PostgreSQL the only application persistence runtime. The project is still i
 - Started on branch `feat/ap-0037-remove-mongodb` from the latest GitHub `main`.
 - Initial inventory found MongoDB models and repositories still present as compatibility paths, while PostgreSQL repositories cover identity, marketplace, wallets, device tokens, notifications, files, notification preferences, and object storage.
 - Removed the unused `CustomerJwt` and `PushDeliveryLog` Mongo document classes after confirming they have no production or test callers. Remaining Mongo models stay until their active compatibility callers are removed.
+- The next bounded cleanup slice includes the obsolete Mongo-only offer path; PostgreSQL offer persistence and its API contract remain in scope for regression verification.
