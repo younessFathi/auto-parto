@@ -1,86 +1,43 @@
 package auto.parto.api;
 
-import org.junit.jupiter.api.BeforeAll;
+import auto.parto.persistence.FileRepository;
+import auto.parto.storage.FileStorage;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.util.UUID;
 
 @WebFluxTest(controllers = ImageController.class)
 @Import(TestConfig.class)
-@TestPropertySource(properties = "auto.parto.persistence.postgresql.files.enabled=false")
 class ImageControllerTest {
-
-    private static Path tempDir;
 
     @Autowired
     private WebTestClient webTestClient;
 
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) throws IOException {
-        tempDir = Files.createTempDirectory("img-test");
-        registry.add("auto.parto.images.uploads", tempDir::toString);
-    }
+    @MockitoBean
+    private FileRepository fileRepository;
+
+    @MockitoBean
+    private FileStorage fileStorage;
 
     @Test
     @WithMockUser
-    void listImages_returnsImageFiles() throws IOException {
-        Path folder = tempDir.resolve("test-folder");
-        Files.createDirectories(folder);
-        Files.createFile(folder.resolve("image1.jpg"));
-        Files.createFile(folder.resolve("image2.png"));
-
+    void legacyFolderRouteIsRetired() {
         webTestClient.get()
                 .uri("/images/test-folder")
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus().isNotFound();
     }
 
     @Test
-    @WithMockUser
-    void listImages_returnsSingleImage_withFlagOne() throws IOException {
-        Path folder = tempDir.resolve("single-folder");
-        Files.createDirectories(folder);
-        Files.createFile(folder.resolve("only.jpg"));
-
+    void canonicalFileRouteRequiresAuthentication() {
         webTestClient.get()
-                .uri("/images/single-folder?flag=ONE")
-                .exchange()
-                .expectStatus().isOk();
-    }
-
-    @Test
-    @WithMockUser
-    void listImages_returns400_whenInvalidFolderName() {
-        webTestClient.get()
-                .uri("/images/../invalid")
-                .exchange()
-                .expectStatus().isBadRequest();
-    }
-
-    @Test
-    @WithMockUser
-    void listImages_returns500_whenFolderNotFound() {
-        webTestClient.get()
-                .uri("/images/nonexistent")
-                .exchange()
-                .expectStatus().is5xxServerError();
-    }
-
-    @Test
-    void listImages_returns401_whenNotAuthenticated() {
-        webTestClient.get()
-                .uri("/images/test-folder")
+                .uri("/api/v1/files/" + UUID.randomUUID())
                 .exchange()
                 .expectStatus().isUnauthorized();
     }

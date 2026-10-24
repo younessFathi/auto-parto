@@ -26,7 +26,7 @@ import java.math.BigDecimal;
 @RestController
 @AllArgsConstructor
 @Validated
-@RequestMapping("/seller")
+@RequestMapping({"/api/v1/sellers", "/seller"})
 @Tag(name = "Seller", description = "Seller API")
 public class SellerController {
     private ISellerService sellerService;

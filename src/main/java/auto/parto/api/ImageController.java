@@ -1,40 +1,33 @@
 package auto.parto.api;
 
-import auto.parto.enums.FileRequestFlag;
 import auto.parto.persistence.FileRecord;
 import auto.parto.persistence.FileRepository;
 import auto.parto.security.CanonicalPrincipal;
 import auto.parto.security.CanonicalSecurity;
 import auto.parto.service.iservice.IFileManagerService;
 import auto.parto.storage.FileStorage;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.PathResource;
-import org.springframework.core.io.Resource;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.multipart.FilePart;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.io.File;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.UUID;
 
+/** Canonical file metadata and upload API. Legacy folder browsing is retired. */
 @RestController
-@RequestMapping("/images")
-@Slf4j
+@RequestMapping("/api/v1/files")
 public class ImageController {
-    @Value("${auto.parto.images.uploads}")
-    private String uploadsDirectory;
-    @Value("${auto.parto.persistence.postgresql.files.enabled:false}")
-    private boolean postgresqlFilesEnabled;
     private final IFileManagerService fileManagerService;
     private final FileRepository fileRepository;
     private final FileStorage fileStorage;
@@ -87,7 +80,7 @@ public class ImageController {
         return fileManagerService.saveForListing(image, ownerId, listingId);
     }
 
-    @GetMapping("/files/{fileId}")
+    @GetMapping("/{fileId}")
     @PreAuthorize("isAuthenticated()")
     public Mono<ResponseEntity<Flux<DataBuffer>>> getFile(@PathVariable UUID fileId) {
         if (fileRepository == null || fileStorage == null) {
@@ -107,57 +100,5 @@ public class ImageController {
             contentType = MediaType.APPLICATION_OCTET_STREAM;
         }
         return ResponseEntity.ok().contentType(contentType).body(fileStorage.read(record.objectKey()));
-    }
-
-    @GetMapping("/{folderName}")
-    @PreAuthorize("isAuthenticated()")
-    public Flux<Resource> listImages(@PathVariable String folderName , @RequestParam(required = false) FileRequestFlag flag) {
-        if (postgresqlFilesEnabled) {
-            return Flux.error(new IllegalStateException(
-                    "Legacy folder image access is disabled; use /images/files/{fileId}"));
-        }
-        // Validate the folder name
-        log.info("Validating folder name {} " , folderName);
-        if (!isValidFolderName(folderName)) {
-            log.error("Invalid folder name {} " , folderName);
-            return Flux.error(new IllegalArgumentException("Invalid folder name."));
-        }
-
-        Path folderPath = Paths.get(uploadsDirectory, folderName);
-        File folder = folderPath.toFile();
-
-        // Check if the folder exists and is indeed a directory
-        if (!folder.exists() || !folder.isDirectory()) {
-            log.error("Folder not fount or is not a directory {} " , folder);
-            return Flux.error(new RuntimeException("Folder not found or is not a directory."));
-        }
-
-        // Filter and list image files
-        File[] files = folder.listFiles((dir, name) -> name.toLowerCase().endsWith(".jpg") ||
-                name.toLowerCase().endsWith(".png") ||
-                name.toLowerCase().endsWith(".gif") ||
-                name.toLowerCase().endsWith(".jpeg"));
-        // Create a Flux from the image files
-        return Flux.create(sink -> {
-            if (files != null && files.length != 0) {
-                if(FileRequestFlag.ONE.equals(flag)){
-                    Path imagePath = files[0].toPath();
-                    Resource resource = new PathResource(imagePath);
-                    sink.next(resource);
-                }else {
-                    for (File file : files) {
-                        Path imagePath = file.toPath();
-                        Resource resource = new PathResource(imagePath);
-                        sink.next(resource);
-                    }
-                }
-            }
-            sink.complete();
-        });
-    }
-
-    private boolean isValidFolderName(String folderName) {
-        // Add validation logic for folder names (e.g., regex to allow only certain characters)
-        return folderName.matches("^[a-zA-Z0-9._-]+$");
     }
 }

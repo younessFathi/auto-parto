@@ -2,6 +2,7 @@ package auto.parto.service.notification;
 
 import auto.parto.dto.NotificationRequest;
 import auto.parto.persistence.NotificationRepository;
+import auto.parto.persistence.NotificationRecord;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -44,9 +45,14 @@ public class HybridNotificationStore {
     }
 
     public Mono<Boolean> storePending(NotificationRequest notification) {
+        return storePendingRecord(notification).map(record -> true).defaultIfEmpty(false);
+    }
+
+    /** Persists first and returns the authoritative public ID used by live delivery. */
+    public Mono<NotificationRecord> storePendingRecord(NotificationRequest notification) {
         String userId = notification.userId();
         if (postgresqlRepository == null) {
-            return Mono.just(false);
+            return Mono.empty();
         }
         return parseUserId(userId)
                 .flatMap(owner -> serialize(notification)
@@ -55,8 +61,7 @@ public class HybridNotificationStore {
                         // PostgreSQL is authoritative; Redis is only a best-effort projection.
                         .flatMap(record -> redisStore.storePending(userId, notification)
                                 .onErrorReturn(false)
-                                .thenReturn(true)))
-                .defaultIfEmpty(false);
+                                .thenReturn(record)));
     }
 
     public Flux<NotificationRequest> getPendingNotifications(String userId) {
@@ -142,6 +147,33 @@ public class HybridNotificationStore {
                         .claimPendingForRecipient(owner, claimOwner, now, leaseDuration, limit)
                         .flatMap(record -> deserialize(record)
                                 .map(notification -> new ClaimedNotification(record.publicId(), notification))));
+    }
+
+    public Flux<ClaimedNotification> replayNotifications(String userId, UUID afterEventId, int limit) {
+        if (postgresqlRepository == null || afterEventId == null || limit < 1 || limit > 100) {
+            return Flux.empty();
+        }
+        return parseUserId(userId)
+                .flatMapMany(owner -> postgresqlRepository.findForRecipientAfter(owner, afterEventId, limit)
+                        .flatMap(record -> deserialize(record)
+                                .map(notification -> new ClaimedNotification(record.publicId(), notification))))
+                .onErrorResume(error -> {
+                    log.warn("SSE notification replay is unavailable");
+                    return Flux.empty();
+                });
+    }
+
+    public Mono<Boolean> validateReplayCursor(String userId, UUID cursor) {
+        if (postgresqlRepository == null || cursor == null) return Mono.just(false);
+        return parseUserId(userId)
+                .flatMap(owner -> postgresqlRepository.cursorBelongsToRecipient(owner, cursor))
+                .onErrorReturn(false);
+    }
+
+    public Mono<NotificationRecord> claimNotification(UUID notificationPublicId, String claimOwner,
+                                                       Instant now, Duration leaseDuration) {
+        if (postgresqlRepository == null || notificationPublicId == null) return Mono.empty();
+        return postgresqlRepository.claimNotification(notificationPublicId, claimOwner, now, leaseDuration);
     }
 
     public Mono<Void> rebuildProjection(String userId) {

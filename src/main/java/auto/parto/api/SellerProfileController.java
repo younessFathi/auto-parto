@@ -25,7 +25,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @ConditionalOnExpression("'${auto.parto.persistence.postgresql.enabled:false}' == 'true' && "
         + "'${auto.parto.persistence.postgresql.identity.enabled:false}' == 'true'")
-@RequestMapping("/seller/profile")
+@RequestMapping({"/api/v1/profiles/seller", "/seller/profile"})
 public class SellerProfileController {
 
     private final ISellerProfileService profileService;

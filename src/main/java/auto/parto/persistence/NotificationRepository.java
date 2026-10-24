@@ -21,6 +21,14 @@ public interface NotificationRepository {
 
     Flux<NotificationRecord> findPendingForRecipient(UUID recipientUserPublicId, int limit);
 
+    Flux<NotificationRecord> findForRecipientAfter(UUID recipientUserPublicId, UUID afterNotificationPublicId,
+                                                    int limit);
+
+    Mono<Boolean> cursorBelongsToRecipient(UUID recipientUserPublicId, UUID notificationPublicId);
+
+    Mono<NotificationRecord> claimNotification(UUID notificationPublicId, String claimOwner,
+                                                Instant now, Duration leaseDuration);
+
     Mono<Long> markPendingForRecipient(UUID recipientUserPublicId);
 
     Mono<Boolean> markPendingForRecipientAndId(UUID recipientUserPublicId, String notificationId);
