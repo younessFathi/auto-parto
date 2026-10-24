@@ -21,12 +21,21 @@ Legacy unversioned SSE endpoints are explicitly deprecated while clients migrate
 
 1. The versioned endpoint derives the recipient from the authenticated canonical principal and never trusts a path user ID.
 2. SSE event IDs are persisted notification public UUIDs for live and replayed events; delivery never generates a replacement event ID.
-3. `Last-Event-ID` replay is bounded, PostgreSQL-authoritative, ordered, and safe for duplicate client delivery.
+3. `Last-Event-ID` replay is bounded, PostgreSQL-authoritative, ordered by `created_at DESC, public_id DESC`, and rejects missing or foreign cursors with the safe 400 contract.
 4. Durable notification state and SSE transport attempts remain separate; socket writes do not imply client receipt or processing.
 5. Connection limits and bounded per-connection buffers produce controlled documented behavior without null responses or unhandled 500 errors.
 6. Heartbeats, cleanup, timeout handling, and structured safe logging remain bounded and reactive.
 7. Multi-instance behavior documents instance affinity for the JVM-local connection map and the required routing constraint.
-8. Controller, security, PostgreSQL, and lifecycle tests cover replay, duplicate IDs, ownership, caps, overflow, reconnect cleanup, and the documented routing behavior.
+8. Controller, security, PostgreSQL, and lifecycle tests cover replay, duplicate IDs, cursor ownership, caps, overflow, reconnect cleanup, and the documented routing behavior.
+
+## Review follow-up
+
+The versioned stream validates the cursor against the authenticated recipient before
+registering a connection and uses the recipient replay index added by V13. Live delivery
+persists first and uses the returned PostgreSQL public UUID as the SSE ID. Heartbeats are
+owned by the exact registered sink, so cancellation or replacement closes the old response
+and runs matching-sink cleanup. The ticket remains In Progress until the full unit and
+Docker-backed verification suites pass.
 
 ## Test Scenarios
 

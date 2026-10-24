@@ -235,8 +235,9 @@ The canonical client contract is `GET /api/v1/notifications/stream`. The recipie
 always taken from the authenticated canonical principal. Each event's SSE `id` is the
 persisted `notifications.public_id` UUID; the payload's application ID is not used as a
 transport identity. A reconnect may send `Last-Event-ID`; PostgreSQL returns at most 100
-events strictly after that UUID, ordered by `created_at, public_id`. Clients must deduplicate
-IDs because a reconnect can overlap a live write and a replay. Invalid cursors return 400.
+events strictly after that UUID, ordered by `created_at DESC, public_id DESC`. The cursor
+must exist for the authenticated recipient; missing or foreign cursors return 400. Clients
+must deduplicate IDs because a reconnect can overlap a live write and a replay.
 
 The connection registry and bounded per-connection sink are currently JVM-local. Until a
 shared connection broker is introduced, the load balancer must use instance affinity for

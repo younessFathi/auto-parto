@@ -15,11 +15,14 @@ public class ResilientNotificationService {
 
     private final BasicCircuitBreaker circuitBreaker;
     private final SSENotificationService sseNotificationService;
+    private final HybridNotificationStore notificationStore;
 
     public Mono<Boolean> sendNotification(NotificationRequest notification) {
         String userId = notification.userId();
         return Mono.defer(() -> {
-            boolean delivered = sseNotificationService.sendViaSSE(userId, notification);
+            return notificationStore.storePendingRecord(notification)
+                    .map(record -> sseNotificationService.sendViaSSE(userId, record.publicId(), notification));
+        }).defaultIfEmpty(false).flatMap(delivered -> {
             if (delivered) {
                 circuitBreaker.recordSuccess(userId);
                 return Mono.just(true);

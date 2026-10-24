@@ -150,9 +150,10 @@ public class R2dbcNotificationRepository implements NotificationRepository {
                         JOIN notifications cursor_notification
                           ON cursor_notification.public_id = :afterNotificationPublicId
                         WHERE owner.public_id = :recipientPublicId
-                          AND (notification.created_at, notification.public_id)
-                              > (cursor_notification.created_at, cursor_notification.public_id)
-                        ORDER BY notification.created_at, notification.public_id
+                          AND (notification.created_at < cursor_notification.created_at
+                               OR (notification.created_at = cursor_notification.created_at
+                                   AND notification.public_id < cursor_notification.public_id))
+                        ORDER BY notification.created_at DESC, notification.public_id DESC
                         LIMIT :limit
                         """)
                 .bind("recipientPublicId", recipientUserPublicId)
@@ -160,6 +161,26 @@ public class R2dbcNotificationRepository implements NotificationRepository {
                 .bind("limit", limit)
                 .map((row, metadata) -> map(row))
                 .all();
+    }
+
+    @Override
+    public Mono<Boolean> cursorBelongsToRecipient(UUID recipientUserPublicId, UUID notificationPublicId) {
+        requirePublicId(recipientUserPublicId);
+        requirePublicId(notificationPublicId);
+        return databaseClient.sql("""
+                        SELECT EXISTS (
+                            SELECT 1
+                            FROM notifications notification
+                            JOIN app_users owner ON owner.id = notification.recipient_user_id
+                            WHERE notification.public_id = :notificationPublicId
+                              AND owner.public_id = :recipientPublicId
+                        ) AS cursor_exists
+                        """)
+                .bind("notificationPublicId", notificationPublicId)
+                .bind("recipientPublicId", recipientUserPublicId)
+                .map((row, metadata) -> Boolean.TRUE.equals(row.get("cursor_exists", Boolean.class)))
+                .one()
+                .defaultIfEmpty(false);
     }
 
     @Override

@@ -183,18 +183,40 @@ class R2dbcNotificationRepositoryIT {
         var records = repository.findPendingForRecipient(owner, 100)
                 .filter(record -> record.eventType().startsWith("REPLAY_"))
                 .collectList().block();
-        records.sort(java.util.Comparator.comparing(NotificationRecord::publicId));
         databaseClient.sql("UPDATE notifications SET created_at = TIMESTAMP '2020-01-01 00:00:00+00' WHERE event_type LIKE 'REPLAY_%'")
                 .fetch().rowsUpdated().block();
-        records = repository.findPendingForRecipient(owner, 100)
-                .filter(record -> record.eventType().startsWith("REPLAY_"))
-                .collectList().block();
-        records.sort(java.util.Comparator.comparing(NotificationRecord::publicId));
+        var orderedIds = databaseClient.sql("""
+                        SELECT notification.public_id
+                        FROM notifications notification
+                        JOIN app_users owner ON owner.id = notification.recipient_user_id
+                        WHERE owner.public_id = :owner AND notification.event_type LIKE 'REPLAY_%'
+                        ORDER BY notification.created_at DESC, notification.public_id DESC
+                        """)
+                .bind("owner", owner)
+                .map((row, metadata) -> row.get("public_id", UUID.class))
+                .all().collectList().block();
 
-        var actual = repository.findForRecipientAfter(owner, records.getFirst().publicId(), 100)
+        var actual = repository.findForRecipientAfter(owner, orderedIds.getFirst(), 100)
                 .map(NotificationRecord::publicId).collectList().block();
-        assertThat(actual).containsExactlyElementsOf(records.subList(1, records.size()).stream()
-                .map(NotificationRecord::publicId).toList());
+        assertThat(actual).containsExactlyElementsOf(orderedIds.subList(1, orderedIds.size()));
+    }
+
+    @Test
+    void replayCursorMustBelongToRecipientAndExist() {
+        UUID owner = UUID.randomUUID();
+        UUID otherOwner = UUID.randomUUID();
+        UUID missing = UUID.randomUUID();
+        NotificationRecord record = insertUser(owner)
+                .then(insertUser(otherOwner))
+                .then(repository.enqueue(owner, "CURSOR_OWNER", "{}"))
+                .block();
+
+        StepVerifier.create(repository.cursorBelongsToRecipient(owner, record.publicId()))
+                .expectNext(true).verifyComplete();
+        StepVerifier.create(repository.cursorBelongsToRecipient(otherOwner, record.publicId()))
+                .expectNext(false).verifyComplete();
+        StepVerifier.create(repository.cursorBelongsToRecipient(owner, missing))
+                .expectNext(false).verifyComplete();
     }
 
     @Test
