@@ -221,6 +221,32 @@ class R2dbcNotificationRepositoryIT {
     }
 
     @Test
+    void failedDirectDeliveryClearsLeaseAndKeepsTheSameRowRetryable() {
+        UUID owner = UUID.randomUUID();
+        NotificationRecord record = insertUser(owner)
+                .then(repository.enqueue(owner, "DIRECT_RETRY", "{}"))
+                .block();
+
+        assertThat(repository.claimNotification(record.publicId(), "direct-worker", Instant.now(),
+                Duration.ofSeconds(30)).block()).isNotNull();
+        assertThat(repository.recordAttempt(record.publicId(), "SSE", "FAILED", null,
+                "DELIVERY_ERROR").block()).isNotNull();
+        assertThat(repository.scheduleRetry(record.publicId(), "direct-worker", Instant.now().plusSeconds(30),
+                "DELIVERY_ERROR", 3).block()).isTrue();
+
+        assertThat(databaseClient.sql("""
+                        SELECT status, lease_owner, attempt_count, last_failure_code
+                        FROM notifications WHERE public_id = :id
+                        """)
+                .bind("id", record.publicId())
+                .map((row, metadata) -> java.util.Arrays.asList(row.get("status", String.class),
+                        row.get("lease_owner", String.class), row.get("attempt_count", Integer.class),
+                        row.get("last_failure_code", String.class)))
+                .one().block())
+                .containsExactly("PENDING", null, 1, "DELIVERY_ERROR");
+    }
+
+    @Test
     void replayCursorMustBelongToRecipientAndExist() {
         UUID owner = UUID.randomUUID();
         UUID otherOwner = UUID.randomUUID();

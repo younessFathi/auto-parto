@@ -36,7 +36,8 @@ public class ResilientNotificationService {
                 .flatMap(record -> notificationStore.claimNotification(record.publicId(), directWorkerId,
                                 Instant.now(), Duration.ofSeconds(30))
                         .flatMap(claimed -> deliverClaimed(userId, notification, claimed))
-                        .defaultIfEmpty(new DirectDeliveryResult(record.publicId(), true, false)))
+                        .defaultIfEmpty(new DirectDeliveryResult(record.publicId(), true, false))
+                        .onErrorResume(error -> Mono.just(new DirectDeliveryResult(record.publicId(), true, false))))
                 .defaultIfEmpty(new DirectDeliveryResult(null, false, false))
                 .doOnNext(result -> {
                     if (result.delivered()) circuitBreaker.recordSuccess(userId);
@@ -55,16 +56,21 @@ public class ResilientNotificationService {
             if (delivered) {
                 return notificationStore.recordAttempt(claimed.publicId(), "SSE", "WRITTEN", null, null)
                         .then(notificationStore.acknowledgeDelivery(claimed.publicId(), directWorkerId))
-                        .map(acknowledged -> new DirectDeliveryResult(claimed.publicId(), true, acknowledged));
+                        .flatMap(acknowledged -> acknowledged
+                                ? Mono.just(new DirectDeliveryResult(claimed.publicId(), true, true))
+                                : scheduleDirectRetry(claimed, "ACKNOWLEDGEMENT_FAILED"));
             }
-            return notificationStore.recordAttempt(claimed.publicId(), "SSE", "FAILED", null,
-                            "DELIVERY_UNAVAILABLE")
-                    .then(notificationStore.scheduleRetry(claimed.publicId(), directWorkerId,
-                            Instant.now().plusSeconds(30), "DELIVERY_UNAVAILABLE", 3))
-                    .thenReturn(new DirectDeliveryResult(claimed.publicId(), true, false));
-        }).onErrorResume(error -> notificationStore.recordAttempt(claimed.publicId(), "SSE", "FAILED", null,
-                        "DELIVERY_ERROR")
-                .thenReturn(new DirectDeliveryResult(claimed.publicId(), true, false)));
+            return scheduleDirectRetry(claimed, "DELIVERY_UNAVAILABLE");
+        }).onErrorResume(error -> scheduleDirectRetry(claimed, "DELIVERY_ERROR"));
+    }
+
+    private Mono<DirectDeliveryResult> scheduleDirectRetry(NotificationRecord claimed, String failureCode) {
+        return notificationStore.recordAttempt(claimed.publicId(), "SSE", "FAILED", null, failureCode)
+                .onErrorResume(error -> Mono.empty())
+                .then(notificationStore.scheduleRetry(claimed.publicId(), directWorkerId,
+                        Instant.now().plusSeconds(30), failureCode, 3)
+                        .onErrorResume(error -> Mono.just(false)))
+                .thenReturn(new DirectDeliveryResult(claimed.publicId(), true, false));
     }
 
     public Sinks.Many<SseNotificationEvent> registerConnection(String userId) {

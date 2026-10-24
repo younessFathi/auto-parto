@@ -1,6 +1,6 @@
 # AP-0043 Versioned SSE Delivery Contract
 
-- **Status:** In Progress
+- **Status:** Done
 - **Type:** Technical Enhancement
 - **Feature:** [Notifications and Redis](../features/F05-notifications-and-redis.md)
 - **Linked Tickets:** [AP-0042](AP-0042-notification-delivery-reliability.md), [AP-0012](AP-0012-notification-outbox.md), [AP-0016](AP-0016-redis-projections.md)
@@ -36,7 +36,8 @@ forward from `Last-Event-ID` in chronological keyset order. Live delivery persis
 records the SSE attempt, and acknowledges the same PostgreSQL row after a successful write;
 failed writes keep that one row retryable. Heartbeats are owned by the exact registered sink,
 so cancellation or replacement closes the old response and runs matching-sink cleanup. The
-ticket remains In Progress until the full unit and Docker-backed verification suites pass.
+full unit and Docker-backed verification suites now pass, including post-claim exception and
+retry-state coverage.
 
 ## Test Scenarios
 
