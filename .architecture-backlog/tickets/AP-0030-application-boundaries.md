@@ -13,9 +13,10 @@ The public route catalog is documented in [`docs/api-boundaries.md`](../../docs/
 Versioned `/api/v1` routes are canonical for marketplace, file, notification, profile, buyer,
 seller, and nested wallet operations. Existing legacy aliases have an explicit sunset and retain
 the same security and DTO contract during migration. The obsolete local folder image route is
-retired. The former PieceService update method was removed because it validated image IDs and
-returned the existing record without persisting an update; file associations now use the upload
-lifecycle.
+retired. The remaining `/notifications/*` and `/pieces/*` compatibility surfaces have a sunset
+of 2027-04-01. The former PieceService update method was removed because it validated image IDs
+and returned the existing record without persisting an update; file associations now use the
+upload lifecycle.
 
 ## Acceptance Criteria
 1. Controllers validate transport input, obtain the principal, call application services, and map responses without containing business or persistence logic.

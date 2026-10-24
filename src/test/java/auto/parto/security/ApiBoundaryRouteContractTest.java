@@ -7,6 +7,7 @@ import auto.parto.api.NotificationController;
 import auto.parto.api.OfferController;
 import auto.parto.api.PartListingController;
 import auto.parto.api.PartRequestController;
+import auto.parto.api.PieceController;
 import auto.parto.api.SellerController;
 import auto.parto.api.SellerProfileController;
 import auto.parto.api.VersionedNotificationController;
@@ -40,6 +41,14 @@ class ApiBoundaryRouteContractTest {
         assertThat(Arrays.stream(PieceService.class.getDeclaredMethods())
                 .map(java.lang.reflect.Method::getName))
                 .doesNotContain("update");
+    }
+
+    @Test
+    void everyRetainedLegacySurfaceHasAnExplicitFutureSunset() {
+        assertThat(paths(NotificationController.class)).contains("/notifications");
+        assertThat(paths(PieceController.class)).contains("/pieces");
+        assertThat(java.time.LocalDate.of(2027, 4, 1))
+                .isAfter(java.time.LocalDate.now());
     }
 
     private static List<String> paths(Class<?> controller) {

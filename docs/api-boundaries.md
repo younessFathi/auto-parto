@@ -15,7 +15,8 @@ internal PostgreSQL numeric IDs never cross this boundary.
 | Seller profile | `/api/v1/profiles/seller` | `/seller/profile` retained as a compatibility alias until 2027-04-01 |
 | Buyer status | `/api/v1/buyers/{publicId}` | `/customers/{publicId}` retained as a compatibility alias until 2027-04-01 |
 | Seller and wallet operations | `/api/v1/sellers/{publicId}` and `/api/v1/sellers/{publicId}/wallet/*` | `/seller/*` retained as a compatibility alias until 2027-04-01 |
-| Notifications | `/api/v1/notifications` | Versioned stream and command routes are canonical; `/notifications/*` remains only as a deprecated compatibility alias |
+| Notifications | `/api/v1/notifications` | Versioned stream and command routes are canonical; `/notifications/*` remains as a deprecated compatibility alias until 2027-04-01 |
+| Legacy piece reads | Marketplace part requests and listings | `/pieces/*` remains as a deprecated read-only compatibility surface until 2027-04-01; no mutation endpoint is supported |
 
 Legacy aliases must preserve authentication, authorization, ownership, validation, and
 DTO response behavior. New clients must use the canonical routes. The old `PieceController`
