@@ -190,7 +190,7 @@ class R2dbcNotificationRepositoryIT {
                         FROM notifications notification
                         JOIN app_users owner ON owner.id = notification.recipient_user_id
                         WHERE owner.public_id = :owner AND notification.event_type LIKE 'REPLAY_%'
-                        ORDER BY notification.created_at DESC, notification.public_id DESC
+                        ORDER BY notification.created_at, notification.public_id
                         """)
                 .bind("owner", owner)
                 .map((row, metadata) -> row.get("public_id", UUID.class))
@@ -199,6 +199,25 @@ class R2dbcNotificationRepositoryIT {
         var actual = repository.findForRecipientAfter(owner, orderedIds.getFirst(), 100)
                 .map(NotificationRecord::publicId).collectList().block();
         assertThat(actual).containsExactlyElementsOf(orderedIds.subList(1, orderedIds.size()));
+    }
+
+    @Test
+    void directDeliveryClaimAndAcknowledgementCompletesOneDurableRecord() {
+        UUID owner = UUID.randomUUID();
+        UUID claimId = UUID.randomUUID();
+        NotificationRecord record = insertUser(owner)
+                .then(repository.enqueue(owner, "DIRECT_DELIVERY", "{}"))
+                .block();
+
+        NotificationRecord claimed = repository.claimNotification(record.publicId(), claimId.toString(),
+                        Instant.now(), Duration.ofSeconds(30))
+                .block();
+        assertThat(claimed.publicId()).isEqualTo(record.publicId());
+        assertThat(repository.recordAttempt(record.publicId(), "SSE", "WRITTEN", null, null).block()).isNotNull();
+        assertThat(repository.acknowledgeDelivery(record.publicId(), claimId.toString()).block()).isTrue();
+        assertThat(databaseClient.sql("SELECT status FROM notifications WHERE public_id = :id")
+                .bind("id", record.publicId())
+                .map((row, metadata) -> row.get("status", String.class)).one().block()).isEqualTo("DISPATCHED");
     }
 
     @Test

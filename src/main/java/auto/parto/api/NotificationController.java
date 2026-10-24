@@ -149,19 +149,19 @@ public class NotificationController {
                         log.debug(USER_HAS_ACTIVE_CONNECTION_ATTEMPTING_DIRECT_DELIVERY, userId);
 
                         // User is online - try direct delivery
-                        return resilientNotificationService.sendNotification(notificationRequest)
-                                .flatMap(delivered -> {
-                                    if (delivered) {
+                        return resilientNotificationService.deliverDirect(notificationRequest)
+                                .flatMap(result -> {
+                                    if (result.delivered()) {
                                         log.info(NOTIFICATION_SUCCESSFULLY_DELIVERED_TO_VIA_SSE, userId);
                                         return Mono.just(ResponseEntity.ok(createSuccessResponse(userId)));
                                     }
-                                    log.warn(DIRECT_DELIVERY_FAILED_FOR_FALLING_BACK_TO_STORAGE, userId);
-                                    return pendingNotificationService.addPendingNotification(notificationRequest)
-                                            .map(isStored -> isStored
-                                                    ? ResponseEntity.status(HttpStatus.ACCEPTED)
-                                                        .body(createPendingResponse(userId))
-                                                    : ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                                        .body(createErrorResponse(userId, STORAGE_FAILED)));
+                                    if (result.persisted()) {
+                                        log.warn(DIRECT_DELIVERY_FAILED_FOR_FALLING_BACK_TO_STORAGE, userId);
+                                        return Mono.just(ResponseEntity.status(HttpStatus.ACCEPTED)
+                                                .body(createPendingResponse(userId)));
+                                    }
+                                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                            .body(createErrorResponse(userId, STORAGE_FAILED)));
                                 });
                     } else {
                         log.debug(USER_IS_OFFLINE_STORING_NOTIFICATION, userId);

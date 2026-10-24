@@ -23,7 +23,7 @@ principal. The response is a bounded SSE stream with a 30-second heartbeat. Even
 are the persisted notification public UUIDs, including replayed events; the request
 payload's `id` is not a substitute. On reconnect, `Last-Event-ID` is an opaque UUID
 cursor. At most 100 PostgreSQL rows strictly after that event are replayed in
-`created_at DESC, public_id DESC` order. The cursor must belong to the authenticated
+`created_at, public_id` order. The cursor must belong to the authenticated
 recipient; malformed, missing, or foreign cursors return 400. Clients deduplicate IDs
 because a live event and a replayed event may overlap. A full instance connection
 registry returns 429.

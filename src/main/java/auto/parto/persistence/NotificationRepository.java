@@ -26,6 +26,9 @@ public interface NotificationRepository {
 
     Mono<Boolean> cursorBelongsToRecipient(UUID recipientUserPublicId, UUID notificationPublicId);
 
+    Mono<NotificationRecord> claimNotification(UUID notificationPublicId, String claimOwner,
+                                                Instant now, Duration leaseDuration);
+
     Mono<Long> markPendingForRecipient(UUID recipientUserPublicId);
 
     Mono<Boolean> markPendingForRecipientAndId(UUID recipientUserPublicId, String notificationId);

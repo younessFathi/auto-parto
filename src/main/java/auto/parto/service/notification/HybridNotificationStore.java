@@ -170,6 +170,12 @@ public class HybridNotificationStore {
                 .onErrorReturn(false);
     }
 
+    public Mono<NotificationRecord> claimNotification(UUID notificationPublicId, String claimOwner,
+                                                       Instant now, Duration leaseDuration) {
+        if (postgresqlRepository == null || notificationPublicId == null) return Mono.empty();
+        return postgresqlRepository.claimNotification(notificationPublicId, claimOwner, now, leaseDuration);
+    }
+
     public Mono<Void> rebuildProjection(String userId) {
         if (postgresqlRepository == null) return Mono.empty();
         return parseUserId(userId)

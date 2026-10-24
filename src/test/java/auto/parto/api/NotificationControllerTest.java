@@ -21,6 +21,8 @@ import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockAuthentication;
 
@@ -98,7 +100,9 @@ class NotificationControllerTest {
         NotificationRequest notification = new NotificationRequest("id-1", "user-1", auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "test", System.currentTimeMillis());
 
         when(resilientNotificationService.hasActiveConnection("user-1")).thenReturn(true);
-        when(resilientNotificationService.sendNotification(any(NotificationRequest.class))).thenReturn(Mono.just(true));
+        when(resilientNotificationService.deliverDirect(any(NotificationRequest.class)))
+                .thenReturn(Mono.just(new ResilientNotificationService.DirectDeliveryResult(
+                        java.util.UUID.randomUUID(), true, true)));
 
         webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.admin("admin-1")))
                 .post()
@@ -128,6 +132,28 @@ class NotificationControllerTest {
                 .expectStatus().isAccepted()
                 .expectBody()
                 .jsonPath("$.status").isEqualTo("PENDING");
+    }
+
+    @Test
+    void sendToUser_doesNotPersistASecondRecordWhenDirectDeliveryFails() {
+        NotificationRequest notification = new NotificationRequest("id-1", "user-1",
+                auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "test", System.currentTimeMillis());
+
+        when(resilientNotificationService.hasActiveConnection("user-1")).thenReturn(true);
+        when(resilientNotificationService.deliverDirect(any(NotificationRequest.class)))
+                .thenReturn(Mono.just(new ResilientNotificationService.DirectDeliveryResult(
+                        java.util.UUID.randomUUID(), true, false)));
+
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.admin("admin-1")))
+                .post()
+                .uri("/notifications/send")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(notification)
+                .exchange()
+                .expectStatus().isAccepted()
+                .expectBody().jsonPath("$.status").isEqualTo("PENDING");
+
+        verify(pendingNotificationService, never()).addPendingNotification(any(NotificationRequest.class));
     }
 
     @Test

@@ -150,10 +150,9 @@ public class R2dbcNotificationRepository implements NotificationRepository {
                         JOIN notifications cursor_notification
                           ON cursor_notification.public_id = :afterNotificationPublicId
                         WHERE owner.public_id = :recipientPublicId
-                          AND (notification.created_at < cursor_notification.created_at
-                               OR (notification.created_at = cursor_notification.created_at
-                                   AND notification.public_id < cursor_notification.public_id))
-                        ORDER BY notification.created_at DESC, notification.public_id DESC
+                          AND (notification.created_at, notification.public_id)
+                              > (cursor_notification.created_at, cursor_notification.public_id)
+                        ORDER BY notification.created_at, notification.public_id
                         LIMIT :limit
                         """)
                 .bind("recipientPublicId", recipientUserPublicId)
@@ -181,6 +180,34 @@ public class R2dbcNotificationRepository implements NotificationRepository {
                 .map((row, metadata) -> Boolean.TRUE.equals(row.get("cursor_exists", Boolean.class)))
                 .one()
                 .defaultIfEmpty(false);
+    }
+
+    @Override
+    public Mono<NotificationRecord> claimNotification(UUID notificationPublicId, String claimOwner,
+                                                       Instant now, Duration leaseDuration) {
+        requirePublicId(notificationPublicId);
+        requireText(claimOwner, "claimOwner");
+        if (leaseDuration == null || leaseDuration.isNegative() || leaseDuration.isZero()) {
+            throw new IllegalArgumentException("leaseDuration must be positive");
+        }
+        return databaseClient.sql("""
+                        UPDATE notifications
+                        SET lease_owner = :claimOwner, lease_expires_at = :leaseExpiresAt,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE public_id = :notificationPublicId
+                          AND status = 'PENDING'
+                          AND next_attempt_at <= :now
+                          AND (lease_expires_at IS NULL OR lease_expires_at <= :now)
+                        RETURNING public_id
+                        """)
+                .bind("notificationPublicId", notificationPublicId)
+                .bind("claimOwner", claimOwner)
+                .bind("now", now)
+                .bind("leaseExpiresAt", now.plus(leaseDuration))
+                .map((row, metadata) -> row.get("public_id", UUID.class))
+                .one()
+                .flatMap(this::findByPublicId)
+                .as(transactions::transactional);
     }
 
     @Override
