@@ -24,7 +24,7 @@ import java.util.UUID;
 @RestController
 @RequiredArgsConstructor
 @ConditionalOnExpression("'${auto.parto.persistence.postgresql.buyer-identity.enabled:false}' == 'true'")
-@RequestMapping("/customers/profile")
+@RequestMapping({"/api/v1/profiles/buyer", "/customers/profile"})
 public class BuyerProfileController {
 
     private final IBuyerProfileService profileService;

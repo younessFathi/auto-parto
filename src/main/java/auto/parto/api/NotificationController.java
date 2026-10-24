@@ -24,7 +24,7 @@ import static auto.parto.utils.Constants.Notification.*;
 
 
 @RestController
-@RequestMapping("/notifications")
+@RequestMapping({"/api/v1/notifications", "/notifications"})
 @Slf4j
 public class NotificationController {
     // Use Sinks for handling multiple subscribers
