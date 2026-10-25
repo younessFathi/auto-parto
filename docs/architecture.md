@@ -271,6 +271,8 @@ The service should provide:
 - Metrics for request failures, wallet operations, queue depth, retry count, notification delivery, and active SSE connections
 - Alerts for dead-letter growth, authentication abuse, storage failures, and dependency outages
 
+The application baseline exports Prometheus metrics, supports Micrometer trace propagation and opt-in OTLP export, and writes structured JSON console logs with request correlation context. Public actuator liveness/readiness probes return status only. Optional audit and provider failures do not make every business route unready; detailed operator diagnostics must use a protected management path. Domain-specific wallet, notification, SSE, and storage metrics, background-job trace linking, and production observability retention/access policy remain tracked in AP-0023.
+
 ## Deployment Boundaries
 
 Detailed deployment, persistence, storage, and observability guidance is in [`deployment-architecture.md`](deployment-architecture.md).

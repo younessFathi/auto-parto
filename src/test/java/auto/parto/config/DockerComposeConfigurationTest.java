@@ -34,6 +34,7 @@ class DockerComposeConfigurationTest {
         assertThat(compose).contains("command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile}");
         assertThat(compose).contains("test: redis-cli -a '${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile}' ping");
         assertThat(compose).contains("depends_on:");
+        assertThat(compose).doesNotContain("MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always");
         assertThat(compose).doesNotContain("mongo:").doesNotContain("MONGODB");
         assertThat(compose).contains("redis:");
     }

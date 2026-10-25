@@ -4,6 +4,16 @@ Coordinate the final production readiness, database cutover, and VPS release gat
 
 **Status:** Deferred until a go-live decision is approved.
 
+## Delivery Order for AP-0021, AP-0023, AP-0024, AP-0026, AP-0028, and AP-0033
+
+1. **AP-0023** — first unblocked implementation slice; AP-0020 is Done. Establish application metrics, trace propagation/export, structured redacted logs, and safe liveness/readiness groups.
+2. **AP-0033** — independent CI track, already In Progress. Complete and verify GitHub Actions compile, unit tests, Docker/Testcontainers verification, packaging, and a manual dispatch gate protected by GitHub environment approval/secrets. The gate must validate inputs, take a protected backup, run Flyway, fixtures, reconciliation, and cutover preflight in order, and block deployment on failure. Keep `.gitlab-ci.yml` active until equivalent workflow runs are verified end to end; do not publish application packages as short-lived test-report artifacts.
+3. **AP-0028 and AP-0026** — start after the remaining AP-0022 secret-delivery prerequisites are met. AP-0028 also requires AP-0020 and AP-0017 (both Done); AP-0026 requires AP-0002 (Done) and AP-0016. These can proceed in parallel. For AP-0028, retain the existing AWS `S3AsyncClient`; replace synchronous Firebase Admin and Resend calls with asynchronous clients where supported, and isolate remaining blocking calls on dedicated bounded schedulers with finite queues, concurrency limits, timeouts, cancellation and shutdown behavior, bounded rejection, and metrics/logs for saturation and timeout outcomes.
+4. **AP-0021** — after AP-0028 and AP-0020. Configure the approved public TLS edge, strict-TLS origin proxy, trusted proxy addresses, health-gated routing, private data-service paths, edge rate limits, and SSE timeouts. Resolve the current Caddy recommendation in `docs/deployment-architecture.md` against the AP-0021 Nginx-origin requirement before deployment.
+5. **AP-0024** — after AP-0021, AP-0022, AP-0023, and AP-0026; AP-0013 and AP-0019 are Done. Define each alert's named owner, severity, recovery objective, escalation path, and runbook. Independently back up and restore application and audit PostgreSQL, use PITR for business data and reconcile wallet balances with immutable ledger entries, restore audit history and replay its application outbox idempotently, rebuild Redis projections from PostgreSQL, and restore SeaweedFS volumes/filer metadata/IAM/key material before bounded file reconciliation. Exercise credential rotation, application rollback, duplicate notification delivery, and repeat each drill with recorded RPO/RTO, outcomes, and follow-up owners.
+
+The deployment design keeps PostgreSQL, audit PostgreSQL, Redis, and object storage private and on explicitly defined failure boundaries. Recovery drills must record measured RPO/RTO, results, owners, and follow-up actions. CloudEvents remain out of scope unless an external consumer or cross-service contract is approved.
+
 This feature is a release gate, not a replacement for the implementation tickets below. No production traffic should be enabled merely because the application builds or the PostgreSQL development bootstrap succeeds.
 
 ## Existing tickets contributing to go-live

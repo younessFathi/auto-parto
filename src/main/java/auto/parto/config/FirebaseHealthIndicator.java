@@ -17,9 +17,8 @@ public class FirebaseHealthIndicator implements ReactiveHealthIndicator {
             try {
                 FirebaseApp.getInstance();
                 return Health.up().withDetail("firebase", "CONNECTED").build();
-            } catch (Exception e) {
-                return Health.down().withDetail("firebase", "DISCONNECTED")
-                        .withDetail("error", e.getMessage()).build();
+            } catch (Exception ignored) {
+                return Health.down().withDetail("firebase", "DISCONNECTED").build();
             }
         });
     }

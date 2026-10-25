@@ -452,6 +452,14 @@ Expose separate checks:
 
 Public liveness and readiness endpoints must not require a user JWT. Readiness includes only dependencies required for the routes served by that instance. Firebase, email, notification, and upload failures should support documented degraded behavior instead of automatically removing every API instance from service. Detailed dependency information should be protected or exposed only to the orchestrator and operations team.
 
+The current application baseline exposes status-only `/actuator/health/liveness` and `/actuator/health/readiness` probes without JWT. Readiness includes application readiness, PostgreSQL R2DBC, and Redis; audit PostgreSQL, Firebase, email, and object storage diagnostics are not public readiness dependencies. Component details are disabled on public health routes. The Prometheus scrape endpoint remains protected by application authentication until the deployment supplies a private, authenticated scrape path. Do not route public traffic from an overall health response that includes optional provider components.
+
+### Application observability configuration
+
+Spring Boot emits console logs in Logstash-compatible JSON, including MDC request IDs and trace/span fields when present. Micrometer Tracing uses W3C propagation and samples traces at the configured `OTEL_TRACES_SAMPLING_PROBABILITY`; OTLP export is opt-in with `OTEL_TRACES_EXPORT_ENABLED=true` and the collector endpoint in `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`. Keep collector credentials and endpoints in protected runtime configuration. Prometheus metrics are exposed at `/actuator/prometheus` and must be scraped over a private authenticated management path.
+
+This is an application baseline, not a complete production observability deployment. Before go-live, install and protect the Prometheus/collector/log backend, define retention, access, sampling, and storage budgets, validate redaction across application log call sites, add bounded domain metrics, and verify trace context through provider clients and scheduled/outbox work. Keep optional provider health details out of public probes.
+
 ### Alerting
 
 Use Prometheus Alertmanager or the equivalent managed alerting service.
