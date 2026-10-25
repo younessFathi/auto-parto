@@ -64,4 +64,19 @@ class SecretsManagementConfigTest {
                 .doesNotContain("root:root")
                 .doesNotContain("password: root");
     }
+
+    @Test
+    void productionProfileUsesRequiredExternalPlaceholders() throws IOException {
+        String content = Files.readString(Path.of("src/main/resources/application-prod.yml"));
+
+        assertThat(content)
+                .contains("url: ${APP_POSTGRES_R2DBC_URL}")
+                .contains("password: ${APP_POSTGRES_RUNTIME_PASSWORD}")
+                .contains("password: ${REDIS_PASSWORD}")
+                .contains("provider: ${APP_SECRET_PROVIDER}")
+                .contains("address: ${OPENBAO_ADDR}")
+                .contains("provider: ${APP_FILE_STORAGE_PROVIDER}")
+                .doesNotContain("localhost")
+                .doesNotContain("root");
+    }
 }

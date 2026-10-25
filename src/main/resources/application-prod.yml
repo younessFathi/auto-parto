@@ -1,0 +1,44 @@
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+  r2dbc:
+    url: ${APP_POSTGRES_R2DBC_URL}
+    username: ${APP_POSTGRES_RUNTIME_USER}
+    password: ${APP_POSTGRES_RUNTIME_PASSWORD}
+
+auto:
+  parto:
+    secrets:
+      provider: ${APP_SECRET_PROVIDER}
+      openbao:
+        address: ${OPENBAO_ADDR}
+        role: ${OPENBAO_ROLE}
+        auth-method: ${OPENBAO_AUTH_METHOD}
+    storage:
+      provider: ${APP_FILE_STORAGE_PROVIDER}
+      s3:
+        endpoint: ${APP_FILE_STORAGE_S3_ENDPOINT}
+        bucket: ${APP_FILE_STORAGE_S3_BUCKET}
+        access-key: ${APP_FILE_STORAGE_S3_ACCESS_KEY}
+        secret-key: ${APP_FILE_STORAGE_S3_SECRET_KEY}
+    audit:
+      enabled: ${APP_AUDIT_OUTBOX_ENABLED:false}
+      r2dbc-url: ${AUDIT_POSTGRES_R2DBC_URL:}
+      username: ${AUDIT_POSTGRES_RUNTIME_USER:}
+      password: ${AUDIT_POSTGRES_RUNTIME_PASSWORD:}
+
+jwt:
+  secretKey: ${JWT_SECRET}
+
+firebase:
+  enabled: ${FIREBASE_ENABLED:false}
+  credentials:
+    json: ${FIREBASE_CREDENTIALS_JSON:}
+    path: ${FIREBASE_CREDENTIALS_PATH:}
+
+resend:
+  enable: ${RESEND_ENABLED:false}
+  api-key: ${RESEND_API_KEY:}
