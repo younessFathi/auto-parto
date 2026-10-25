@@ -38,7 +38,7 @@ import static io.r2dbc.spi.ConnectionFactoryOptions.USER;
         "auto.parto.audit.reconciliation-interval=1h",
         "auto.parto.audit.cleanup-interval=1h",
         "auto.parto.audit.readiness-timeout=100ms",
-        "management.endpoint.health.show-details=always"
+        "management.endpoint.health.show-details=never"
 })
 @Import(AuditReadinessApplicationIT.ApplicationOutboxTestConfiguration.class)
 class AuditReadinessApplicationIT extends BaseIntegrationTest {
@@ -74,12 +74,12 @@ class AuditReadinessApplicationIT extends BaseIntegrationTest {
     }
 
     @Test
-    void readinessTracksAuditDatabaseAvailabilityThroughActuator() {
+    void auditDatabaseOutageDoesNotRemoveBusinessInstanceFromReadiness() {
         assertReadiness("UP", 200);
 
         pauseAuditPostgres();
         try {
-            assertReadiness("DOWN", 503);
+            assertReadiness("UP", 200);
         } finally {
             unpauseAuditPostgres();
         }

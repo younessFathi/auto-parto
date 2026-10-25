@@ -1,6 +1,6 @@
 # AP-0023 Implement Unified Telemetry and Health
 
-- **Status:** Proposed
+- **Status:** In Progress
 - **Type:** Technical Enhancement
 - **Feature:** [Observability and Recovery](../features/F08-observability-and-recovery.md)
 - **Linked Tickets:** [AP-0020](AP-0020-stateless-deployment.md)
@@ -26,3 +26,14 @@ Provide correlated metrics, traces, structured logs, and safe health groups for 
 
 ## Definition of Done
 The whole ticket is implemented, every acceptance criterion is satisfied, every scenario is automated and passing, dashboards and health documentation are complete, and all applicable suites pass.
+
+## Implementation Tracking
+
+- Started the application telemetry baseline: Prometheus remains exposed, Micrometer Tracing is configured for OTLP with sampling and an explicit export opt-in, console logs use Spring Boot's JSON format, and public liveness/readiness groups omit component details.
+- Readiness tracks application readiness, PostgreSQL R2DBC, and Redis. Audit PostgreSQL and optional providers do not remove the business instance from rotation. Detailed health responses remain disabled on public actuator routes.
+- Removed user identity and role values from successful authentication logs, and removed provider exception text from Firebase health details.
+- Focused coverage verifies safe public probes, audit-outage degradation, and Firebase health redaction.
+- Follow-up to review `41e2522`: request IDs are carried in Reactor context and bridged into MDC with Micrometer context propagation; the asynchronous scheduler-boundary log test verifies the structured logging context without clearing tracing MDC fields.
+- Verification: `./mvnw -B test` passed (357 tests, 1 skipped); Docker-backed `./mvnw -B verify` passed (139 integration tests, 1 skipped).
+- Review follow-up verification (2026-10-25): `./mvnw -B test` passed (358 tests, 1 skipped); Docker-backed `./mvnw -B verify` passed (139 integration tests, 1 skipped); JaCoCo passed.
+- Remaining: confirm the central log backend, collector, Prometheus/Grafana deployment, retention/access/sampling budgets, protected operator diagnostics, domain metrics for wallets/notifications/SSE/storage, trace continuity through provider calls and background work, and broader log review/redaction. AP-0023 remains In Progress until these are deployed and verified.

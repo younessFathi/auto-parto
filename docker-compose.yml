@@ -34,7 +34,6 @@ services:
       FIREBASE_ENABLED: "false"
       APP_FIREBASE_COMPONENTS_ENABLED: "false"
       RESEND_API_KEY: ${RESEND_API_KEY:-}
-      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always
     volumes:
       - ./uploads:/uploads
     restart: unless-stopped

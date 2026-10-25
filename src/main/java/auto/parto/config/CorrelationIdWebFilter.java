@@ -1,5 +1,7 @@
 package auto.parto.config;
 
+import io.micrometer.context.ContextRegistry;
+import io.micrometer.context.ThreadLocalAccessor;
 import org.slf4j.MDC;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
@@ -19,6 +21,27 @@ public class CorrelationIdWebFilter implements WebFilter {
     public static final String MDC_KEY = "requestId";
 
     static {
+        ContextRegistry.getInstance().registerThreadLocalAccessor(new ThreadLocalAccessor<String>() {
+            @Override
+            public Object key() {
+                return MDC_KEY;
+            }
+
+            @Override
+            public String getValue() {
+                return MDC.get(MDC_KEY);
+            }
+
+            @Override
+            public void setValue(String value) {
+                MDC.put(MDC_KEY, value);
+            }
+
+            @Override
+            public void setValue() {
+                MDC.remove(MDC_KEY);
+            }
+        });
         Hooks.enableAutomaticContextPropagation();
     }
 
@@ -39,11 +62,6 @@ public class CorrelationIdWebFilter implements WebFilter {
                 .build();
 
         return chain.filter(exchange.mutate().request(mutatedRequest).build())
-                .doOnEach(signal -> {
-                    if (signal.isOnSubscribe()) {
-                        MDC.put(MDC_KEY, finalRequestId);
-                    }
-                })
-                .doFinally(ignored -> MDC.clear());
+                .contextWrite(context -> context.put(MDC_KEY, finalRequestId));
     }
 }

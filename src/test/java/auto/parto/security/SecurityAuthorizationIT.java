@@ -109,6 +109,22 @@ class SecurityAuthorizationIT extends BaseIntegrationTest {
     }
 
     @Test
+    void publicHealthProbesAreSafeAndDoNotExposeDependencyDetails() {
+        for (String probe : Stream.of("liveness", "readiness").toList()) {
+            webTestClient.get()
+                    .uri("/actuator/health/" + probe)
+                    .exchange()
+                    .expectStatus().isOk()
+                    .expectBody()
+                    .jsonPath("$.status").isEqualTo("UP")
+                    .consumeWith(result -> {
+                        String body = new String(result.getResponseBody());
+                        assertThat(body).doesNotContain("components", "details", "auditDatabase", "firebase");
+                    });
+        }
+    }
+
+    @Test
     void protectedRouteRejectsMalformedToken() {
         requestPreferences("not-a-jwt")
                 .expectStatus().isUnauthorized()

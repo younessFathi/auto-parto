@@ -44,8 +44,7 @@ public class JwtTokenAuthenticationFilter implements WebFilter {
         try {
             if (this.jwtTokenGenerator.validateToken(token)) {
                 Authentication authentication = this.jwtTokenGenerator.getAuthentication(token);
-                log.info("Authentication successful for user: {}, Roles: {}",
-                        authentication.getName(), authentication.getAuthorities());
+                log.debug("Authentication successful");
                 return chain.filter(exchange)
                         .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication));
             }
