@@ -24,8 +24,6 @@ public class PieceService implements IPieceService {
     @Override public Mono<Boolean> checkIfPieceById(String id) { return repository.findByPublicId(requireUuid(id)).hasElement(); }
     @Override @Caching(evict = {@CacheEvict(value = "pieces", allEntries = true), @CacheEvict(value = "pieceDetails", allEntries = true)})
     public Mono<PieceDto> create(PieceDto pieceDto) { return repository.create(requireUuid(pieceDto.getCustomerId()), pieceDto.getName(), pieceDto.getDescription(), valueOf(pieceDto.getCondition()), valueOf(pieceDto.getCategory())).map(PieceService::toDto); }
-    @Override @Caching(evict = {@CacheEvict(value = "pieces", allEntries = true), @CacheEvict(value = "pieceDetails", key = "#pieceDto.id")})
-    public Mono<PieceDto> update(PieceDto pieceDto) { validateCanonicalImageIds(pieceDto.getImagesId()); return repository.findByPublicId(requireUuid(pieceDto.getId())).map(PieceService::toDto); }
     @Override @Cacheable(value = "pieces", key = "#id + ':' + #page + ':' + #size")
     public Mono<PagedResponse<PieceDto>> getAllPiecesByCustomerId(String id, int page, int size) { UUID buyerId = requireUuid(id); return repository.findByBuyerPublicId(buyerId, page, size).map(PieceService::toDto).collectList().zipWith(repository.countByBuyerPublicId(buyerId)).map(result -> { PagedResponse<PieceDto> response = new PagedResponse<>(); response.setData(result.getT1()); response.setPage(page); response.setSize(size); response.setTotalItems(result.getT2()); return response; }); }
     @Override @Cacheable(value = "pieceDetails", key = "#pieceId")
@@ -34,5 +32,4 @@ public class PieceService implements IPieceService {
     private static Status toStatus(String status) { return switch (status) { case "OPEN" -> Status.PENDING; case "MATCHED" -> Status.IN_PROGRESS; case "CLOSED" -> Status.COMPLETED; case "CANCELLED" -> Status.CANCELLED; default -> Status.FAILED; }; }
     private static String valueOf(Enum<?> value) { return value == null ? null : value.name(); }
     private static UUID requireUuid(String value) { try { return UUID.fromString(value); } catch (RuntimeException e) { throw new IllegalArgumentException("canonical ID must be a UUID", e); } }
-    private static void validateCanonicalImageIds(java.util.List<String> imageIds) { if (imageIds == null || imageIds.size() > 100) throw new IllegalArgumentException("imagesId must contain between 0 and 100 canonical IDs"); imageIds.forEach(id -> { try { UUID.fromString(id); } catch (RuntimeException e) { throw new IllegalArgumentException("canonical image IDs must be UUIDs", e); } }); }
 }

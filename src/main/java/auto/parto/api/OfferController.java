@@ -15,7 +15,7 @@ import reactor.core.publisher.Mono;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/offers")
+@RequestMapping({"/api/v1/offers", "/offers"})
 public class OfferController {
     private final PostgresqlOfferService service;
 

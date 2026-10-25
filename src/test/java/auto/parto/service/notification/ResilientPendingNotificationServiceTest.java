@@ -122,7 +122,7 @@ class ResilientPendingNotificationServiceTest {
         when(notificationStore.claimPendingNotifications(org.mockito.ArgumentMatchers.eq(userId), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(100)))
                 .thenReturn(Flux.just(new HybridNotificationStore.ClaimedNotification(record.publicId(), notification)));
-        when(sseService.sendViaSSE(userId, notification)).thenReturn(true);
+        when(sseService.sendViaSSE(userId, record.publicId(), notification)).thenReturn(true);
         when(notificationStore.recordAttempt(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("SSE"),
                 org.mockito.ArgumentMatchers.eq("WRITTEN"), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn(Mono.empty());
@@ -131,7 +131,7 @@ class ResilientPendingNotificationServiceTest {
 
         service.deliverPendingOnConnect(userId).block();
 
-        verify(sseService).sendViaSSE(userId, notification);
+        verify(sseService).sendViaSSE(userId, record.publicId(), notification);
         verify(notificationStore).acknowledgeDelivery(org.mockito.ArgumentMatchers.eq(record.publicId()),
                 org.mockito.ArgumentMatchers.anyString());
     }

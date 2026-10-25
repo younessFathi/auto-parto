@@ -22,6 +22,7 @@ import reactor.core.publisher.Mono;
 
 @RestController
 @RequestMapping("/pieces")
+@Deprecated(forRemoval = false)
 @AllArgsConstructor
 @Tag(name = "Piece Controller", description = "APIs for managing pieces")
 public class PieceController {

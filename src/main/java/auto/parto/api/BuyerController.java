@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 @RestController
-@RequestMapping("customers")
+@RequestMapping({"/api/v1/buyers", "/customers"})
 @AllArgsConstructor
 public class BuyerController {
     private final IBuyerService buyerService;
