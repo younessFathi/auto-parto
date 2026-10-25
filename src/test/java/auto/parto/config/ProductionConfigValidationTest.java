@@ -46,6 +46,18 @@ class ProductionConfigValidationTest {
     }
 
     @Test
+    void rejectsAProductionProfileThatLeavesMongoOrCutoverRuntimeEnabled() {
+        MockEnvironment environment = validProductionEnvironment();
+        environment.setProperty("auto.parto.persistence.postgresql.cutover.mongo-disabled", "false");
+        environment.setProperty("spring.autoconfigure.exclude", "");
+
+        assertThatThrownBy(() -> new ProductionConfigValidation(environment).afterPropertiesSet())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("auto.parto.persistence.postgresql.cutover.mongo-disabled=true")
+                .hasMessageContaining("spring.autoconfigure.exclude must disable Mongo reactive runtime");
+    }
+
+    @Test
     void requiresEnabledEmailFirebaseAndAuditCredentials() {
         MockEnvironment environment = validProductionEnvironment();
         environment.setProperty("resend.enable", "true");
@@ -103,6 +115,20 @@ class ProductionConfigValidationTest {
                 .withProperty("resend.enable", "false")
                 .withProperty("firebase.enabled", "false")
                 .withProperty("auto.parto.audit.enabled", "false")
+                .withProperty("auto.parto.persistence.postgresql.enabled", "true")
+                .withProperty("auto.parto.persistence.postgresql.identity.enabled", "true")
+                .withProperty("auto.parto.persistence.postgresql.buyer-identity.enabled", "true")
+                .withProperty("auto.parto.persistence.postgresql.marketplace.enabled", "true")
+                .withProperty("auto.parto.persistence.postgresql.wallet.enabled", "true")
+                .withProperty("auto.parto.persistence.postgresql.device-tokens.enabled", "true")
+                .withProperty("auto.parto.persistence.postgresql.notifications.enabled", "true")
+                .withProperty("auto.parto.persistence.postgresql.files.enabled", "true")
+                .withProperty("auto.parto.persistence.postgresql.notification-preferences.enabled", "true")
+                .withProperty("auto.parto.persistence.postgresql.cutover.enabled", "true")
+                .withProperty("auto.parto.persistence.postgresql.cutover.api-contracts-ready", "true")
+                .withProperty("auto.parto.persistence.postgresql.cutover.mongo-disabled", "true")
+                .withProperty("auto.parto.persistence.postgresql.cutover.storage-reconciliation.enabled", "true")
+                .withProperty("spring.autoconfigure.exclude", "org.springframework.boot.autoconfigure.mongo.MongoReactiveAutoConfiguration,org.springframework.boot.autoconfigure.data.mongo.MongoReactiveRepositoriesAutoConfiguration")
                 .withProperty("spring.data.redis.database", "0")
                 .withProperty("spring.data.redis.timeout", "2000")
                 .withProperty("spring.r2dbc.pool.enabled", "true")

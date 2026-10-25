@@ -1,4 +1,9 @@
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.mongo.MongoReactiveAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.mongo.MongoReactiveDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.mongo.MongoReactiveRepositoriesAutoConfiguration
   data:
     redis:
       host: ${REDIS_HOST}
@@ -11,6 +16,31 @@ spring:
 
 auto:
   parto:
+    persistence:
+      postgresql:
+        enabled: true
+        identity:
+          enabled: true
+        buyer-identity:
+          enabled: true
+        marketplace:
+          enabled: true
+        wallet:
+          enabled: true
+        device-tokens:
+          enabled: true
+        notifications:
+          enabled: true
+        files:
+          enabled: true
+        notification-preferences:
+          enabled: true
+        cutover:
+          enabled: true
+          api-contracts-ready: true
+          mongo-disabled: true
+          storage-reconciliation:
+            enabled: true
     secrets:
       provider: ${APP_SECRET_PROVIDER}
       openbao:
@@ -42,3 +72,7 @@ firebase:
 resend:
   enable: ${RESEND_ENABLED:false}
   api-key: ${RESEND_API_KEY:}
+
+app:
+  firebase:
+    components-enabled: false

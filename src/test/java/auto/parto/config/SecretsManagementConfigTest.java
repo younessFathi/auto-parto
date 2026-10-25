@@ -76,6 +76,8 @@ class SecretsManagementConfigTest {
                 .contains("provider: ${APP_SECRET_PROVIDER}")
                 .contains("address: ${OPENBAO_ADDR}")
                 .contains("provider: ${APP_FILE_STORAGE_PROVIDER}")
+                .contains("MongoReactiveAutoConfiguration")
+                .contains("mongo-disabled: true")
                 .doesNotContain("localhost")
                 .doesNotContain("root");
     }

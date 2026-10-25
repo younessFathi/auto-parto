@@ -22,6 +22,7 @@ public class ProductionConfigValidation implements InitializingBean {
         List<String> errors = new ArrayList<>();
         validateSecretDelivery(errors);
         validatePostgresql(errors);
+        validatePostgresqlCutover(errors);
         validateRedis(errors);
         validateJwt(errors);
         validateStorage(errors);
@@ -54,6 +55,37 @@ public class ProductionConfigValidation implements InitializingBean {
         validatePort("spring.data.redis.port", errors);
         validateRequiredProperty("spring.data.redis.password", errors);
         if ("localhost".equalsIgnoreCase(value("spring.data.redis.host"))) errors.add("spring.data.redis.host must not be localhost");
+    }
+
+    private void validatePostgresqlCutover(List<String> errors) {
+        requireTrue("auto.parto.persistence.postgresql.enabled", errors);
+        requireTrue("auto.parto.persistence.postgresql.identity.enabled", errors);
+        requireTrue("auto.parto.persistence.postgresql.buyer-identity.enabled", errors);
+        requireTrue("auto.parto.persistence.postgresql.marketplace.enabled", errors);
+        requireTrue("auto.parto.persistence.postgresql.wallet.enabled", errors);
+        requireTrue("auto.parto.persistence.postgresql.device-tokens.enabled", errors);
+        requireTrue("auto.parto.persistence.postgresql.notifications.enabled", errors);
+        requireTrue("auto.parto.persistence.postgresql.files.enabled", errors);
+        requireTrue("auto.parto.persistence.postgresql.notification-preferences.enabled", errors);
+        requireTrue("auto.parto.persistence.postgresql.cutover.enabled", errors);
+        requireTrue("auto.parto.persistence.postgresql.cutover.api-contracts-ready", errors);
+        requireTrue("auto.parto.persistence.postgresql.cutover.mongo-disabled", errors);
+        requireTrue("auto.parto.persistence.postgresql.cutover.storage-reconciliation.enabled", errors);
+        if (!isMongoAutoConfigurationExcluded()) {
+            errors.add("spring.autoconfigure.exclude must disable Mongo reactive runtime");
+        }
+    }
+
+    private boolean isMongoAutoConfigurationExcluded() {
+        String direct = value("spring.autoconfigure.exclude");
+        StringBuilder exclusions = new StringBuilder(direct == null ? "" : direct);
+        for (int index = 0; index < 8; index++) {
+            String indexed = value("spring.autoconfigure.exclude[" + index + "]");
+            if (indexed != null) exclusions.append(',').append(indexed);
+        }
+        String configured = exclusions.toString();
+        return configured.contains("MongoReactiveAutoConfiguration")
+                && configured.contains("MongoReactiveRepositoriesAutoConfiguration");
     }
 
     private void validateJwt(List<String> errors) {
@@ -99,6 +131,10 @@ public class ProductionConfigValidation implements InitializingBean {
     private void validateBoolean(String propertyName, List<String> errors) {
         String propertyValue = value(propertyName);
         if (!"true".equalsIgnoreCase(propertyValue) && !"false".equalsIgnoreCase(propertyValue)) errors.add(propertyName + " must be true or false");
+    }
+
+    private void requireTrue(String propertyName, List<String> errors) {
+        if (!"true".equalsIgnoreCase(value(propertyName))) errors.add(propertyName + "=true");
     }
 
     private void validatePort(String propertyName, List<String> errors) {
