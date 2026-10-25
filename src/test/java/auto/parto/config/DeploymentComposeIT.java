@@ -126,6 +126,7 @@ class DeploymentComposeIT {
                 .redirectErrorStream(true);
         processBuilder.environment().putAll(java.util.Map.ofEntries(
                 java.util.Map.entry("REDIS_PASSWORD", "password"),
+                java.util.Map.entry("JWT_SECRET", "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE="),
                 java.util.Map.entry("APP_POSTGRES_BOOTSTRAP_PASSWORD", "compose-smoke-test-bootstrap"),
                 java.util.Map.entry("APP_POSTGRES_RUNTIME_PASSWORD", "compose-smoke-test-runtime"),
                 java.util.Map.entry("APP_POSTGRES_MIGRATION_PASSWORD", "compose-smoke-test-migration"),

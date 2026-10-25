@@ -1,6 +1,6 @@
 # AP-0022 Establish OpenBao Secret Management
 
-- **Status:** Proposed
+- **Status:** In Progress
 - **Type:** Technical Enhancement
 - **Feature:** [Deployment and Secrets](../features/F07-deployment-and-secrets.md)
 - **Linked Tickets:** [AP-0020](AP-0020-stateless-deployment.md)
@@ -8,6 +8,12 @@
 
 ## Description
 Deliver environment-isolated application credentials through protected OpenBao policies and controlled rotation.
+
+## Current Implementation Slice
+
+The application-side production validation increment is complete enough to enforce the boundary while the infrastructure work remains open. The `prod` profile now requires protected PostgreSQL/R2DBC, Redis, JWT, object-storage, and OpenBao configuration, validates enabled email/Firebase/audit credentials, rejects loopback dependency endpoints, requires the PostgreSQL-only cutover flags, and excludes MongoDB runtime configuration. Compose smoke verification supplies only safe test values explicitly through its test harness; it does not use production fallbacks.
+
+The whole ticket remains **In Progress**. OpenBao provisioning, TLS and least-privilege policies, short-lived workload identity, dynamic database leases, rotation/revocation drills, backups/unseal recovery, and asymmetric JWT key overlap are infrastructure and operations follow-ups. They must be delivered with AP-0021, AP-0026, AP-0028, and the remaining F07 work before production readiness is claimed.
 
 ## Acceptance Criteria
 1. Required database, Redis, JWT, OAuth, Firebase, email, and storage secrets are externalized.

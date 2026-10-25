@@ -277,7 +277,7 @@ Detailed deployment, persistence, storage, and observability guidance is in [`de
 
 - Local profile: Docker Compose and safe development defaults.
 - Test profile: Testcontainers or isolated test doubles with no real credentials.
-- Production profile: environment or secret-manager configuration, restricted PostgreSQL/Redis networking, versioned database migrations, explicit indexes, persistent object storage, resource limits, and deployment health checks.
+- Production profile: validated external configuration delivered through protected deployment variables or a secret manager, restricted PostgreSQL/Redis networking, versioned database migrations, explicit indexes, persistent object storage, resource limits, and deployment health checks. The production profile fails closed when PostgreSQL, Redis, JWT signing material, object storage, OpenBao, or an enabled provider lacks protected configuration; it never inherits local defaults. PostgreSQL is the only application persistence authority, while Redis remains a bounded, rebuildable projection.
 
 Production must not depend on local relative filesystem paths, development passwords, committed credentials, or host-exposed database ports.
 
@@ -294,6 +294,8 @@ The application uses reactive PostgreSQL through R2DBC repository boundaries. Fl
 7. Keep PostgreSQL migrations, repository integration tests, and readiness gates in the release verification path.
 
 Live dual-read and dual-write are not part of the current runtime. PostgreSQL is authoritative for all application business data.
+
+Production secret delivery and infrastructure hardening are staged separately from the application boundary. AP-0022 currently covers fail-closed validation, protected configuration placeholders, and deployment-level verification; OpenBao policy/lease automation, rotation operations, and the remaining PostgreSQL/Redis infrastructure controls remain tracked follow-ups in F07.
 
 Do not introduce a second persistence source of truth for an application entity without a documented synchronization and recovery strategy.
 
