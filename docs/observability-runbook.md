@@ -7,6 +7,8 @@
 - Traces: set `OTEL_TRACES_EXPORT_ENABLED=true`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, and `OTEL_TRACES_SAMPLING_PROBABILITY` through protected deployment configuration. The default sampling rate is 10%; exporting is disabled unless explicitly enabled.
 - Logs: console output uses Logstash-compatible JSON. Request IDs are added through MDC. Trace and span identifiers appear when tracing instrumentation has established them.
 
+Request IDs are stored in Reactor context and restored into MDC through Micrometer context propagation, including across scheduler changes. The filter scopes only the request ID key so it does not clear trace/span fields maintained by tracing instrumentation.
+
 ## Readiness response
 
 Readiness combines application readiness with the PostgreSQL R2DBC and Redis indicators. Audit PostgreSQL and optional providers do not remove the entire application from traffic rotation. Probe responses omit component names and details, so they are suitable for routing but not dependency diagnosis.
