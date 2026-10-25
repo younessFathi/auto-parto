@@ -5,6 +5,8 @@ import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -45,7 +47,11 @@ public class ProductionConfigValidation implements InitializingBean {
     private void validatePostgresql(List<String> errors) {
         String url = value("spring.r2dbc.url");
         validateRequiredProperty("spring.r2dbc.url", errors);
-        if (url != null && (!url.startsWith("r2dbc:postgresql://") || url.contains("localhost"))) errors.add("spring.r2dbc.url must be a protected PostgreSQL URL");
+        if (url != null && !url.startsWith("r2dbc:postgresql://")) {
+            errors.add("spring.r2dbc.url must be a protected PostgreSQL URL");
+        } else if (url != null && isLoopbackR2dbcUrl(url)) {
+            errors.add("spring.r2dbc.url must not use a loopback host");
+        }
         validateRequiredProperty("spring.r2dbc.username", errors);
         validateRequiredProperty("spring.r2dbc.password", errors);
     }
@@ -54,7 +60,7 @@ public class ProductionConfigValidation implements InitializingBean {
         validateRequiredProperty("spring.data.redis.host", errors);
         validatePort("spring.data.redis.port", errors);
         validateRequiredProperty("spring.data.redis.password", errors);
-        if ("localhost".equalsIgnoreCase(value("spring.data.redis.host"))) errors.add("spring.data.redis.host must not be localhost");
+        if (isLoopbackHost(value("spring.data.redis.host"))) errors.add("spring.data.redis.host must not be a loopback host");
     }
 
     private void validatePostgresqlCutover(List<String> errors) {
@@ -147,8 +153,42 @@ public class ProductionConfigValidation implements InitializingBean {
     private void validateHttpsUri(String propertyName, List<String> errors) {
         String propertyValue = value(propertyName);
         try {
-            if (propertyValue == null || !"https".equalsIgnoreCase(URI.create(propertyValue).getScheme())) errors.add(propertyName + " must use HTTPS");
+            URI uri = propertyValue == null ? null : URI.create(propertyValue);
+            if (uri == null || !"https".equalsIgnoreCase(uri.getScheme())) {
+                errors.add(propertyName + " must use HTTPS");
+            } else if (isLoopbackHost(uri.getHost())) {
+                errors.add(propertyName + " must not use a loopback host");
+            }
         } catch (IllegalArgumentException exception) { errors.add(propertyName + " must be a valid HTTPS URI"); }
+    }
+
+    private boolean isLoopbackR2dbcUrl(String value) {
+        try {
+            String authority = value.substring("r2dbc:postgresql://".length());
+            return isLoopbackHost(URI.create("http://" + authority).getHost());
+        } catch (IllegalArgumentException exception) {
+            return true;
+        }
+    }
+
+    private boolean isLoopbackHost(String host) {
+        if (host == null || host.isBlank()) return true;
+        String normalized = host.trim().toLowerCase();
+        if (normalized.startsWith("[") && normalized.endsWith("]")) {
+            normalized = normalized.substring(1, normalized.length() - 1);
+        }
+        if (normalized.endsWith(".")) normalized = normalized.substring(0, normalized.length() - 1);
+        if ("localhost".equals(normalized)) return true;
+        if (!looksLikeIpLiteral(normalized)) return false;
+        try {
+            return InetAddress.getByName(normalized).isLoopbackAddress();
+        } catch (UnknownHostException exception) {
+            return true;
+        }
+    }
+
+    private boolean looksLikeIpLiteral(String host) {
+        return host.indexOf(':') >= 0 || host.matches("[0-9.]+") || host.startsWith("::ffff:");
     }
 
     private boolean isBlank(String propertyName) {

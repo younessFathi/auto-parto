@@ -39,10 +39,26 @@ class ProductionConfigValidationTest {
 
         assertThatThrownBy(() -> new ProductionConfigValidation(environment).afterPropertiesSet())
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("spring.r2dbc.url must be a protected PostgreSQL URL")
+                .hasMessageContaining("spring.r2dbc.url must not use a loopback host")
                 .hasMessageContaining("spring.data.redis.port must be between 1 and 65535")
                 .hasMessageContaining("jwt.secretKey must be Base64 encoded")
                 .hasMessageContaining("auto.parto.storage.s3.endpoint must use HTTPS");
+    }
+
+    @Test
+    void rejectsIpv4LoopbackInfrastructureEndpoints() {
+        assertRejectsLoopback("spring.r2dbc.url", "r2dbc:postgresql://127.0.0.1:5432/app", "spring.r2dbc.url");
+        assertRejectsLoopback("spring.data.redis.host", "127.0.0.1", "spring.data.redis.host");
+        assertRejectsLoopback("auto.parto.secrets.openbao.address", "https://127.0.0.1", "auto.parto.secrets.openbao.address");
+        assertRejectsLoopback("auto.parto.storage.s3.endpoint", "https://127.0.0.1", "auto.parto.storage.s3.endpoint");
+    }
+
+    @Test
+    void rejectsIpv6LoopbackInfrastructureEndpoints() {
+        assertRejectsLoopback("spring.r2dbc.url", "r2dbc:postgresql://[::1]:5432/app", "spring.r2dbc.url");
+        assertRejectsLoopback("spring.data.redis.host", "[::1]", "spring.data.redis.host");
+        assertRejectsLoopback("auto.parto.secrets.openbao.address", "https://[::1]", "auto.parto.secrets.openbao.address");
+        assertRejectsLoopback("auto.parto.storage.s3.endpoint", "https://[::1]", "auto.parto.storage.s3.endpoint");
     }
 
     @Test
@@ -141,5 +157,13 @@ class ProductionConfigValidationTest {
                 .withProperty("spring.r2dbc.pool.validation-query", "SELECT 1");
         environment.setActiveProfiles("prod");
         return environment;
+    }
+
+    private static void assertRejectsLoopback(String property, String value, String expectedMessage) {
+        MockEnvironment environment = validProductionEnvironment().withProperty(property, value);
+        assertThatThrownBy(() -> new ProductionConfigValidation(environment).afterPropertiesSet())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(expectedMessage)
+                .hasMessageContaining("loopback");
     }
 }
