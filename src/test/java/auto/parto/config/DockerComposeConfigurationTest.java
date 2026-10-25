@@ -29,10 +29,10 @@ class DockerComposeConfigurationTest {
                 .contains("cpus: \"1.0\"");
         assertThat(compose).contains("SPRING_R2DBC_URL: r2dbc:postgresql://app-postgresql:5432/${APP_POSTGRES_DB:-auto_parto}");
         assertThat(compose).contains("SPRING_DATA_REDIS_HOST: redis");
-        assertThat(compose).contains("REDIS_PASSWORD: ${REDIS_PASSWORD:-password}");
-        assertThat(compose).contains("JWT_SECRET: ${JWT_SECRET:-MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=}");
-        assertThat(compose).contains("command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-password}");
-        assertThat(compose).contains("test: redis-cli -a '${REDIS_PASSWORD:-password}' ping");
+        assertThat(compose).contains("REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile}");
+        assertThat(compose).contains("JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET for the postgres profile}");
+        assertThat(compose).contains("command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile}");
+        assertThat(compose).contains("test: redis-cli -a '${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile}' ping");
         assertThat(compose).contains("depends_on:");
         assertThat(compose).doesNotContain("mongo:").doesNotContain("MONGODB");
         assertThat(compose).contains("redis:");
@@ -84,6 +84,8 @@ class DockerComposeConfigurationTest {
         environment.put("APP_POSTGRES_RUNTIME_PASSWORD", "runtime-test-value");
         environment.put("APP_POSTGRES_MIGRATION_USER", "schema_migrator");
         environment.put("APP_POSTGRES_MIGRATION_PASSWORD", "migration-test-value");
+        environment.put("REDIS_PASSWORD", "compose-test-redis");
+        environment.put("JWT_SECRET", "compose-test-jwt");
 
         Process process;
         try {

@@ -296,6 +296,8 @@ Configuration should be separated by profile:
 - `test`: fake providers and isolated containers
 - `prod`: required external secrets with startup validation
 
+The production profile has no development fallback for PostgreSQL, Redis, JWT signing material, object storage, or OpenBao. Startup validation rejects missing, malformed, or loopback dependency endpoints and requires the PostgreSQL-only cutover flags. Email, Firebase, and audit credentials are validated when their capabilities are enabled. The application image and Compose configuration contain no secret values; protected deployment variables or OpenBao must supply them at runtime.
+
 Runtime application-database access uses R2DBC. Audit publishing uses a bounded non-blocking client or isolated bounded scheduler when the driver is blocking. Application and audit schema migrations use separate restricted JDBC migration jobs, run in deployment order before the corresponding workers and application rollout. Use expand-contract migrations when application versions overlap.
 
 The PostgreSQL migration job, identity/profile fixture job, reconciliation procedure, and readiness gates are documented in [`postgresql-development-cutover.md`](postgresql-development-cutover.md). The audit PostgreSQL service is intentionally supplied through `docker-compose.audit.yml`, so an application-only PostgreSQL command does not require audit credentials.
@@ -315,6 +317,8 @@ Recommended usage:
 - Authenticate workloads with short-lived machine identity, not a permanent root token.
 - Keep OpenBao unexposed to the public Internet and protect it with TLS.
 - Back up and test the OpenBao storage and unseal/recovery process.
+
+The application-side AP-0022 increment validates the OpenBao address, role, and approved authentication method as part of the production boundary, but it does not claim that OpenBao is provisioned. Deployment still needs least-privilege policies, short-lived workload credentials, lease renewal and revocation, TLS trust distribution, rotation drills, and recovery/unseal procedures. Those operational controls remain linked work in F07 and must be completed before production readiness is declared.
 
 OpenBao is not free operationally. A single OpenBao instance on the same PostgreSQL VPS creates a shared failure and compromise boundary. Initially use a separate small protected host or a managed secret service if available. If OpenBao is deployed on one node, document that it is a temporary availability risk and protect its recovery keys separately.
 

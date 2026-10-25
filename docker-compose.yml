@@ -14,8 +14,8 @@ services:
       SPRING_R2DBC_PASSWORD: ${APP_POSTGRES_RUNTIME_PASSWORD:?set APP_POSTGRES_RUNTIME_PASSWORD for the postgres profile}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-password}
-      JWT_SECRET: ${JWT_SECRET:-MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET for the postgres profile}
       APP_POSTGRES_R2DBC_ENABLED: "true"
       OTP_PEPPER: local-development-pepper
       APP_POSTGRES_IDENTITY_ENABLED: "true"
@@ -33,7 +33,7 @@ services:
       APP_FILE_STORAGE_LOCAL_ROOT: /uploads
       FIREBASE_ENABLED: "false"
       APP_FIREBASE_COMPONENTS_ENABLED: "false"
-      RESEND_API_KEY: local-development-disabled
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
       MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always
     volumes:
       - ./uploads:/uploads
@@ -67,7 +67,7 @@ services:
     container_name: redis
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-password}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile}
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -81,7 +81,7 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: redis-cli -a '${REDIS_PASSWORD:-password}' ping
+      test: redis-cli -a '${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile}' ping
       interval: 10s
       timeout: 5s
       retries: 5
