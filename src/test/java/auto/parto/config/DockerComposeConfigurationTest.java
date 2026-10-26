@@ -107,4 +107,41 @@ class DockerComposeConfigurationTest {
         assertThat(localCompose).contains("127.0.0.1:8081:8080")
                 .doesNotContain("127.0.0.1:8080:8080");
     }
+
+    @Test
+    void openBaoDevelopmentComposeIsDisposableAndLoopbackOnly() throws IOException {
+        String compose = Files.readString(Path.of("docker-compose.openbao-dev.yml"));
+
+        assertThat(compose).contains("image: openbao/openbao:2.7.1")
+                .contains("profiles: [\"openbao-dev\"]")
+                .contains("command: [\"server\", \"-dev\", \"-dev-no-store-token=true\"]")
+                .contains("127.0.0.1:8200:8200")
+                .contains("internal: true")
+                .contains("restart: \"no\"")
+                .contains("BAO_DEV_ROOT_TOKEN_ID: ${OPENBAO_DEV_ROOT_TOKEN_ID:")
+                .doesNotContain("/var/lib/openbao")
+                .doesNotContain("APP_SECRET_PROVIDER")
+                .doesNotContain("root-token-id=");
+    }
+
+    @Test
+    void openBaoDevelopmentComposeRendersWithOnlyThrowawayTestCredentials() throws Exception {
+        ProcessBuilder processBuilder = new ProcessBuilder(
+                "docker", "compose", "--file", "docker-compose.openbao-dev.yml",
+                "--profile", "openbao-dev", "config", "--quiet");
+        processBuilder.directory(Path.of(".").toFile());
+        processBuilder.redirectErrorStream(true);
+        processBuilder.environment().put("OPENBAO_DEV_ROOT_TOKEN_ID", "throwaway-compose-test-value");
+
+        Process process;
+        try {
+            process = processBuilder.start();
+        } catch (IOException unavailable) {
+            assumeTrue(false, "Docker Compose is not available");
+            return;
+        }
+        String output = new String(process.getInputStream().readAllBytes());
+        assertThat(process.waitFor(30, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).withFailMessage(output).isZero();
+    }
 }

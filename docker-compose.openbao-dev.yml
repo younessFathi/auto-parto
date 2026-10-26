@@ -1,0 +1,32 @@
+services:
+  openbao-dev:
+    image: openbao/openbao:2.7.1
+    profiles: ["openbao-dev"]
+    command: ["server", "-dev", "-dev-no-store-token=true"]
+    environment:
+      BAO_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+      BAO_DEV_ROOT_TOKEN_ID: ${OPENBAO_DEV_ROOT_TOKEN_ID:?set a throwaway OPENBAO_DEV_ROOT_TOKEN_ID}
+    ports:
+      - "127.0.0.1:8200:8200"
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: "0.25"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - openbao-dev-network
+    healthcheck:
+      test: ["CMD", "bao", "status", "-address=http://127.0.0.1:8200"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+networks:
+  openbao-dev-network:
+    internal: true

@@ -2,6 +2,8 @@
 
 AP-0022 runtime configuration is fail closed. This runbook defines a separate OpenBao service on a private management subnet/VM; do not run it in the application Compose project or on either PostgreSQL host. `deploy/openbao/server.hcl.example` uses TLS and Raft on a dedicated encrypted volume. Bind only private addresses, install certificates from the approved PKI, allow port 8200 only from agent/operations subnets, and keep the cluster port private to OpenBao peers. Do not put root tokens in Compose, systemd arguments, environment files, images, logs, tests, or traces.
 
+For local development only, `docker-compose.openbao-dev.yml` runs the official OpenBao image in disposable dev mode, bound to loopback and without persistent storage. Follow the [README sandbox instructions](../README.md#local-openbao-sandbox); use a throwaway value and never connect production credentials or workloads. This helper is intentionally unlike the production deployment described below and does not demonstrate AppRole/Agent workload identity.
+
 ## Provision and identity
 
 1. Install the pinned OpenBao release on at least three independent secret-service nodes for HA, configure Raft and TLS, initialize using the protected ceremony, and unseal with separately held recovery shares. Store no initialization output on application/database hosts.
