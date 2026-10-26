@@ -1,0 +1,23 @@
+[Unit]
+Description=OpenBao secret service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=openbao
+Group=openbao
+ExecStart=/usr/bin/openbao server -config=/etc/openbao/server.hcl
+ExecReload=/bin/kill --signal HUP $MAINPID
+LimitMEMLOCK=infinity
+AmbientCapabilities=CAP_IPC_LOCK
+CapabilityBoundingSet=CAP_IPC_LOCK
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/openbao
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

@@ -21,6 +21,13 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.security.KeyFactory;
+import java.security.interfaces.RSAPublicKey;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
+import java.math.BigInteger;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
@@ -33,14 +40,33 @@ import java.util.function.Function;
 @Slf4j
 public class JwtTokenGenerator {
     public static final String ROLE_PREFIX = "ROLE_";
-    @Value("${jwt.secretKey}")
+    @Value("${jwt.secretKey:}")
     private String secretKey;
+    @Value("${jwt.signing.algorithm:HS256}")
+    private String algorithm;
+    @Value("${jwt.signing.key-id:local}")
+    private String keyId;
+    @Value("${jwt.signing.private-key:}")
+    private String privateKeyMaterial;
+    @Value("${jwt.signing.verification-keys:{}}")
+    private String verificationKeysMaterial;
     @Value("${jwt.expiration}")
     private long expirationTime;
     private static final String AUTHORITIES_KEY = "roles";
 
     @PostConstruct
     public void validateConfiguration() {
+        if ("RS256".equalsIgnoreCase(algorithm)) {
+            try {
+                signingPrivateKey();
+                verificationKeys();
+                if (!verificationKeys().containsKey(keyId)) throw new IllegalStateException("JWT signing key id must be present in verification key set");
+                return;
+            } catch (Exception e) {
+                throw new IllegalStateException("JWT RS256 signing and verification keys are not configured correctly");
+            }
+        }
+        if (!"HS256".equalsIgnoreCase(algorithm)) throw new IllegalStateException("JWT signing algorithm must be RS256 or HS256");
         if (secretKey == null || secretKey.isBlank()) {
             throw new IllegalStateException(
                 "JWT secret key is not configured. Set JWT_SECRET environment variable to a Base64-encoded key of at least 256 bits."
@@ -76,7 +102,8 @@ public class JwtTokenGenerator {
                             .claim("email", user.getEmail())
                             .claim("principal_id", user.getId())
                             .claim(AUTHORITIES_KEY , ROLE_PREFIX + type.name())
-                            .signWith(getSigningKey())
+                            .header().keyId(keyId).and()
+                            .signWith(signingKey(), signingAlgorithm())
                             .issuedAt(now)
                             .expiration(expiryDate)
                             .compact();
@@ -103,8 +130,6 @@ public class JwtTokenGenerator {
     }
 
     public String generateToken(String value, String role) {
-        byte[] decodedKey = Base64.getDecoder().decode(secretKey);
-        Key key = Keys.hmacShaKeyFor(decodedKey);
         long nowMillis = System.currentTimeMillis();
         Date now = new Date(nowMillis);
         Date expiryDate = new Date(nowMillis + expirationTime);
@@ -116,7 +141,8 @@ public class JwtTokenGenerator {
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .claim(AUTHORITIES_KEY, authorities)
-                .signWith(key)
+                .header().keyId(keyId).and()
+                .signWith(signingKey(), signingAlgorithm())
                 .compact();
         return token;
     }
@@ -136,26 +162,75 @@ public class JwtTokenGenerator {
 
     public Boolean validateToken(String token) {
         try {
-            Claims claims = Jwts.parser()
-                    .verifyWith(getSigningKey())
-                    .build()
+            Claims claims = parser()
                     .parseSignedClaims(token)
                     .getPayload();
             return claims.getExpiration().after(new java.util.Date());
         } catch (Exception e) {
-            log.info("exception {} " , e.getMessage());
+            log.debug("JWT validation failed");
             return false;
         }
     }
 
     private Claims extractAllClaims(String token) {
-        byte[] decodedKey = Base64.getDecoder().decode(secretKey);
-        SecretKey key = Keys.hmacShaKeyFor(decodedKey);
-        return Jwts.parser()
-                .verifyWith(key)
-                .build()
+        return parser()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    private io.jsonwebtoken.JwtParser parser() {
+        if ("RS256".equalsIgnoreCase(algorithm)) {
+            return Jwts.parser().keyLocator(header -> {
+                if (!"RS256".equals(header.getAlgorithm())) throw new IllegalArgumentException("Unsupported JWT algorithm");
+                var key = verificationKeys().get(((io.jsonwebtoken.JwsHeader) header).getKeyId());
+                if (key == null) throw new IllegalArgumentException("Unknown JWT key id");
+                return key;
+            }).build();
+        }
+        return Jwts.parser().verifyWith(getSigningKey()).build();
+    }
+
+    private Key signingKey() {
+        return "RS256".equalsIgnoreCase(algorithm) ? signingPrivateKey() : getSigningKey();
+    }
+
+    private io.jsonwebtoken.SignatureAlgorithm signingAlgorithm() {
+        return "RS256".equalsIgnoreCase(algorithm) ? io.jsonwebtoken.SignatureAlgorithm.RS256 : io.jsonwebtoken.SignatureAlgorithm.HS256;
+    }
+
+    private RSAPrivateKey signingPrivateKey() {
+        try {
+            byte[] der = Base64.getDecoder().decode(privateKeyMaterial.replaceAll("-----[^-]+-----", "").replaceAll("\\s", ""));
+            return (RSAPrivateKey) KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(der));
+        } catch (Exception e) { throw new IllegalStateException("Invalid JWT private key"); }
+    }
+
+    private java.util.Map<String, RSAPublicKey> verificationKeys() {
+        try {
+            var values = new ObjectMapper().readValue(verificationKeysMaterial, new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, String>>() {});
+            var result = new java.util.HashMap<String, RSAPublicKey>();
+            var factory = KeyFactory.getInstance("RSA");
+            values.forEach((kid, value) -> {
+                try { result.put(kid, (RSAPublicKey) factory.generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(value)))); }
+                catch (Exception e) { throw new IllegalArgumentException("Invalid JWT public key"); }
+            });
+            return result;
+        } catch (Exception e) { throw new IllegalStateException("Invalid JWT verification key set"); }
+    }
+
+    public java.util.Map<String, Object> publishedJwks() {
+        var keys = verificationKeys().entrySet().stream().map(entry -> {
+            RSAPublicKey key = entry.getValue();
+            return java.util.Map.<String, Object>of("kty", "RSA", "use", "sig", "alg", "RS256", "kid", entry.getKey(),
+                    "n", Base64.getUrlEncoder().withoutPadding().encodeToString(unsigned(key.getModulus())),
+                    "e", Base64.getUrlEncoder().withoutPadding().encodeToString(unsigned(key.getPublicExponent())));
+        }).toList();
+        return java.util.Map.of("keys", keys);
+    }
+
+    private byte[] unsigned(BigInteger value) {
+        byte[] bytes = value.toByteArray();
+        return bytes.length > 1 && bytes[0] == 0 ? java.util.Arrays.copyOfRange(bytes, 1, bytes.length) : bytes;
     }
 
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {

@@ -39,8 +39,9 @@ public class ProductionConfigValidation implements InitializingBean {
         validateHttpsUri("auto.parto.secrets.openbao.address", errors);
         validateRequiredProperty("auto.parto.secrets.openbao.role", errors);
         String authMethod = value("auto.parto.secrets.openbao.auth-method");
-        if (!"kubernetes".equalsIgnoreCase(authMethod) && !"jwt".equalsIgnoreCase(authMethod)) {
-            errors.add("auto.parto.secrets.openbao.auth-method=kubernetes|jwt");
+        if (!"kubernetes".equalsIgnoreCase(authMethod) && !"jwt".equalsIgnoreCase(authMethod)
+                && !"approle-agent".equalsIgnoreCase(authMethod)) {
+            errors.add("auto.parto.secrets.openbao.auth-method=kubernetes|jwt|approle-agent");
         }
     }
 
@@ -49,6 +50,8 @@ public class ProductionConfigValidation implements InitializingBean {
         validateRequiredProperty("spring.r2dbc.url", errors);
         if (url != null && !url.startsWith("r2dbc:postgresql://")) {
             errors.add("spring.r2dbc.url must be a protected PostgreSQL URL");
+        } else if (url != null && hasEmbeddedR2dbcCredentials(url)) {
+            errors.add("spring.r2dbc.url must not contain embedded credentials");
         } else if (url != null && isLoopbackR2dbcUrl(url)) {
             errors.add("spring.r2dbc.url must not use a loopback host");
         }
@@ -95,14 +98,12 @@ public class ProductionConfigValidation implements InitializingBean {
     }
 
     private void validateJwt(List<String> errors) {
-        String secret = value("jwt.secretKey");
-        validateRequiredProperty("jwt.secretKey", errors);
-        if (secret != null) {
-            try {
-                if (Base64.getDecoder().decode(secret).length < 32) errors.add("jwt.secretKey must decode to at least 256 bits");
-            } catch (IllegalArgumentException exception) {
-                errors.add("jwt.secretKey must be Base64 encoded");
-            }
+        if (!"RS256".equalsIgnoreCase(value("jwt.signing.algorithm"))) errors.add("jwt.signing.algorithm=RS256");
+        validateRequiredProperty("jwt.signing.key-id", errors);
+        validateRequiredProperty("jwt.signing.private-key", errors);
+        String publicKeys = value("jwt.signing.verification-keys");
+        if (isBlank("jwt.signing.verification-keys") || publicKeys == null || !publicKeys.contains("\"" + value("jwt.signing.key-id") + "\"")) {
+            errors.add("jwt.signing.verification-keys must contain the active key id");
         }
     }
 
@@ -167,6 +168,15 @@ public class ProductionConfigValidation implements InitializingBean {
             String authority = value.substring("r2dbc:postgresql://".length());
             return isLoopbackHost(URI.create("http://" + authority).getHost());
         } catch (IllegalArgumentException exception) {
+            return true;
+        }
+    }
+
+    private boolean hasEmbeddedR2dbcCredentials(String value) {
+        try {
+            String authority = value.substring("r2dbc:postgresql://".length()).split("[/ ?]", 2)[0];
+            return authority.contains("@") || value.matches("(?i).*([?&])(user|username|password)=.*");
+        } catch (RuntimeException exception) {
             return true;
         }
     }

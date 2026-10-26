@@ -35,6 +35,7 @@ public class SecurityConfig {
                         .pathMatchers("/auth/**").permitAll()
                         .pathMatchers(SWAGGER_WHITELIST).permitAll()
                         .pathMatchers("/actuator/health/**").permitAll()
+                        .pathMatchers("/.well-known/jwks.json").permitAll()
                         .anyExchange().authenticated()
                 )
                 .addFilterAt(new JwtTokenAuthenticationFilter(jwtTokenGenerator, errorResponseWriter), SecurityWebFiltersOrder.HTTP_BASIC)

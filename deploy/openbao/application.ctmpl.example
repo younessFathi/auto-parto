@@ -1,0 +1,15 @@
+{{- with secret "database/creds/production-application" -}}
+spring.r2dbc.username={{ .Data.username }}
+spring.r2dbc.password={{ .Data.password }}
+{{- end }}
+{{- with secret "kv/data/production/application/runtime" -}}
+spring.data.redis.password={{ .Data.data.redis_password }}
+auto.parto.storage.s3.access-key={{ .Data.data.object_access_key }}
+auto.parto.storage.s3.secret-key={{ .Data.data.object_secret_key }}
+jwt.signing.algorithm=RS256
+jwt.signing.key-id={{ .Data.data.jwt_active_kid }}
+jwt.signing.private-key={{ .Data.data.jwt_private_key_pkcs8_base64 }}
+jwt.signing.verification-keys={{ .Data.data.jwt_verification_keys_json }}
+resend.api-key={{ .Data.data.resend_api_key }}
+firebase.credentials.json={{ .Data.data.firebase_credentials_json_compact }}
+{{- end }}

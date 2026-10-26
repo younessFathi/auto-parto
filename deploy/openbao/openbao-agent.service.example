@@ -1,0 +1,21 @@
+[Unit]
+Description=Auto-Parto application OpenBao Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=auto-parto-agent
+Group=auto-parto-agent
+SupplementaryGroups=10001
+LoadCredential=openbao-secret-id:/etc/auto-parto/credentials/openbao-secret-id.wrapped
+ExecStart=/usr/bin/openbao agent -config=/etc/auto-parto/openbao/agent.hcl
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/run/openbao-agent /run/auto-parto/secrets
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

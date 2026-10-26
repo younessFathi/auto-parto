@@ -1,0 +1,21 @@
+[Unit]
+Description=Auto-Parto audit OpenBao Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=auto-parto-audit-agent
+Group=auto-parto-audit-agent
+SupplementaryGroups=10001
+LoadCredential=openbao-audit-secret-id:/etc/auto-parto/credentials/openbao-audit-secret-id.wrapped
+ExecStart=/usr/bin/openbao agent -config=/etc/auto-parto/openbao/agent-audit.hcl
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/run/openbao-audit-agent /run/auto-parto/audit
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

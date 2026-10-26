@@ -318,11 +318,11 @@ Recommended usage:
 - Keep OpenBao unexposed to the public Internet and protect it with TLS.
 - Back up and test the OpenBao storage and unseal/recovery process.
 
-The application-side AP-0022 increment validates the OpenBao address, role, and approved authentication method as part of the production boundary, but it does not claim that OpenBao is provisioned. Deployment still needs least-privilege policies, short-lived workload credentials, lease renewal and revocation, TLS trust distribution, rotation drills, and recovery/unseal procedures. Those operational controls remain linked work in F07 and must be completed before production readiness is declared.
+The AP-0022 repository increment now includes a dedicated-host TLS/Raft server template and systemd unit, separated environment/application/audit/migration policies, AppRole Agent and systemd templates, a private production app Compose boundary, fail-closed required properties-file import, and staging authorization/lease drill scripts. The host Agent renders credentials to tmpfs and alone holds its renewable token. The app receives no OpenBao token. These artifacts are templates: service provisioning, role binding, certificate issuance, dynamic database plugin setup, and successful staging/recovery drills still require operations evidence.
 
 OpenBao is not free operationally. A single OpenBao instance on the same PostgreSQL VPS creates a shared failure and compromise boundary. Initially use a separate small protected host or a managed secret service if available. If OpenBao is deployed on one node, document that it is a temporary availability risk and protect its recovery keys separately.
 
-For JWTs, prefer asymmetric signing and key rotation with a published verification key set when possible. Do not put a long-lived root credential in the application container.
+The application supports RS256 JWT signing with a `kid`, a published `/.well-known/jwks.json` key set, overlapping verification keys, and removal-based revocation. Keep private key material in OpenBao and publish only public keys. Tests cover overlap and removal; the staging rollout/revocation drill is still required. Do not put a long-lived root credential in the application container.
 
 Prefer asynchronous clients for Firebase, email, OpenBao, and object storage. If a blocking SDK is unavoidable, isolate it on a bounded scheduler with explicit thread count, queue size, concurrency, timeout, cancellation, and shutdown behavior.
 

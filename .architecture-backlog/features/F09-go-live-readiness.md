@@ -58,6 +58,7 @@ This feature is a release gate, not a replacement for the implementation tickets
 - [ ] Provision existing PostgreSQL volumes through the AP-0003 recovery procedure; never delete a volume to force initialization.
 - [ ] Verify runtime grants, migration ownership, Flyway history access, and audit-database isolation before rollout.
 - [ ] Confirm no secrets appear in GitHub Actions logs, Compose files, images, traces, or process arguments.
+- [ ] Provision the separate TLS-protected OpenBao cluster, bind environment-scoped app/audit/migration workload identities, and record successful authorization, renewal/revocation, credential rotation, old-credential rejection, Raft snapshot restore, and unseal drills.
 
 ### Data cutover and rollback
 

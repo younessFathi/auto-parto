@@ -1,0 +1,15 @@
+[Unit]
+Description=Auto-Parto production application container
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/auto-parto
+ExecStart=/usr/bin/docker compose --env-file /etc/auto-parto/deploy.env -f docker-compose.prod.yml --profile production up -d --no-deps springboot-postgresql-app
+ExecStop=/usr/bin/docker compose --env-file /etc/auto-parto/deploy.env -f docker-compose.prod.yml --profile production stop springboot-postgresql-app
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
