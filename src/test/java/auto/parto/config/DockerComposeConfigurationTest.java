@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -143,5 +144,68 @@ class DockerComposeConfigurationTest {
         String output = new String(process.getInputStream().readAllBytes());
         assertThat(process.waitFor(30, TimeUnit.SECONDS)).isTrue();
         assertThat(process.exitValue()).withFailMessage(output).isZero();
+    }
+
+    @Test
+    void openBaoProductionComposeRendersWithPrivateTlsAndPersistentStorage() throws Exception {
+        String productionCompose = Files.readString(Path.of("deploy/openbao/compose.production.yml"));
+        String serverConfig = Files.readString(Path.of("deploy/openbao/server.hcl.example"));
+        assertThat(productionCompose)
+                .contains("openbao/openbao@sha256:")
+                .contains("host_ip: ${OPENBAO_PRIVATE_BIND_IP")
+                .contains("/openbao/config/server.hcl")
+                .contains("/etc/openbao/tls")
+                .contains("openbao-data:/openbao/file")
+                .contains("external: true")
+                .contains("BAO_CACERT: /etc/openbao/tls/ca.crt")
+                .doesNotContain("-dev")
+                .doesNotContain("root_token");
+        assertThat(serverConfig).contains("path    = \"/openbao/file\"")
+                .doesNotContain("disable_mlock");
+
+        ProcessBuilder processBuilder = new ProcessBuilder(
+                "docker", "compose", "--file", "deploy/openbao/compose.production.yml", "config", "--quiet");
+        processBuilder.directory(Path.of(".").toFile());
+        processBuilder.redirectErrorStream(true);
+        Map<String, String> environment = processBuilder.environment();
+        environment.put("OPENBAO_PRIVATE_BIND_IP", "10.20.30.10");
+        environment.put("OPENBAO_API_ADDR", "https://openbao-secrets.internal:8200");
+        environment.put("OPENBAO_SERVER_CONFIG", "/tmp/openbao/server.hcl");
+        environment.put("OPENBAO_TLS_DIR", "/tmp/openbao/tls");
+        environment.put("OPENBAO_DATA_VOLUME", "openbao-compose-test-volume");
+
+        Process process;
+        try {
+            process = processBuilder.start();
+        } catch (IOException unavailable) {
+            assumeTrue(false, "Docker Compose is not available");
+            return;
+        }
+        String output = new String(process.getInputStream().readAllBytes());
+        assertThat(process.waitFor(30, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).withFailMessage(output).isZero();
+    }
+
+    @Test
+    void openBaoProductionComposeFailsClosedWithoutHostConfiguration() throws Exception {
+        ProcessBuilder processBuilder = new ProcessBuilder(
+                "docker", "compose", "--file", "deploy/openbao/compose.production.yml", "config", "--quiet");
+        processBuilder.directory(Path.of(".").toFile());
+        processBuilder.redirectErrorStream(true);
+        Map<String, String> environment = processBuilder.environment();
+        List.of("OPENBAO_PRIVATE_BIND_IP", "OPENBAO_API_ADDR", "OPENBAO_SERVER_CONFIG",
+                "OPENBAO_TLS_DIR", "OPENBAO_DATA_VOLUME").forEach(environment::remove);
+
+        Process process;
+        try {
+            process = processBuilder.start();
+        } catch (IOException unavailable) {
+            assumeTrue(false, "Docker Compose is not available");
+            return;
+        }
+        String output = new String(process.getInputStream().readAllBytes());
+        assertThat(process.waitFor(30, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isNotZero();
+        assertThat(output).contains("required variable OPENBAO_");
     }
 }
