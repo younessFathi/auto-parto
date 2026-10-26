@@ -78,25 +78,21 @@ public class FcmNotificationController {
                         .flatMap(isValid->{
                             Mono<ResponseEntity<Object>> UNAUTHORIZED = checkAuthentication(authentication.getName(), isValid);
                             if (UNAUTHORIZED != null) return UNAUTHORIZED;
-                            log.info("Sending FCM notification to user: {}, title: {}",
-                                    request.getUserId(), request.getTitle());
+                            log.info("Sending FCM notification to user");
 
                             FcmNotification notification = buildFcmNotification(request);
                             return fcmService.sendToUser(request.getUserId(), notification)
                                     .map(result -> {
                                         if (result.isSuccess()) {
-                                            log.info("Notification sent successfully to user: {}, messageId: {}",
-                                                    request.getUserId(), result.getMessageId());
+                                            log.info("Notification sent successfully");
                                             return ResponseEntity.ok(result);
                                         } else {
-                                            log.warn("Notification failed for user: {}, error: {}",
-                                                    request.getUserId(), result.getError());
+                                            log.warn("Notification failed: PROVIDER_UNAVAILABLE");
                                             return ResponseEntity.status(HttpStatus.ACCEPTED).body(result);
                                         }
                                     })
                                     .onErrorResume(error -> {
-                                        log.error("Error sending notification to user {}: {}",
-                                                request.getUserId(), error.getMessage(), error);
+                                        log.error("Error sending notification: PROVIDER_UNAVAILABLE");
                                         return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                                                 .body(FcmDeliveryResult.failed(request.getUserId(), "PROVIDER_UNAVAILABLE")));
                                     });
@@ -130,8 +126,7 @@ public class FcmNotificationController {
                 isValid -> {
                     Mono<ResponseEntity<Object>> UNAUTHORIZED = checkAuthentication(authentication.getName(), isValid);
                     if (UNAUTHORIZED != null) return UNAUTHORIZED;
-                    log.info("Notifying sellers about new search: {} for {}",
-                            request.getPartName(), request.getCarMake());
+                    log.info("Notifying sellers about new search");
 
                     // Create search notification
                     SearchNotification search = buildSearchNotification(request);
@@ -148,7 +143,7 @@ public class FcmNotificationController {
                                                 return ResponseEntity.ok(result);
                                             })
                                             .onErrorResume(error -> {
-                                                log.error("Failed to notify sellers: {}", error.getMessage(), error);
+                                                log.error("Failed to notify sellers: PROVIDER_UNAVAILABLE");
                                                 return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                                                         .body(BatchFcmResult.builder()
                                                                 .totalUsers(sellersId.size())
@@ -185,7 +180,6 @@ public class FcmNotificationController {
     }
 
     private static FcmNotification buildFcmNotification(SearchNotification search) {
-        log.info("Building FCM notification for search: {}" , search);
         return FcmNotification.newSearchMatch(
                 search.getPartName(),
                 search.getBuyerLocation(),
@@ -208,8 +202,7 @@ public class FcmNotificationController {
                             Mono<ResponseEntity<Object>> UNAUTHORIZED = checkAuthentication(authentication.getName(), isValid);
                             if (UNAUTHORIZED != null) return UNAUTHORIZED;
 
-                            log.info("Seller {} responding to search {}",
-                                    request.getSellerId(), request.getSearchId());
+                            log.info("Sending seller response notification");
 
                             FcmNotification notification = FcmNotification.sellerResponse(
                                     request.getSellerName(),
@@ -220,10 +213,10 @@ public class FcmNotificationController {
                             return fcmService.sendToUser(request.getBuyerId(), notification)
                                     .map(result -> {
                                         if (result.isSuccess()) {
-                                            log.info("Buyer notified about seller response: {}", request.getResponseId());
+                                            log.info("Buyer notified about seller response");
                                             return ResponseEntity.ok(result);
                                         } else {
-                                            log.warn("Failed to notify buyer about response: {}", result.getError());
+                                            log.warn("Failed to notify buyer about response: PROVIDER_UNAVAILABLE");
                                             return ResponseEntity.status(HttpStatus.ACCEPTED).body(result);
                                         }
                                     });
@@ -244,7 +237,7 @@ public class FcmNotificationController {
                         isValid -> {
                             Mono<ResponseEntity<Object>> UNAUTHORIZED = checkAuthentication(authentication.getName(), isValid);
                             if (UNAUTHORIZED != null) return UNAUTHORIZED;
-                            log.warn("Sending urgent notification: {}", request.getTitle());
+                            log.warn("Sending urgent notification");
 
                             FcmNotification notification = FcmNotification.builder()
                                     .title("🚨 " + request.getTitle())
@@ -260,7 +253,7 @@ public class FcmNotificationController {
                                                     result.getSuccessfulUsers(), result.getTotalUsers()))
                                     .map(ResponseEntity::ok)
                                     .onErrorResume(error -> {
-                                        log.error("Failed to send urgent notification: {}", error.getMessage());
+                                        log.error("Failed to send urgent notification: PROVIDER_UNAVAILABLE");
                                         return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                                                 .body(BatchFcmResult.builder()
                                                         .totalUsers(request.getUserIds().size())

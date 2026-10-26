@@ -81,17 +81,14 @@ public class ResilientFcmService {
     private FcmDeliveryResult buildDeliveryResult(String userId, int totalTokens, List<FcmDeliveryResult> results) {
         boolean anySuccess = results.stream().anyMatch(FcmDeliveryResult::isSuccess);
 
-        List<String> failedTokens = results.stream()
-                .filter(r -> !r.isSuccess())
-                .map(FcmDeliveryResult::getToken)
-                .toList();
+        long failedCount = results.stream().filter(result -> !result.isSuccess()).count();
 
         return FcmDeliveryResult.builder()
                 .userId(userId)
                 .success(anySuccess)
-                .failedTokens(failedTokens)
+                .failedTokens(List.of())
                 .totalTokens(totalTokens)
-                .successfulTokens(totalTokens - failedTokens.size())
+                .successfulTokens(totalTokens - Math.toIntExact(failedCount))
                 .build();
     }
 
@@ -141,8 +138,7 @@ public class ResilientFcmService {
 
                     String messageId = firebaseMessaging.send(message);
 
-                    log.debug("FCM sent successfully to token: {}, messageId: {}",
-                            deviceTokenService.maskToken(token), messageId);
+                    log.debug("FCM sent successfully");
 
                     return FcmDeliveryResult.success(token, messageId);
                 })
@@ -151,8 +147,7 @@ public class ResilientFcmService {
                 .retryWhen(Retry.backoff(3, Duration.ofSeconds(1))
                         .filter(this::isRetryableError)
                         .doBeforeRetry(retry ->
-                                log.warn("Retrying FCM send to token: {}, attempt: {}",
-                                        deviceTokenService.maskToken(token), retry.totalRetries())
+                                log.warn("Retrying FCM send, attempt: {}", retry.totalRetries())
                         ));
 
         // 2. Wrap the task with Circuit Breaker and Fallback
@@ -160,19 +155,17 @@ public class ResilientFcmService {
                 .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
                 .onErrorResume(throwable -> {
                     // Circuit open or non-retryable error
-                    log.error("FCM circuit open or failed for token: {}",
-                            deviceTokenService.maskToken(token));
+                    log.error("FCM circuit open or provider request failed");
 
                     // Handle invalid token
                     if (isInvalidTokenError(throwable)) {
                         Mono<Void> invalidation = deviceTokenService.markTokenInvalid(token);
                         return (invalidation == null ? Mono.<Void>empty() : invalidation)
                                 .onErrorResume(invalidationError -> Mono.empty())
-                                .thenReturn(FcmDeliveryResult.failed(token, "PROVIDER_UNAVAILABLE"));
+                                .thenReturn(FcmDeliveryResult.failed(null, "PROVIDER_UNAVAILABLE"));
                     }
 
-                    // FIX: Added .getMessage() to fix the syntax error "throwable."
-                    return Mono.just(FcmDeliveryResult.failed(token, "PROVIDER_UNAVAILABLE"));
+                    return Mono.just(FcmDeliveryResult.failed(null, "PROVIDER_UNAVAILABLE"));
                 });
     }
 

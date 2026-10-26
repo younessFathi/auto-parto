@@ -1,6 +1,6 @@
 # AP-0042 Complete Notification Delivery Reliability
 
-- **Status:** In Progress
+- **Status:** Done
 - **Type:** Technical Enhancement
 - **Feature:** [Notifications and Redis](../features/F05-notifications-and-redis.md)
 - **Linked Tickets:** [AP-0012](AP-0012-notification-outbox.md), [AP-0013](AP-0013-outbox-processing.md), [AP-0016](AP-0016-redis-projections.md), [AP-0028](AP-0028-provider-isolation.md)
@@ -37,5 +37,10 @@ FCM failure classification. PostgreSQL/Testcontainers
 coverage verifies bounded claims, lease recovery, deterministic retry exhaustion, and
 schema migration. Redis integration coverage verifies bounded projection reads and
 idempotent projection replacement. A Spring context test verifies scheduled recovery is
-active. The implementation is complete pending the feature owner’s review and status
-transition.
+active. The feature owner accepted AP-0042 on 2026-10-26 after reviewing the criteria
+and scenarios in [the acceptance review](../reviews/AP-0042-feature-owner-acceptance-2026-10-26.md).
+FCM response/log redaction and duplicate acknowledgement coverage were completed as
+part of that review. Delivery is at-least-once: a connection loss between a successful
+SSE write and the PostgreSQL acknowledgement can result in a duplicate, so clients
+deduplicate using the persisted notification UUID. Provider scheduler isolation and
+saturation policy remain explicitly tracked by [AP-0028](AP-0028-provider-isolation.md).

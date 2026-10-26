@@ -277,7 +277,7 @@ public class RedisNotificationStore {
         try {
             return objectMapper.readValue(json, new TypeReference<ArrayList<DeviceTokenService.DeviceToken>>() {});
         } catch (IOException e) {
-            log.error("Failed to deserialize tokens", e);
+            log.error("Failed to deserialize device token projection");
             return new ArrayList<>();
         }
     }
@@ -286,7 +286,7 @@ public class RedisNotificationStore {
         try {
             return objectMapper.writeValueAsString(tokens);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to serialize tokens", e);
+            throw new IllegalStateException("Failed to serialize device token projection");
         }
     }
 
