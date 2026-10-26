@@ -169,7 +169,7 @@ class DockerComposeConfigurationTest {
         processBuilder.redirectErrorStream(true);
         Map<String, String> environment = processBuilder.environment();
         environment.put("OPENBAO_PRIVATE_BIND_IP", "10.20.30.10");
-        environment.put("OPENBAO_API_ADDR", "https://openbao-secrets.internal:8200");
+        environment.put("OPENBAO_TLS_SERVER_NAME", "openbao-secrets.internal");
         environment.put("OPENBAO_SERVER_CONFIG", "/tmp/openbao/server.hcl");
         environment.put("OPENBAO_TLS_DIR", "/tmp/openbao/tls");
         environment.put("OPENBAO_DATA_VOLUME", "openbao-compose-test-volume");
@@ -193,7 +193,7 @@ class DockerComposeConfigurationTest {
         processBuilder.directory(Path.of(".").toFile());
         processBuilder.redirectErrorStream(true);
         Map<String, String> environment = processBuilder.environment();
-        List.of("OPENBAO_PRIVATE_BIND_IP", "OPENBAO_API_ADDR", "OPENBAO_SERVER_CONFIG",
+        List.of("OPENBAO_PRIVATE_BIND_IP", "OPENBAO_TLS_SERVER_NAME", "OPENBAO_SERVER_CONFIG",
                 "OPENBAO_TLS_DIR", "OPENBAO_DATA_VOLUME").forEach(environment::remove);
 
         Process process;

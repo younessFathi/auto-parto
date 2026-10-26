@@ -3,15 +3,16 @@ services:
     image: openbao/openbao@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf
     command: ["server", "-config=/openbao/config/server.hcl"]
     environment:
-      BAO_ADDR: ${OPENBAO_API_ADDR:?set this node's private TLS API address}
+      BAO_ADDR: https://127.0.0.1:8200
       BAO_CACERT: /etc/openbao/tls/ca.crt
+      BAO_TLS_SERVER_NAME: ${OPENBAO_TLS_SERVER_NAME:?set the TLS certificate DNS name}
     ports:
       - target: 8200
-        published: "8200"
+        published: ${OPENBAO_API_PUBLISHED_PORT:-8200}
         host_ip: ${OPENBAO_PRIVATE_BIND_IP:?set this node's private interface address}
         protocol: tcp
       - target: 8201
-        published: "8201"
+        published: ${OPENBAO_CLUSTER_PUBLISHED_PORT:-8201}
         host_ip: ${OPENBAO_PRIVATE_BIND_IP:?set this node's private interface address}
         protocol: tcp
     volumes:

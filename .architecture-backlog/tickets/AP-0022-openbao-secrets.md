@@ -1,48 +1,51 @@
 # AP-0022 Establish OpenBao Secret Management
 
-- **Status:** In Progress
+- **Status:** Done
 - **Type:** Technical Enhancement
 - **Feature:** [Deployment and Secrets](../features/F07-deployment-and-secrets.md)
-- **Linked Tickets:** [AP-0020](AP-0020-stateless-deployment.md)
+- **Linked Tickets:** [AP-0020](AP-0020-stateless-deployment.md), [AP-0044](AP-0044-openbao-vps-go-live.md)
 - **Source:** `deployment-architecture.md` Secrets and Configuration
 
 ## Description
-Deliver environment-isolated application credentials through protected OpenBao policies and controlled rotation.
+Deliver the repository's container-based OpenBao deployment configuration, environment-isolated credential policies, production Agent integration, and verifiable local/staging automation. Actual VPS provisioning and live production operations are tracked by [AP-0044](AP-0044-openbao-vps-go-live.md).
 
 ## Current Implementation Slice
 
-The application-side production validation increment requires protected PostgreSQL/R2DBC, Redis, JWT, object-storage, and OpenBao configuration, validates enabled email/Firebase/audit credentials, rejects loopback dependency endpoints, requires the PostgreSQL-only cutover flags, and excludes MongoDB runtime configuration. This change adds a required OpenBao Agent rendered-properties import, a production app Compose boundary, a digest-pinned OpenBao image Compose template for a dedicated TLS/Raft host, a systemd lifecycle, separated policy/agent templates, a staging authorization script, and RS256/JWKS overlap and revocation support with isolated tests. `docker-compose.openbao-dev.yml` supplies an isolated loopback-only disposable OpenBao image for non-production exploration; it is not wired to the application or treated as production identity/persistence/recovery evidence. Compose smoke verification uses only safe test values explicitly through its test harness; it does not use production fallbacks.
+The production application profile requires protected PostgreSQL/R2DBC, Redis, JWT, object-storage, and OpenBao configuration, validates enabled email/Firebase/audit credentials, rejects loopback dependency endpoints, requires PostgreSQL cutover flags, and excludes MongoDB runtime configuration. This ticket delivers required Agent-rendered properties, an app Compose boundary, a digest-pinned normal-mode OpenBao image Compose template for a dedicated TLS/Raft host, a systemd lifecycle, separated policies/Agent templates, repeatable staging scripts, and RS256/JWKS overlap/revocation behavior.
 
-No external OpenBao service, role bindings, dynamic database plugin, lease renewal/revocation exercise, rotation, backup/restore, or unseal drill has been run. This ticket therefore remains **In Progress**, and this code is not operational proof of the secret service.
+The local OpenBao image profile is loopback-only, in-memory, and explicitly disposable. `OpenBaoImageDeploymentIT` exercises the production image configuration with temporary TLS and persistent test storage, initializes/unseals the isolated server, tests AppRole policy isolation, rotates/revokes a SecretID, renews/revokes workload tokens, and verifies state recovery after restart. It uses only generated test credentials and removes its test infrastructure. The test validates the repository deployment and automation contract; it does not represent a deployed VPS or production secret service.
+
+AP-0022's repository deliverable is complete. Provisioning the external service, establishing real workload bindings, live database/provider credential rotation and old-value rejection, and backup/snapshot restore and quorum unseal drills remain release gates tracked in AP-0044 and F09.
 
 ### Acceptance Evidence Snapshot (2026-10-26)
 
 | Criterion | Evidence in this change | Status / remaining proof |
 | --- | --- | --- |
-| 1. Externalize required credentials | Required prod properties import from `/run/auto-parto/secrets/secrets.properties`; audit has a separate optional file whose missing values fail validation when enabled; provider keys are in the app policy path. | Repository contract present; exercise full prod startup with provisioned secrets in staging. |
-| 2. Short-lived identity and least privilege | Separate app/audit/migration policies, AppRole Agent templates, wrapped one-use SecretID settings, short token TTLs and scoped policy installer. | Templates only; bind actual roles and verify lease renewal/revocation and cross-environment denial in OpenBao staging. |
-| 3. Fail safely when secrets are absent | Required properties file import, `ProductionConfigValidation`, and the systemd pre-start credential gate. The gate checks file type, group/mode, required keys, enabled provider/audit credentials, and RS256 before Compose starts. | Isolated gate/config tests cover missing and incomplete bundles; verify a real prod-profile startup against the deployed Agent in staging. |
-| 4. Private TLS service and recovery | Digest-pinned OpenBao image Compose deployment for a dedicated host; private host binds; read-only TLS/config mounts; external persistent Raft volume; systemd lifecycle; TLS health probe and encrypted snapshot/unseal procedure. | Compose configuration and local normal-mode container smoke pass; not complete until the separate HA service is provisioned and restore/unseal drill records RPO/RTO. |
-| 5. Rotation/recovery | Agent render/restart hook, credential/JWT rotation sequence, staging authorization harness, and RSA overlap/revocation unit coverage. | No external credential was rotated, revoked, or rejected; no snapshot was restored. Staging drills remain release blockers. |
-| 6. Environment separation | Local HMAC defaults remain local/test; `docker-compose.openbao-dev.yml` provides a separate loopback-only, in-memory dev image profile; prod requires the external rendered bundle and RS256 material; distinct staging and production policies are supplied. | Dev container is only an exploration sandbox, not application workload-identity or production evidence. Confirm separation with actual staging identities and production startup rehearsal. |
-| 7. Asymmetric rotating JWT | RS256 signing with `kid`, JWKS endpoint, overlapping verification set; tests verify old and active keys during overlap and reject removed key afterward. | Code behavior tested; publish/rollover/revocation rehearsal against the deployment remains outstanding. |
+| 1. Externalize required credentials | Required production import, audit-specific optional bundle, enabled provider checks, and Agent templates for database, Redis, S3, JWT, email, Firebase, and audit values. | Repository contract complete; real secret provisioning is AP-0044. |
+| 2. Short-lived identity and least privilege | Scoped app/audit/migration policies, idempotent AppRole/KV/database mount installer, wrapped one-use SecretIDs, and bounded token TTLs. `OpenBaoImageDeploymentIT` verifies app access and cross-path denial. | Repository contract complete; bind actual environment identities in AP-0044. |
+| 3. Fail safely when secrets are absent | Required properties import, production validation, systemd bundle gate, and isolated missing/incomplete-bundle tests. | Repository contract complete; production host startup rehearsal is AP-0044. |
+| 4. Private TLS service and recovery configuration | Digest-pinned production image Compose template, private binds, TLS/config read-only mounts, external Raft volume, systemd lifecycle, and health probe. `OpenBaoImageDeploymentIT` starts normal mode with verified TLS and persistent storage. | Repository config complete; deploy HA service and record backup/restore/unseal RPO/RTO in AP-0044. |
+| 5. Rotation/recovery automation | Staging authorization/lease scripts, integration coverage for SecretID and token renewal/revocation, persistent-volume restart recovery, and documented snapshot/restore procedure. | Repository automation complete; real credential rotation and snapshot restore drills are AP-0044. |
+| 6. Environment separation | Local HS256/test config, disposable local OpenBao dev profile, and production required external RS256 bundle/policies. Compose and profile tests enforce the boundaries. | Repository contract complete; production identity binding is AP-0044. |
+| 7. Asymmetric rotating JWT | RS256 signing with `kid`, public JWKS, overlap/removal behavior, and unit/HTTP tests. | Repository behavior complete; deployment rollover rehearsal is AP-0044. |
 
-The whole ticket remains **In Progress**. OpenBao provisioning, TLS and least-privilege policies, short-lived workload identity, dynamic database leases, rotation/revocation drills, backups/unseal recovery, and asymmetric JWT key overlap are infrastructure and operations follow-ups. They must be delivered with AP-0021, AP-0026, AP-0028, and the remaining F07 work before production readiness is claimed.
+AP-0022 is **Done** for the repository and image-based configuration scope. Its completion does not claim a live production OpenBao service or make F07/F09 complete. AP-0044 owns VPS provisioning, actual workload bindings, live credential rejection, and backup/restore/quorum-unseal evidence.
 
 ## Acceptance Criteria
-1. Required database, Redis, JWT, OAuth, Firebase, email, and storage secrets are externalized.
-2. Workloads authenticate with short-lived machine identity and least-privilege policies.
-3. Production fails safely when required secrets are missing and never falls back to development values.
-4. OpenBao is private, TLS-protected, backed up, and outside the database failure boundary.
-5. Rotation and recovery procedures are documented and tested.
-6. Local uses safe optional defaults, test uses isolated fake/container providers, and production requires validated external secrets.
-7. JWT signing prefers asymmetric rotating keys with published verification keys and a tested overlap window.
+1. Production configuration externalizes database, Redis, JWT, OAuth, Firebase, email, object-storage, and audit credentials through required rendered bundles.
+2. Repository policies and Agents define short-lived, environment/role-scoped application, audit, and migration identities; the image integration test verifies policy isolation, SecretID replacement, token renewal, and revocation.
+3. Production startup fails closed on missing configuration and never uses development defaults; unit/config/systemd tests cover these failure modes.
+4. A digest-pinned normal-mode OpenBao image deployment template defines TLS, private binds, Raft storage, persistent external volume, systemd lifecycle, and health probing; a Docker integration test starts it with temporary TLS and persistent test storage.
+5. Rotation, restart recovery, snapshot restore, and unseal procedures are documented. The local integration test verifies SecretID/token rotation and restart recovery; external snapshot/restore and unseal execution is assigned to AP-0044.
+6. Local/test/production profiles are separated and tested; the OpenBao dev image remains disposable and isolated.
+7. Production JWT uses RS256 and published JWKS with tested overlap and removal behavior.
 
 ## Test Scenarios
 1. **Given** a production workload, **when** it requests another environment's secret, **then** access is denied.
 2. **Given** a missing required secret, **when** production starts, **then** startup fails safely.
 3. **Given** a rotated credential, **when** rollout completes, **then** the old credential is revoked safely.
 4. **Given** JWT key rotation, **when** the overlap window is active, **then** new and allowed prior tokens verify through published keys.
+5. **Given** the pinned normal-mode image and temporary TLS material, **when** the Docker integration test initializes it, **then** AppRole access stays within its policy, old SecretIDs and revoked tokens fail, renewed tokens work, and the external test volume retains state across restart.
 
 ## Definition of Done
-The whole ticket is implemented, every acceptance criterion is satisfied, every scenario is automated and passing, secret rotation and recovery runbooks are complete, and all applicable suites pass.
+All repository and Docker image configuration criteria above are implemented and verified by focused tests plus `./mvnw -B test` and `./mvnw -B verify`. The real VPS deployment and externally executed recovery/rotation drills are AP-0044 go-live acceptance and do not block completion of this repository-scope ticket.

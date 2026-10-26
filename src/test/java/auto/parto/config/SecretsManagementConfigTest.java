@@ -104,4 +104,35 @@ class SecretsManagementConfigTest {
                 .contains("`/.well-known/jwks.json`")
                 .doesNotContain("The JWT signing secret is required through `JWT_SECRET`");
     }
+
+    @Test
+    void openBaoInstallerEnablesRequiredEnginesAndShortLivedScopedRoles() throws IOException {
+        String installer = Files.readString(Path.of("deploy/openbao/install-policies.sh"));
+
+        assertThat(installer)
+                .contains("bao auth enable approle")
+                .contains("bao secrets enable -path=kv kv-v2")
+                .contains("bao secrets enable database")
+                .contains("token_ttl=15m")
+                .contains("token_max_ttl=1h")
+                .contains("secret_id_ttl=10m")
+                .contains("secret_id_num_uses=1")
+                .contains("bind_secret_id=true")
+                .doesNotContain("root_token");
+
+        String applicationPolicy = Files.readString(Path.of("deploy/openbao/policies/app.hcl"));
+        String auditPolicy = Files.readString(Path.of("deploy/openbao/policies/audit.hcl"));
+        String migrationPolicy = Files.readString(Path.of("deploy/openbao/policies/migration.hcl"));
+        assertThat(applicationPolicy).contains("kv/data/production/application/")
+                .contains("database/creds/production-application")
+                .doesNotContain("production-audit")
+                .doesNotContain("production-migration");
+        assertThat(auditPolicy).contains("kv/data/production/audit/")
+                .contains("database/creds/production-audit")
+                .doesNotContain("production-application")
+                .doesNotContain("production-migration");
+        assertThat(migrationPolicy).contains("database/creds/production-migration")
+                .doesNotContain("production-application")
+                .doesNotContain("production-audit");
+    }
 }

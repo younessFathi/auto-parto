@@ -7,6 +7,18 @@ set -euo pipefail
 export BAO_TOKEN="$(cat "$BAO_TOKEN_FILE")"
 unset BAO_TOKEN_FILE
 
+if ! bao auth list -format=json | jq -e 'has("approle/")' >/dev/null; then
+  bao auth enable approle
+fi
+
+mounted_secrets="$(bao secrets list -format=json)"
+if ! jq -e 'has("kv/")' <<<"$mounted_secrets" >/dev/null; then
+  bao secrets enable -path=kv kv-v2
+fi
+if ! jq -e 'has("database/")' <<<"$mounted_secrets" >/dev/null; then
+  bao secrets enable database
+fi
+
 root="$(cd "$(dirname "$0")" && pwd)"
 bao policy write production-app "$root/policies/app.hcl"
 bao policy write production-audit "$root/policies/audit.hcl"
