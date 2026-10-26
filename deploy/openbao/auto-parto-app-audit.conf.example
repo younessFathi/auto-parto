@@ -1,0 +1,4 @@
+[Unit]
+Requires=openbao-audit-agent.service
+After=openbao-audit-agent.service
+PartOf=openbao-audit-agent.service

@@ -223,7 +223,13 @@ class JwtTokenGeneratorTest {
         String newToken = overlapping.generateToken("user", "BUYER");
         assertThat(overlapping.validateToken(oldToken)).isTrue();
         assertThat(overlapping.validateToken(newToken)).isTrue();
-        assertThat(overlapping.publishedJwks().get("keys")).asList().hasSize(2);
+        var publishedKeys = (java.util.List<Map<String, Object>>) overlapping.publishedJwks().get("keys");
+        assertThat(publishedKeys).hasSize(2).allSatisfy(key -> {
+            assertThat(key).containsEntry("kty", "RSA")
+                    .containsEntry("alg", "RS256")
+                    .containsKeys("kid", "n", "e")
+                    .doesNotContainKeys("d", "privateKey", "private_key");
+        });
 
         JwtTokenGenerator revoked = configuredRsaGenerator("active", activePair, Map.of("active", activePair.getPublic()));
         assertThat(revoked.validateToken(oldToken)).isFalse();

@@ -93,4 +93,15 @@ class SecretsManagementConfigTest {
                 .contains("/run/openbao-agent/token")
                 .doesNotContain("root_token");
     }
+
+    @Test
+    void canonicalAuthenticationDocumentationMatchesProductionJwtContract() throws IOException {
+        String content = Files.readString(Path.of("docs/canonical-authentication.md"));
+
+        assertThat(content)
+                .contains("non-production profiles retain HS256 compatibility")
+                .contains("The `prod` profile requires RS256 signing material")
+                .contains("`/.well-known/jwks.json`")
+                .doesNotContain("The JWT signing secret is required through `JWT_SECRET`");
+    }
 }
