@@ -30,6 +30,7 @@ public class SSENotificationService {
 
     // Store active connections per user
     private final Map<String, Sinks.Many<SseNotificationEvent>> userConnections = new ConcurrentHashMap<>();
+    private final Object connectionRegistryLock = new Object();
 
     /**
      * Send notification via SSE to a specific user
@@ -74,17 +75,17 @@ public class SSENotificationService {
 
                 case FAIL_ZERO_SUBSCRIBER:
                     log.warn("No subscribers for user: {}", userId);
-                    cleanupConnection(userId);
+                    cleanupConnection(userId, userSink);
                     return false;
 
                 case FAIL_CANCELLED:
                     log.warn("SSE sink cancelled for user: {}", userId);
-                    cleanupConnection(userId);
+                    cleanupConnection(userId, userSink);
                     return false;
 
                 case FAIL_TERMINATED:
                     log.warn("SSE sink terminated for user: {}", userId);
-                    cleanupConnection(userId);
+                    cleanupConnection(userId, userSink);
                     return false;
 
                 default:
@@ -116,47 +117,45 @@ public class SSENotificationService {
      * Register a user's SSE connection
      */
     public Sinks.Many<SseNotificationEvent> registerConnection(String userId) {
-        if (userConnections.size() >= maxConnections) {
-            log.warn("Max SSE connections reached ({}), rejecting connection for user: {}",
-                    maxConnections, userId);
-            return null;
-        }
+        synchronized (connectionRegistryLock) {
+            Sinks.Many<SseNotificationEvent> existing = userConnections.get(userId);
+            if (existing == null && userConnections.size() >= maxConnections) {
+                log.warn("Max SSE connections reached ({}), rejecting connection for user: {}",
+                        maxConnections, userId);
+                return null;
+            }
 
-        Sinks.Many<SseNotificationEvent> sink = Sinks.many().unicast().onBackpressureBuffer(new ArrayBlockingQueue<>(bufferSize));
-
-        userConnections.compute(userId, (k, existing) -> {
+            Sinks.Many<SseNotificationEvent> sink = Sinks.many().unicast()
+                    .onBackpressureBuffer(new ArrayBlockingQueue<>(bufferSize));
             if (existing != null) {
                 existing.tryEmitComplete();
             }
+            userConnections.put(userId, sink);
+
+            log.info("SSE connection registered for user: {} (total connections: {})",
+                    userId, userConnections.size());
             return sink;
-        });
-
-        log.info("SSE connection registered for user: {} (total connections: {})",
-                userId, userConnections.size());
-
-        return sink;
+        }
     }
 
     /**
      * Remove user's SSE connection
      */
     public void unregisterConnection(String userId) {
-        userConnections.computeIfPresent(userId, (k, current) -> {
-            current.emitComplete(Sinks.EmitFailureHandler.FAIL_FAST);
-            log.info("SSE connection removed for user: {}", userId);
-            return null;
-        });
+        synchronized (connectionRegistryLock) {
+            Sinks.Many<SseNotificationEvent> current = userConnections.remove(userId);
+            completeConnection(userId, current);
+        }
     }
 
     public void unregisterConnection(String userId, Sinks.Many<SseNotificationEvent> expectedConnection) {
-        userConnections.computeIfPresent(userId, (k, current) -> {
-            if (current != expectedConnection) {
-                return current;
+        synchronized (connectionRegistryLock) {
+            Sinks.Many<SseNotificationEvent> current = userConnections.get(userId);
+            if (current == expectedConnection) {
+                userConnections.remove(userId);
+                completeConnection(userId, current);
             }
-            current.emitComplete(Sinks.EmitFailureHandler.FAIL_FAST);
-            log.info("SSE connection removed for user: {}", userId);
-            return null;
-        });
+        }
     }
 
     /**
@@ -198,10 +197,19 @@ public class SSENotificationService {
         }
     }
 
-    private void cleanupConnection(String userId) {
-        Sinks.Many<SseNotificationEvent> sink = userConnections.remove(userId);
+    private void cleanupConnection(String userId, Sinks.Many<SseNotificationEvent> expectedConnection) {
+        synchronized (connectionRegistryLock) {
+            if (userConnections.get(userId) == expectedConnection) {
+                userConnections.remove(userId);
+                completeConnection(userId, expectedConnection);
+            }
+        }
+    }
+
+    private void completeConnection(String userId, Sinks.Many<SseNotificationEvent> sink) {
         if (sink != null) {
             sink.emitComplete(Sinks.EmitFailureHandler.FAIL_FAST);
+            log.info("SSE connection removed for user: {}", userId);
         }
     }
     public Sinks.Many<SseNotificationEvent> getUserConnections(String userId){

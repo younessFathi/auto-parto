@@ -244,7 +244,10 @@ shared connection broker is introduced, the load balancer must use instance affi
 the lifetime of an SSE connection and its reconnects. This is an explicit routing
 constraint, not a claim of global live delivery. The endpoint returns 429 when the instance
 connection cap is reached; bounded sink overflow leaves the PostgreSQL notification
-retryable. The older `/notifications/subscribe` and `/notifications/subscribe/{userId}`
+retryable. The per-instance cap is enforced atomically; reconnecting an existing user
+replaces its sink without consuming another slot, while concurrent registrations cannot
+exceed the configured cap. Cleanup only removes the sink instance that terminated. The
+older `/notifications/subscribe` and `/notifications/subscribe/{userId}`
 endpoints are unversioned compatibility routes, deprecated through 2027-04-01. They are
 not mounted below `/api/v1`; `/api/v1/notifications/stream` is the only versioned SSE route.
 
