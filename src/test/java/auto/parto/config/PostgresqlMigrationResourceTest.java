@@ -135,6 +135,14 @@ class PostgresqlMigrationResourceTest {
     }
 
     @Test
+    void notificationReplayMigrationAddsRecipientKeysetIndex() throws IOException {
+        String sql = readResource("/db/migration/V13__add_notification_replay_cursor_index.sql");
+
+        assertThat(sql).contains("notifications_recipient_replay_cursor_idx")
+                .contains("ON notifications (recipient_user_id, created_at DESC, public_id DESC)");
+    }
+
+    @Test
     void partListingStatusMigrationSeparatesLifecycleStates() throws IOException {
         String sql = readResource("/db/migration/V6__separate_part_listing_statuses.sql");
 

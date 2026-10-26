@@ -26,21 +26,20 @@ class SSENotificationServiceTest {
 
     @Test
     void registerConnectionCreatesBoundedSink() {
-        Sinks.Many<NotificationRequest> sink = service.registerConnection("user-1");
+        Sinks.Many<SseNotificationEvent> sink = service.registerConnection("user-1");
         assertThat(sink).isNotNull();
     }
 
     @Test
     void registerConnectionCompletesOldSinkOnReconnect() {
-        Sinks.Many<NotificationRequest> first = service.registerConnection("user-1");
-        Sinks.Many<NotificationRequest> second = service.registerConnection("user-1");
+        Sinks.Many<SseNotificationEvent> first = service.registerConnection("user-1");
+        Sinks.Many<SseNotificationEvent> second = service.registerConnection("user-1");
 
-        assertThat(first.tryEmitNext(new NotificationRequest(
-                UUID.randomUUID().toString(), "user-1", NotificationType.NEW_SEARCH_POSTED, "test", null
-        ))).isEqualTo(Sinks.EmitResult.FAIL_TERMINATED);
-        assertThat(second.tryEmitNext(new NotificationRequest(
-                UUID.randomUUID().toString(), "user-1", NotificationType.NEW_SEARCH_POSTED, "test", null
-        )).isSuccess()).isTrue();
+        NotificationRequest notification = new NotificationRequest(
+                UUID.randomUUID().toString(), "user-1", NotificationType.NEW_SEARCH_POSTED, "test", null);
+        assertThat(first.tryEmitNext(new SseNotificationEvent(UUID.randomUUID(), notification)))
+                .isEqualTo(Sinks.EmitResult.FAIL_TERMINATED);
+        assertThat(second.tryEmitNext(new SseNotificationEvent(UUID.randomUUID(), notification)).isSuccess()).isTrue();
     }
 
     @Test
@@ -58,5 +57,16 @@ class SSENotificationServiceTest {
         );
         boolean result = service.sendViaSSE("user-1", notification);
         assertThat(result).isFalse();
+    }
+
+    @Test
+    void boundedBufferReportsOverflowWithoutThrowing() {
+        ReflectionTestUtils.setField(service, "bufferSize", 1);
+        service.registerConnection("user-1");
+        NotificationRequest notification = new NotificationRequest(
+                UUID.randomUUID().toString(), "user-1", NotificationType.NEW_SEARCH_POSTED, "test message", null);
+
+        assertThat(service.sendViaSSE("user-1", UUID.randomUUID(), notification)).isTrue();
+        assertThat(service.sendViaSSE("user-1", UUID.randomUUID(), notification)).isFalse();
     }
 }

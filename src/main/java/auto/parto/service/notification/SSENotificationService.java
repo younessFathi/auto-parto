@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -28,14 +29,26 @@ public class SSENotificationService {
     private int bufferSize;
 
     // Store active connections per user
-    private final Map<String, Sinks.Many<NotificationRequest>> userConnections = new ConcurrentHashMap<>();
+    private final Map<String, Sinks.Many<SseNotificationEvent>> userConnections = new ConcurrentHashMap<>();
 
     /**
      * Send notification via SSE to a specific user
      */
     public boolean sendViaSSE(String userId, NotificationRequest notification) {
+        UUID eventId;
         try {
-            Sinks.Many<NotificationRequest> userSink = userConnections.get(userId);
+            eventId = UUID.fromString(notification.id());
+        } catch (RuntimeException exception) {
+            log.warn("SSE notification has no durable event ID for user {}", userId);
+            return false;
+        }
+        return sendViaSSE(userId, eventId, notification);
+    }
+
+    public boolean sendViaSSE(String userId, UUID eventId, NotificationRequest notification) {
+        try {
+            if (eventId == null || notification == null) return false;
+            Sinks.Many<SseNotificationEvent> userSink = userConnections.get(userId);
 
             if (userSink == null) {
                 log.warn("No active SSE connection for user: {}", userId);
@@ -43,7 +56,7 @@ public class SSENotificationService {
             }
 
             // Attempt to send notification
-            Sinks.EmitResult result = userSink.tryEmitNext(notification);
+            Sinks.EmitResult result = userSink.tryEmitNext(new SseNotificationEvent(eventId, notification));
 
             switch (result) {
                 case OK:
@@ -57,7 +70,7 @@ public class SSENotificationService {
                 case FAIL_OVERFLOW:
                     log.warn("SSE backpressure overflow for user: {}", userId);
                     // Try with backpressure handling
-                    return tryEmitWithBackpressure(userSink, notification);
+                    return tryEmitWithBackpressure(userSink, new SseNotificationEvent(eventId, notification));
 
                 case FAIL_ZERO_SUBSCRIBER:
                     log.warn("No subscribers for user: {}", userId);
@@ -102,14 +115,14 @@ public class SSENotificationService {
     /**
      * Register a user's SSE connection
      */
-    public Sinks.Many<NotificationRequest> registerConnection(String userId) {
+    public Sinks.Many<SseNotificationEvent> registerConnection(String userId) {
         if (userConnections.size() >= maxConnections) {
             log.warn("Max SSE connections reached ({}), rejecting connection for user: {}",
                     maxConnections, userId);
             return null;
         }
 
-        Sinks.Many<NotificationRequest> sink = Sinks.many().unicast().onBackpressureBuffer(new ArrayBlockingQueue<>(bufferSize));
+        Sinks.Many<SseNotificationEvent> sink = Sinks.many().unicast().onBackpressureBuffer(new ArrayBlockingQueue<>(bufferSize));
 
         userConnections.compute(userId, (k, existing) -> {
             if (existing != null) {
@@ -135,7 +148,7 @@ public class SSENotificationService {
         });
     }
 
-    public void unregisterConnection(String userId, Sinks.Many<NotificationRequest> expectedConnection) {
+    public void unregisterConnection(String userId, Sinks.Many<SseNotificationEvent> expectedConnection) {
         userConnections.computeIfPresent(userId, (k, current) -> {
             if (current != expectedConnection) {
                 return current;
@@ -150,7 +163,7 @@ public class SSENotificationService {
      * Check if user has active SSE connection
      */
     public boolean hasActiveConnection(String userId) {
-        Sinks.Many<NotificationRequest> sink = userConnections.get(userId);
+        Sinks.Many<SseNotificationEvent> sink = userConnections.get(userId);
         return sink != null && sink.currentSubscriberCount() > 0;
     }
 
@@ -172,7 +185,7 @@ public class SSENotificationService {
 
     // Private helper methods
 
-    private boolean tryEmitWithBackpressure(Sinks.Many<NotificationRequest> sink, NotificationRequest notification) {
+    private boolean tryEmitWithBackpressure(Sinks.Many<SseNotificationEvent> sink, SseNotificationEvent notification) {
         try {
             Sinks.EmitResult result = sink.tryEmitNext(notification);
             if (result.isSuccess()) {
@@ -186,12 +199,12 @@ public class SSENotificationService {
     }
 
     private void cleanupConnection(String userId) {
-        Sinks.Many<NotificationRequest> sink = userConnections.remove(userId);
+        Sinks.Many<SseNotificationEvent> sink = userConnections.remove(userId);
         if (sink != null) {
             sink.emitComplete(Sinks.EmitFailureHandler.FAIL_FAST);
         }
     }
-    public  Sinks.Many<NotificationRequest> getUserConnections(String userId){
+    public Sinks.Many<SseNotificationEvent> getUserConnections(String userId){
         return userConnections.get(userId);
     }
 }

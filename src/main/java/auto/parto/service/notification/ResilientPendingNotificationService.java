@@ -106,7 +106,7 @@ public class ResilientPendingNotificationService {
         NotificationRequest notification = claimed.notification();
         String userId = notification.userId();
         return Mono.defer(() -> {
-            boolean delivered = sseService.sendViaSSE(userId, notification);
+            boolean delivered = sseService.sendViaSSE(userId, claimed.publicId(), notification);
             if (delivered) {
                 circuitBreaker.recordSuccess(userId);
                 return notificationStore.recordAttempt(claimed.publicId(), "SSE", "WRITTEN", null, null)

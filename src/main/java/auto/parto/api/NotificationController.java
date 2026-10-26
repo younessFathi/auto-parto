@@ -5,6 +5,7 @@ import auto.parto.enums.NotificationStatus;
 import auto.parto.service.notification.PendingNotificationService;
 import auto.parto.service.notification.ResilientNotificationService;
 import auto.parto.service.notification.ResilientPendingNotificationService;
+import auto.parto.service.notification.SseNotificationEvent;
 import auto.parto.security.CanonicalSecurity;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -19,12 +20,10 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
 import static auto.parto.utils.Constants.Notification.*;
 
 
 @RestController
-@RequestMapping("/notifications")
 @Slf4j
 public class NotificationController {
     // Use Sinks for handling multiple subscribers
@@ -44,7 +43,8 @@ public class NotificationController {
         this.resilientPendingNotificationService = resilientPendingNotificationService;
     }
 
-    @GetMapping(value = "/subscribe", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @GetMapping(value = "/notifications/subscribe", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Deprecated(forRemoval = false)
     @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public Flux<ServerSentEvent<NotificationRequest>> subscribe() {
         return notificationSink.asFlux()
@@ -69,19 +69,24 @@ public class NotificationController {
     }
 
     // Subscribe with user-specific notifications
-    @GetMapping(value = "/subscribe/{userId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @GetMapping(value = "/notifications/subscribe/{userId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Deprecated(forRemoval = false)
     @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public Flux<ServerSentEvent<NotificationRequest>> subscribeToUser(
             @PathVariable String userId,
             org.springframework.security.core.Authentication authentication) {
         CanonicalSecurity.requireOwner(authentication, userId, null);
-        Sinks.Many<NotificationRequest> userSink = resilientNotificationService.registerConnection(userId);
+        Sinks.Many<SseNotificationEvent> userSink = resilientNotificationService.registerConnection(userId);
+        if (userSink == null) {
+            return Flux.error(new org.springframework.web.server.ResponseStatusException(
+                    HttpStatus.TOO_MANY_REQUESTS, "SSE connection limit reached"));
+        }
         // Subscribe to the sink before recovery so delivery sees an active SSE subscriber. The
         // recovery publisher remains part of the returned stream and is cancelled with the client.
         return Flux.defer(() -> userSink.asFlux().publish(sharedSink -> {
                     Mono<Void> sinkClosed = sharedSink.ignoreElements().then();
                     Flux<ServerSentEvent<NotificationRequest>> liveNotifications =
-                            sharedSink.map(buildNotification());
+                            sharedSink.map(NotificationController::buildNotification);
                     Flux<ServerSentEvent<NotificationRequest>> pendingRecovery =
                             resilientPendingNotificationService.deliverPendingOnConnect(userId)
                                     .doOnError(error -> log.error("SSE pending recovery failed"))
@@ -104,20 +109,19 @@ public class NotificationController {
                 });
     }
 
-    private static Function<NotificationRequest, ServerSentEvent<NotificationRequest>> buildNotification() {
-        return notification -> {
+    private static ServerSentEvent<NotificationRequest> buildNotification(SseNotificationEvent event) {
+            NotificationRequest notification = event.notification();
             // Format as proper SSE
             return ServerSentEvent.<NotificationRequest>builder()
-                    .id(UUID.randomUUID().toString())
+                    .id(event.eventId().toString())
                     .event(notification.type().name())
                     .data(notification)
                     .retry(Duration.ofSeconds(10))
                     .build();
-        };
     }
 
     // Broadcast notification to all connected clients
-    @PostMapping("/broadcast")
+    @PostMapping({"/api/v1/notifications/broadcast", "/notifications/broadcast"})
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
     public Mono<Void> broadcast(
             @RequestBody NotificationRequest notificationRequest,
@@ -130,7 +134,7 @@ public class NotificationController {
     }
 
     // Send notification to specific user
-    @PostMapping("/send")
+    @PostMapping({"/api/v1/notifications/send", "/notifications/send"})
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
     public Mono<ResponseEntity<Map<String, Object>>> sendToUser(
             @RequestBody NotificationRequest notificationRequest,
@@ -144,19 +148,19 @@ public class NotificationController {
                         log.debug(USER_HAS_ACTIVE_CONNECTION_ATTEMPTING_DIRECT_DELIVERY, userId);
 
                         // User is online - try direct delivery
-                        return resilientNotificationService.sendNotification(notificationRequest)
-                                .flatMap(delivered -> {
-                                    if (delivered) {
+                        return resilientNotificationService.deliverDirect(notificationRequest)
+                                .flatMap(result -> {
+                                    if (result.delivered()) {
                                         log.info(NOTIFICATION_SUCCESSFULLY_DELIVERED_TO_VIA_SSE, userId);
                                         return Mono.just(ResponseEntity.ok(createSuccessResponse(userId)));
                                     }
-                                    log.warn(DIRECT_DELIVERY_FAILED_FOR_FALLING_BACK_TO_STORAGE, userId);
-                                    return pendingNotificationService.addPendingNotification(notificationRequest)
-                                            .map(isStored -> isStored
-                                                    ? ResponseEntity.status(HttpStatus.ACCEPTED)
-                                                        .body(createPendingResponse(userId))
-                                                    : ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                                        .body(createErrorResponse(userId, STORAGE_FAILED)));
+                                    if (result.persisted()) {
+                                        log.warn(DIRECT_DELIVERY_FAILED_FOR_FALLING_BACK_TO_STORAGE, userId);
+                                        return Mono.just(ResponseEntity.status(HttpStatus.ACCEPTED)
+                                                .body(createPendingResponse(userId)));
+                                    }
+                                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                            .body(createErrorResponse(userId, STORAGE_FAILED)));
                                 });
                     } else {
                         log.debug(USER_IS_OFFLINE_STORING_NOTIFICATION, userId);

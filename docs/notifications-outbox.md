@@ -15,3 +15,23 @@ The audit worker claims `outbox_deliveries` rows by destination with PostgreSQL 
 Each claim increments the bounded attempt counter. Retryable failures use capped exponential backoff; permanent failures and retry exhaustion become durable `EXHAUSTED` state with one of the controlled error classifications. Terminal audit delivery rows are eligible for bounded cleanup after the seven-day reconciliation retention window. Replay requires an operator-authorized caller and reuses the original event UUID.
 
 Audit delivery is ordered by `available_at, id` when claims are selected. Audit events do not promise cross-worker or cross-aggregate ordering; streams that require ordering must be assigned a serialized destination policy before they are introduced. Claim, retry, exhaustion, replay, and reconciliation outcomes are returned in bounded publisher reports and remain queryable in PostgreSQL for operational inspection.
+
+## Canonical SSE delivery
+
+Clients use `GET /api/v1/notifications/stream` with the authenticated canonical
+principal. The response is a bounded SSE stream with a 30-second heartbeat. Event IDs
+are the persisted notification public UUIDs, including replayed events; the request
+payload's `id` is not a substitute. On reconnect, `Last-Event-ID` is an opaque UUID
+cursor. At most 100 PostgreSQL rows strictly after that event are replayed in
+`created_at, public_id` order. The cursor must belong to the authenticated
+recipient; malformed, missing, or foreign cursors return 400. Clients deduplicate IDs
+because a live event and a replayed event may overlap. A full instance connection
+registry returns 429.
+
+The durable notification row and its SSE transport attempt remain separate. Writing to
+the socket records a bounded `WRITTEN` attempt but does not mean the client received or
+processed the event. The current connection registry is process-local, so deployments
+must use load-balancer instance affinity for an SSE connection and reconnect. A future
+shared connection coordinator is required before claiming global multi-instance live
+delivery. The legacy `/notifications/subscribe` and `/notifications/subscribe/{userId}`
+routes are deprecated during migration.

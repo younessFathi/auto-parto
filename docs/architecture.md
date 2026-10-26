@@ -231,6 +231,23 @@ SSE delivery semantics are explicit and channel-specific. Durable event state is
 
 `RECEIVED` and `PROCESSED` are never implied by a server write or provider acceptance; they require client acknowledgement. Events have stable IDs, bounded retention, `Last-Event-ID` replay, and deduplication. Client acknowledgements are only required for business workflows that need processed confirmation.
 
+The canonical client contract is `GET /api/v1/notifications/stream`. The recipient is
+always taken from the authenticated canonical principal. Each event's SSE `id` is the
+persisted `notifications.public_id` UUID; the payload's application ID is not used as a
+transport identity. A reconnect may send `Last-Event-ID`; PostgreSQL returns at most 100
+events strictly after that UUID, ordered chronologically by `created_at, public_id`. The cursor
+must exist for the authenticated recipient; missing or foreign cursors return 400. Clients
+must deduplicate IDs because a reconnect can overlap a live write and a replay.
+
+The connection registry and bounded per-connection sink are currently JVM-local. Until a
+shared connection broker is introduced, the load balancer must use instance affinity for
+the lifetime of an SSE connection and its reconnects. This is an explicit routing
+constraint, not a claim of global live delivery. The endpoint returns 429 when the instance
+connection cap is reached; bounded sink overflow leaves the PostgreSQL notification
+retryable. The older `/notifications/subscribe` and `/notifications/subscribe/{userId}`
+endpoints are unversioned compatibility routes, deprecated through 2027-04-01. They are
+not mounted below `/api/v1`; `/api/v1/notifications/stream` is the only versioned SSE route.
+
 ## File Storage
 
 The application should use a file-storage abstraction with separate implementations for local development and object storage in production.

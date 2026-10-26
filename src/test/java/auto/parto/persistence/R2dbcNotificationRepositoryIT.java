@@ -175,6 +175,96 @@ class R2dbcNotificationRepositoryIT {
     }
 
     @Test
+    void replaysAfterCursorWithStableUuidTieBreaker() {
+        UUID owner = UUID.randomUUID();
+        insertUser(owner).then(repository.enqueue(owner, "REPLAY_ONE", "{}"))
+                .then(repository.enqueue(owner, "REPLAY_TWO", "{}"))
+                .block();
+        var records = repository.findPendingForRecipient(owner, 100)
+                .filter(record -> record.eventType().startsWith("REPLAY_"))
+                .collectList().block();
+        databaseClient.sql("UPDATE notifications SET created_at = TIMESTAMP '2020-01-01 00:00:00+00' WHERE event_type LIKE 'REPLAY_%'")
+                .fetch().rowsUpdated().block();
+        var orderedIds = databaseClient.sql("""
+                        SELECT notification.public_id
+                        FROM notifications notification
+                        JOIN app_users owner ON owner.id = notification.recipient_user_id
+                        WHERE owner.public_id = :owner AND notification.event_type LIKE 'REPLAY_%'
+                        ORDER BY notification.created_at, notification.public_id
+                        """)
+                .bind("owner", owner)
+                .map((row, metadata) -> row.get("public_id", UUID.class))
+                .all().collectList().block();
+
+        var actual = repository.findForRecipientAfter(owner, orderedIds.getFirst(), 100)
+                .map(NotificationRecord::publicId).collectList().block();
+        assertThat(actual).containsExactlyElementsOf(orderedIds.subList(1, orderedIds.size()));
+    }
+
+    @Test
+    void directDeliveryClaimAndAcknowledgementCompletesOneDurableRecord() {
+        UUID owner = UUID.randomUUID();
+        UUID claimId = UUID.randomUUID();
+        NotificationRecord record = insertUser(owner)
+                .then(repository.enqueue(owner, "DIRECT_DELIVERY", "{}"))
+                .block();
+
+        NotificationRecord claimed = repository.claimNotification(record.publicId(), claimId.toString(),
+                        Instant.now(), Duration.ofSeconds(30))
+                .block();
+        assertThat(claimed.publicId()).isEqualTo(record.publicId());
+        assertThat(repository.recordAttempt(record.publicId(), "SSE", "WRITTEN", null, null).block()).isNotNull();
+        assertThat(repository.acknowledgeDelivery(record.publicId(), claimId.toString()).block()).isTrue();
+        assertThat(databaseClient.sql("SELECT status FROM notifications WHERE public_id = :id")
+                .bind("id", record.publicId())
+                .map((row, metadata) -> row.get("status", String.class)).one().block()).isEqualTo("DISPATCHED");
+    }
+
+    @Test
+    void failedDirectDeliveryClearsLeaseAndKeepsTheSameRowRetryable() {
+        UUID owner = UUID.randomUUID();
+        NotificationRecord record = insertUser(owner)
+                .then(repository.enqueue(owner, "DIRECT_RETRY", "{}"))
+                .block();
+
+        assertThat(repository.claimNotification(record.publicId(), "direct-worker", Instant.now(),
+                Duration.ofSeconds(30)).block()).isNotNull();
+        assertThat(repository.recordAttempt(record.publicId(), "SSE", "FAILED", null,
+                "DELIVERY_ERROR").block()).isNotNull();
+        assertThat(repository.scheduleRetry(record.publicId(), "direct-worker", Instant.now().plusSeconds(30),
+                "DELIVERY_ERROR", 3).block()).isTrue();
+
+        assertThat(databaseClient.sql("""
+                        SELECT status, lease_owner, attempt_count, last_failure_code
+                        FROM notifications WHERE public_id = :id
+                        """)
+                .bind("id", record.publicId())
+                .map((row, metadata) -> java.util.Arrays.asList(row.get("status", String.class),
+                        row.get("lease_owner", String.class), row.get("attempt_count", Integer.class),
+                        row.get("last_failure_code", String.class)))
+                .one().block())
+                .containsExactly("PENDING", null, 1, "DELIVERY_ERROR");
+    }
+
+    @Test
+    void replayCursorMustBelongToRecipientAndExist() {
+        UUID owner = UUID.randomUUID();
+        UUID otherOwner = UUID.randomUUID();
+        UUID missing = UUID.randomUUID();
+        NotificationRecord record = insertUser(owner)
+                .then(insertUser(otherOwner))
+                .then(repository.enqueue(owner, "CURSOR_OWNER", "{}"))
+                .block();
+
+        StepVerifier.create(repository.cursorBelongsToRecipient(owner, record.publicId()))
+                .expectNext(true).verifyComplete();
+        StepVerifier.create(repository.cursorBelongsToRecipient(otherOwner, record.publicId()))
+                .expectNext(false).verifyComplete();
+        StepVerifier.create(repository.cursorBelongsToRecipient(owner, missing))
+                .expectNext(false).verifyComplete();
+    }
+
+    @Test
     void marksOnlyTheDeliveredNotificationId() {
         UUID owner = UUID.randomUUID();
         StepVerifier.create(insertUser(owner)
