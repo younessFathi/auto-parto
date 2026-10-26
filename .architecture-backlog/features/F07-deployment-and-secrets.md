@@ -7,6 +7,7 @@ Deploy stateless application instances behind TLS with isolated configuration an
 - [AP-0020](../tickets/AP-0020-stateless-deployment.md): Deploy bounded non-root application replicas.
 - [AP-0021](../tickets/AP-0021-tls-entrypoint.md): Configure Caddy, trusted proxies, and SSE timeouts.
 - [AP-0022](../tickets/AP-0022-openbao-secrets.md): Establish OpenBao-backed secret delivery and rotation. Repository templates and RS256/JWKS behavior are delivered; live infrastructure and drills remain outstanding.
+- [AP-0044](../tickets/AP-0044-openbao-vps-go-live.md): Provision and verify the private OpenBao service and workload integration when production go-live is approved. A non-production dev-mode container is disposable and is not production evidence.
 - [AP-0026](../tickets/AP-0026-data-infrastructure.md): Harden PostgreSQL and Redis production infrastructure.
 - [AP-0028](../tickets/AP-0028-provider-isolation.md): Isolate blocking external provider clients.
 
