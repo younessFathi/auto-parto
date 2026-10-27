@@ -1,6 +1,7 @@
 package auto.parto.service;
 
 import auto.parto.dto.OtpRequestDto;
+import auto.parto.config.DomainMetrics;
 import auto.parto.dto.SellerDto;
 import auto.parto.dto.WalletDto;
 import auto.parto.enums.CarPartType;
@@ -60,11 +61,16 @@ public class SellerService implements ISellerService {
         if (currency == null) return Mono.error(new IllegalArgumentException("currency is required"));
         if (idempotencyKey == null || idempotencyKey.isBlank()) return Mono.error(new IllegalArgumentException("Idempotency-Key is required for PostgreSQL wallet mutations"));
         long amountMinor = Money.fromMajor(amount, currency).minorUnits();
-        return walletRepository.mutate(publicId, currency.name(), amountMinor, amountMinor >= 0 ? "CREDIT" : "DEBIT", idempotencyKey, "seller-wallet-api")
-                .flatMap(mutation -> userRepository.findByPublicId(publicId).zipWhen(user -> profileRepository.findByUserPublicId(publicId))
-                        .map(result -> toDto(result.getT1(), result.getT2(), mutation)))
+        String operation = amountMinor >= 0 ? "CREDIT" : "DEBIT";
+        Mono<SellerDto> mutation = walletRepository.mutate(publicId, currency.name(), amountMinor, operation,
+                        idempotencyKey, "seller-wallet-api")
+                .flatMap(walletMutation -> userRepository.findByPublicId(publicId).zipWhen(user -> profileRepository.findByUserPublicId(publicId))
+                        .map(result -> toDto(result.getT1(), result.getT2(), walletMutation)))
                 .switchIfEmpty(Mono.error(new InsufficientBalanceException("Seller wallet not found")))
                 .onErrorMap(error -> error instanceof IllegalStateException ? new InsufficientBalanceException("Insufficient balance") : error);
+        return DomainMetrics.observe("wallet", "mutation", mutation)
+                .doOnSuccess(ignored -> DomainMetrics.walletMutation(operation.equals("CREDIT") ? "credit" : "debit", "success"))
+                .doOnError(ignored -> DomainMetrics.walletMutation(operation.equals("CREDIT") ? "credit" : "debit", "failure"));
     }
     @Override public Mono<SellerDto> deactivate(String id) {
         UUID publicId = requireUuid(id);

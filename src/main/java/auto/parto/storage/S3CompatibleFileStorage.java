@@ -1,6 +1,7 @@
 package auto.parto.storage;
 
 import auto.parto.config.ProviderCallTelemetry;
+import auto.parto.config.DomainMetrics;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -86,9 +87,10 @@ public final class S3CompatibleFileStorage implements FileStorage {
                                   long byteSize, String checksum) {
         PutObjectRequest request = PutObjectRequest.builder().bucket(bucket).key(requireText(objectKey, "objectKey"))
                 .contentType(contentType).contentLength(byteSize).metadata(java.util.Map.of("sha256", checksum)).build();
-        return telemetry.observe("s3", "put_object", Mono.fromFuture(client.putObject(request,
+        return DomainMetrics.storageCall("put", telemetry.observe("s3", "put_object", Mono.fromFuture(client.putObject(request,
                         software.amazon.awssdk.core.async.AsyncRequestBody.fromFile(stagedFile)))
-                .map(ignored -> new StoredObject(objectKey, byteSize, checksum)), operationTimeout);
+                .map(ignored -> new StoredObject(objectKey, byteSize, checksum)), operationTimeout))
+                .doOnSuccess(ignored -> DomainMetrics.storageUploadBytes(byteSize));
     }
 
     @Override
@@ -96,24 +98,25 @@ public final class S3CompatibleFileStorage implements FileStorage {
         GetObjectRequest request = GetObjectRequest.builder().bucket(bucket).key(requireText(objectKey, "objectKey")).build();
         CompletableFuture<software.amazon.awssdk.core.async.ResponsePublisher<software.amazon.awssdk.services.s3.model.GetObjectResponse>> future =
                 client.getObject(request, AsyncResponseTransformer.toPublisher());
-        return telemetry.observe("s3", "read_object", Mono.fromFuture(future)
+        return DomainMetrics.storageCall("read", telemetry.observe("s3", "read_object", Mono.fromFuture(future)
                 .flatMapMany(publisher -> Flux.from(publisher)
-                        .map(bytes -> buffers.wrap(bytes.asReadOnlyBuffer()))), operationTimeout);
+                        .map(bytes -> buffers.wrap(bytes.asReadOnlyBuffer()))), operationTimeout));
     }
 
     @Override
     public Mono<Boolean> exists(String objectKey) {
         HeadObjectRequest request = HeadObjectRequest.builder().bucket(bucket)
                 .key(requireText(objectKey, "objectKey")).build();
-        return telemetry.observe("s3", "head_object", Mono.fromFuture(client.headObject(request)).thenReturn(true)
+        return DomainMetrics.storageCall("head", telemetry.observe("s3", "head_object", Mono.fromFuture(client.headObject(request)).thenReturn(true)
                 .onErrorResume(S3Exception.class, error -> error.statusCode() == 404
-                        ? Mono.just(false) : Mono.error(error)), operationTimeout);
+                        ? Mono.just(false) : Mono.error(error)), operationTimeout));
     }
 
     @Override
     public Mono<Void> delete(String objectKey) {
         DeleteObjectRequest request = DeleteObjectRequest.builder().bucket(bucket).key(requireText(objectKey, "objectKey")).build();
-        return telemetry.observe("s3", "delete_object", Mono.fromFuture(client.deleteObject(request)).then(), operationTimeout);
+        return DomainMetrics.storageCall("delete", telemetry.observe("s3", "delete_object",
+                Mono.fromFuture(client.deleteObject(request)).then(), operationTimeout));
     }
 
     @Override
@@ -121,8 +124,8 @@ public final class S3CompatibleFileStorage implements FileStorage {
         if (limit < 1 || limit > 1000) {
             return Flux.error(new IllegalArgumentException("limit must be between 1 and 1000"));
         }
-        return telemetry.observe("s3", "list_objects", listPage(null, limit, new ArrayList<>())
-                .flatMapMany(Flux::fromIterable), operationTimeout);
+        return DomainMetrics.storageCall("list", telemetry.observe("s3", "list_objects",
+                listPage(null, limit, new ArrayList<>()).flatMapMany(Flux::fromIterable), operationTimeout));
     }
 
     @Override
@@ -132,14 +135,14 @@ public final class S3CompatibleFileStorage implements FileStorage {
         }
         int pageSize = Math.min(limit + 1, 1000);
         ListObjectsV2Request request = ListObjectsV2Request.builder().bucket(bucket).maxKeys(pageSize).build();
-        return telemetry.observe("s3", "scan_objects", Mono.fromFuture(client.listObjectsV2(request))
+        return DomainMetrics.storageCall("scan", telemetry.observe("s3", "scan_objects", Mono.fromFuture(client.listObjectsV2(request))
                 .map(response -> {
                     List<String> keys = response.contents().stream()
                             .map(software.amazon.awssdk.services.s3.model.S3Object::key)
                             .limit(limit)
                             .toList();
                     return new ObjectKeyScan(keys, response.isTruncated() || response.contents().size() > limit);
-                }), operationTimeout);
+                }), operationTimeout));
     }
 
     private Mono<List<String>> listPage(String continuationToken, int limit, List<String> keys) {

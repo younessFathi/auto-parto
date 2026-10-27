@@ -2,6 +2,8 @@ package auto.parto.config;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import io.micrometer.observation.ObservationRegistry;
+import org.springframework.beans.factory.annotation.Autowired;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -19,16 +21,25 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class ProviderCallTelemetry {
 
     private final MeterRegistry registry;
+    private final ObservationRegistry observationRegistry;
+
+    @Autowired
+    public ProviderCallTelemetry(MeterRegistry registry, ObservationRegistry observationRegistry) {
+        this.registry = registry;
+        this.observationRegistry = observationRegistry;
+    }
 
     public ProviderCallTelemetry(MeterRegistry registry) {
-        this.registry = registry;
+        this(registry, ObservationRegistry.NOOP);
     }
 
     public <T> Mono<T> observe(String provider, String operation, Mono<T> source, Duration timeout) {
         return Mono.defer(() -> {
             Timer.Sample sample = Timer.start(registry);
             AtomicBoolean recorded = new AtomicBoolean();
-            return source.timeout(timeout)
+            Mono<T> observed = ObservationSupport.observe(observationRegistry, "external.provider",
+                    java.util.Map.of("provider", provider, "operation", operation), source.timeout(timeout));
+            return observed
                     .doOnSuccess(ignored -> finish(sample, recorded, provider, operation, "success"))
                     .doOnError(error -> finish(sample, recorded, provider, operation, outcome(error)))
                     .doFinally(signal -> finishCancellation(sample, recorded, provider, operation, signal));
@@ -39,7 +50,9 @@ public final class ProviderCallTelemetry {
         return Flux.defer(() -> {
             Timer.Sample sample = Timer.start(registry);
             AtomicBoolean recorded = new AtomicBoolean();
-            return source.timeout(timeout)
+            Flux<T> observed = ObservationSupport.observe(observationRegistry, "external.provider",
+                    java.util.Map.of("provider", provider, "operation", operation), source.timeout(timeout));
+            return observed
                     .doOnComplete(() -> finish(sample, recorded, provider, operation, "success"))
                     .doOnError(error -> finish(sample, recorded, provider, operation, outcome(error)))
                     .doFinally(signal -> finishCancellation(sample, recorded, provider, operation, signal));

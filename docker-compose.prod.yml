@@ -4,6 +4,10 @@ services:
     profiles: ["production"]
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      MANAGEMENT_SERVER_PORT: 8081
+      OTEL_TRACES_EXPORT_ENABLED: ${OTEL_TRACES_EXPORT_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_TRACES_SAMPLING_PROBABILITY: ${OTEL_TRACES_SAMPLING_PROBABILITY:-0.05}
       APP_POSTGRES_R2DBC_URL: ${APP_POSTGRES_R2DBC_URL:?set protected application PostgreSQL URL}
       REDIS_HOST: ${REDIS_HOST:?set private Redis host}
       REDIS_PORT: ${REDIS_PORT:-6379}
@@ -26,9 +30,10 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
     restart: unless-stopped
-    networks: [application-backend, tls-origin]
+    networks: [application-backend, tls-origin, observability]
+    expose: ["8080", "8081"]
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/actuator/health/readiness"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/actuator/health/readiness"]
       interval: 20s
       timeout: 3s
       retries: 3
@@ -39,4 +44,7 @@ networks:
     external: true
   tls-origin:
     name: auto-parto-tls-origin
+    external: true
+  observability:
+    name: auto-parto-observability
     external: true

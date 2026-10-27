@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+scrape_configs:
+  - job_name: auto-parto
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["springboot-postgresql-app:8081"]
+    scrape_timeout: 10s

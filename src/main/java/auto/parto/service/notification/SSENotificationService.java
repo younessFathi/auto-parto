@@ -1,5 +1,6 @@
 package auto.parto.service.notification;
 
+import auto.parto.config.DomainMetrics;
 import auto.parto.dto.NotificationRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,7 +41,7 @@ public class SSENotificationService {
         try {
             eventId = UUID.fromString(notification.id());
         } catch (RuntimeException exception) {
-            log.warn("SSE notification has no durable event ID for user {}", userId);
+            log.warn("SSE notification has no durable event ID");
             return false;
         }
         return sendViaSSE(userId, eventId, notification);
@@ -52,7 +53,8 @@ public class SSENotificationService {
             Sinks.Many<SseNotificationEvent> userSink = userConnections.get(userId);
 
             if (userSink == null) {
-                log.warn("No active SSE connection for user: {}", userId);
+                DomainMetrics.sseEmit("no_subscriber");
+                log.warn("No active SSE connection for notification delivery");
                 return false;
             }
 
@@ -61,40 +63,48 @@ public class SSENotificationService {
 
             switch (result) {
                 case OK:
-                    log.debug("SSE notification sent to user: {}", userId);
+                    DomainMetrics.sseEmit("success");
+                    log.debug("SSE notification emitted");
                     return true;
 
                 case FAIL_NON_SERIALIZED:
-                    log.warn("SSE serialization failed for user: {}", userId);
+                    DomainMetrics.sseEmit("failure");
+                    log.warn("SSE serialization failed");
                     return false;
 
                 case FAIL_OVERFLOW:
-                    log.warn("SSE backpressure overflow for user: {}", userId);
+                    DomainMetrics.sseEmit("overflow");
+                    log.warn("SSE backpressure overflow");
                     // Try with backpressure handling
                     return tryEmitWithBackpressure(userSink, new SseNotificationEvent(eventId, notification));
 
                 case FAIL_ZERO_SUBSCRIBER:
-                    log.warn("No subscribers for user: {}", userId);
+                    DomainMetrics.sseEmit("no_subscriber");
+                    log.warn("SSE stream has no subscriber");
                     cleanupConnection(userId, userSink);
                     return false;
 
                 case FAIL_CANCELLED:
-                    log.warn("SSE sink cancelled for user: {}", userId);
+                    DomainMetrics.sseEmit("cancelled");
+                    log.warn("SSE stream was cancelled");
                     cleanupConnection(userId, userSink);
                     return false;
 
                 case FAIL_TERMINATED:
-                    log.warn("SSE sink terminated for user: {}", userId);
+                    DomainMetrics.sseEmit("terminated");
+                    log.warn("SSE stream was terminated");
                     cleanupConnection(userId, userSink);
                     return false;
 
                 default:
-                    log.error("Unknown SSE emit result: {} for user: {}", result, userId);
+                    DomainMetrics.sseEmit("failure");
+                    log.error("Unknown SSE emit result: {}", result);
                     return false;
             }
 
         } catch (Exception e) {
-            log.error("Error sending SSE to user: {}", userId, e);
+            DomainMetrics.sseEmit("failure");
+            log.error("Error emitting SSE notification");
             return false;
         }
     }
@@ -120,8 +130,8 @@ public class SSENotificationService {
         synchronized (connectionRegistryLock) {
             Sinks.Many<SseNotificationEvent> existing = userConnections.get(userId);
             if (existing == null && userConnections.size() >= maxConnections) {
-                log.warn("Max SSE connections reached ({}), rejecting connection for user: {}",
-                        maxConnections, userId);
+                DomainMetrics.sseConnectionRejected();
+                log.warn("Max SSE connections reached ({}), rejecting connection", maxConnections);
                 return null;
             }
 
@@ -131,9 +141,10 @@ public class SSENotificationService {
                 existing.tryEmitComplete();
             }
             userConnections.put(userId, sink);
+            DomainMetrics.setRegisteredSseConnections(userConnections.size());
+            if (existing == null) DomainMetrics.sseConnectionOpened();
 
-            log.info("SSE connection registered for user: {} (total connections: {})",
-                    userId, userConnections.size());
+            log.info("SSE connection registered (total connections: {})", userConnections.size());
             return sink;
         }
     }
@@ -144,6 +155,10 @@ public class SSENotificationService {
     public void unregisterConnection(String userId) {
         synchronized (connectionRegistryLock) {
             Sinks.Many<SseNotificationEvent> current = userConnections.remove(userId);
+            if (current != null) {
+                DomainMetrics.setRegisteredSseConnections(userConnections.size());
+                DomainMetrics.sseConnectionClosed();
+            }
             completeConnection(userId, current);
         }
     }
@@ -153,6 +168,8 @@ public class SSENotificationService {
             Sinks.Many<SseNotificationEvent> current = userConnections.get(userId);
             if (current == expectedConnection) {
                 userConnections.remove(userId);
+                DomainMetrics.setRegisteredSseConnections(userConnections.size());
+                DomainMetrics.sseConnectionClosed();
                 completeConnection(userId, current);
             }
         }
@@ -188,11 +205,14 @@ public class SSENotificationService {
         try {
             Sinks.EmitResult result = sink.tryEmitNext(notification);
             if (result.isSuccess()) {
+                DomainMetrics.sseEmit("success");
                 return true;
             }
+            DomainMetrics.sseEmit("failure");
             log.warn("SSE backpressure emit failed: {}", result);
             return false;
         } catch (Exception e) {
+            DomainMetrics.sseEmit("failure");
             return false;
         }
     }
@@ -209,7 +229,7 @@ public class SSENotificationService {
     private void completeConnection(String userId, Sinks.Many<SseNotificationEvent> sink) {
         if (sink != null) {
             sink.emitComplete(Sinks.EmitFailureHandler.FAIL_FAST);
-            log.info("SSE connection removed for user: {}", userId);
+            log.info("SSE connection removed");
         }
     }
     public Sinks.Many<SseNotificationEvent> getUserConnections(String userId){

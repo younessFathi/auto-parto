@@ -1,5 +1,7 @@
 package auto.parto.audit;
 
+import auto.parto.config.ObservationSupport;
+import io.micrometer.observation.ObservationRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
@@ -18,13 +20,20 @@ public final class AuditOutboxWorker implements SmartLifecycle {
     private final AuditPublisher publisher;
     private final AuditProcessingProperties properties;
     private final Clock clock;
+    private final ObservationRegistry observationRegistry;
     private Disposable subscription;
     private volatile boolean running;
 
     public AuditOutboxWorker(AuditPublisher publisher, AuditProcessingProperties properties, Clock clock) {
+        this(publisher, properties, clock, ObservationRegistry.NOOP);
+    }
+
+    public AuditOutboxWorker(AuditPublisher publisher, AuditProcessingProperties properties, Clock clock,
+                             ObservationRegistry observationRegistry) {
         this.publisher = Objects.requireNonNull(publisher, "publisher");
         this.properties = Objects.requireNonNull(properties, "properties");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.observationRegistry = Objects.requireNonNull(observationRegistry, "observationRegistry");
     }
 
     @Override
@@ -60,21 +69,24 @@ public final class AuditOutboxWorker implements SmartLifecycle {
     }
 
     private Mono<AuditPublishReport> publish() {
-        return whenReady(() -> publisher.publishBatch(
+        return ObservationSupport.observe(observationRegistry, "audit.outbox",
+                java.util.Map.of("operation", "publish"), whenReady(() -> publisher.publishBatch(
                         properties.getWorkerId(), properties.getBatchSize(), properties.getLeaseDuration()))
                 .doOnNext(report -> log.debug("Audit outbox batch completed: {}", report))
-                .onErrorResume(error -> reportFailure("publish", error));
+                .onErrorResume(error -> reportFailure("publish", error)));
     }
 
     private Mono<Long> reconcile() {
-        return whenReady(() -> publisher.reconcile(
+        return ObservationSupport.observe(observationRegistry, "audit.outbox",
+                java.util.Map.of("operation", "reconcile"), whenReady(() -> publisher.reconcile(
                         clock.instant().minus(properties.getReconciliationLookback()), properties.getBatchSize()))
                 .doOnNext(count -> log.debug("Audit reconciliation scheduled {} replay(s)", count))
-                .onErrorResume(error -> reportFailure("reconcile", error));
+                .onErrorResume(error -> reportFailure("reconcile", error)));
     }
 
     private Mono<Integer> cleanup() {
-        return whenReady(() -> publisher.purgeTerminal(properties.getBatchSize()))
+        return ObservationSupport.observe(observationRegistry, "audit.outbox",
+                java.util.Map.of("operation", "cleanup"), whenReady(() -> publisher.purgeTerminal(properties.getBatchSize())))
                 .doOnNext(count -> log.debug("Audit cleanup removed {} terminal delivery row(s)", count))
                 .onErrorResume(error -> reportFailure("cleanup", error));
     }

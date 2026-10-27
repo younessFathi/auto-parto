@@ -1,9 +1,9 @@
 # AP-0024 Establish Alerts and Recovery Drills
 
-- **Status:** Proposed
+- **Status:** Blocked
 - **Type:** Technical Enhancement
 - **Feature:** [Observability and Recovery](../features/F08-observability-and-recovery.md)
-- **Linked Tickets:** [AP-0013](AP-0013-outbox-processing.md), [AP-0019](AP-0019-storage-reconciliation.md), [AP-0021](AP-0021-tls-entrypoint.md), [AP-0022](AP-0022-openbao-secrets.md), [AP-0023](AP-0023-telemetry-health.md)
+- **Linked Tickets:** [AP-0013](AP-0013-outbox-processing.md), [AP-0019](AP-0019-storage-reconciliation.md), [AP-0021](AP-0021-tls-entrypoint.md), [AP-0022](AP-0022-openbao-secrets.md), [AP-0023](AP-0023-telemetry-health.md), [AP-0026](AP-0026-data-infrastructure.md)
 - **Source:** `deployment-architecture.md` Alerting and Recovery Requirements
 
 ## Description
@@ -25,3 +25,7 @@ Create owned alerts and exercise restoration, replay, rotation, rollback, and re
 
 ## Definition of Done
 The whole ticket is implemented, every acceptance criterion is satisfied, every scenario is automated or executed as a repeatable recovery test and passes, runbooks are complete, and all applicable suites pass.
+
+## Dependency Gate
+
+Blocked pending demonstrable completion of AP-0021 (TLS/network boundary), AP-0022 (deployed OpenBao and recovery/rotation evidence), AP-0023 (deployed protected observability), and AP-0026 (database/Redis infrastructure and backup controls). These tickets are currently Proposed or In Progress. No controlled staging environment is available in this change, so no recovery or alert drills are claimed. Once unblocked, record separate encrypted off-host application/audit PostgreSQL PITR restore measurements, wallet-ledger reconciliation, Redis rebuild, SeaweedFS restore, secret rotation/old-key rejection, application rollback, duplicate notification recovery, and alert escalation evidence with named owners.
