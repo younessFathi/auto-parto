@@ -215,6 +215,7 @@ class R2dbcNotificationRepositoryIT {
         assertThat(claimed.publicId()).isEqualTo(record.publicId());
         assertThat(repository.recordAttempt(record.publicId(), "SSE", "WRITTEN", null, null).block()).isNotNull();
         assertThat(repository.acknowledgeDelivery(record.publicId(), claimId.toString()).block()).isTrue();
+        assertThat(repository.acknowledgeDelivery(record.publicId(), claimId.toString()).block()).isFalse();
         assertThat(databaseClient.sql("SELECT status FROM notifications WHERE public_id = :id")
                 .bind("id", record.publicId())
                 .map((row, metadata) -> row.get("status", String.class)).one().block()).isEqualTo("DISPATCHED");

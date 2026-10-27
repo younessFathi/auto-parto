@@ -54,6 +54,15 @@ class NotificationControllerTest {
     }
 
     @Test
+    void legacySubscribeIsNotExposedUnderVersionedApiPrefix() {
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("user-1")))
+                .get()
+                .uri("/api/v1/notifications/subscribe")
+                .exchange()
+                .expectStatus().isNotFound();
+    }
+
+    @Test
     void subscribeToUser_returnsSseStream() {
         Sinks.Many<SseNotificationEvent> userSink = Sinks.many().multicast().onBackpressureBuffer();
         when(resilientNotificationService.registerConnection("user-1")).thenReturn(userSink);

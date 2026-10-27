@@ -103,6 +103,34 @@ class FcmNotificationControllerTest {
     }
 
     @Test
+    void sendToUser_returnsSanitizedFailureWhenProviderThrows() {
+        String privateContent = "private-notification-content";
+        FcmRequest request = FcmRequest.builder()
+                .userId("user-1")
+                .title(privateContent)
+                .body(privateContent)
+                .build();
+
+        when(securityHelper.validateAuthentication(any())).thenReturn(Mono.just(true));
+        when(fcmService.sendToUser(anyString(), any()))
+                .thenReturn(Mono.error(new IllegalStateException(privateContent)));
+
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.admin("admin-1")))
+                .post()
+                .uri("/api/v1/notifications/fcm/send")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().is5xxServerError()
+                .expectBody(String.class)
+                .value(body -> {
+                    org.assertj.core.api.Assertions.assertThat(body)
+                            .contains("PROVIDER_UNAVAILABLE")
+                            .doesNotContain(privateContent);
+                });
+    }
+
+    @Test
     void sendToUser_returns401_whenNotAuthenticated() {
         FcmRequest request = FcmRequest.builder()
                 .userId("user-1")

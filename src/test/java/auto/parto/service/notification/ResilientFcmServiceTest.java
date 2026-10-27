@@ -12,8 +12,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import reactor.test.StepVerifier;
+import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -47,6 +49,7 @@ class ResilientFcmServiceTest {
         StepVerifier.create(service.sendToToken("token-1", new FcmNotification()))
                 .assertNext(result -> {
                     assert !result.isSuccess();
+                    assert result.getToken() == null;
                 })
                 .verifyComplete();
     }
@@ -60,6 +63,22 @@ class ResilientFcmServiceTest {
         StepVerifier.create(service.sendToToken("token-1", new FcmNotification()))
                 .assertNext(result -> {
                     assert !result.isSuccess();
+                    assert result.getToken() == null;
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void sendToUserDoesNotReturnFailedDeviceTokens() throws Exception {
+        FirebaseMessagingException mockEx = mock(FirebaseMessagingException.class);
+        when(mockEx.getMessagingErrorCode()).thenReturn(MessagingErrorCode.UNREGISTERED);
+        when(deviceTokenService.getActiveTokens("user-1")).thenReturn(Mono.just(List.of("private-fcm-token")));
+        when(firebaseMessaging.send(any())).thenThrow(mockEx);
+
+        StepVerifier.create(service.sendToUser("user-1", new FcmNotification()))
+                .assertNext(result -> {
+                    assert result.getFailedTokens().isEmpty();
+                    assert result.getToken() == null;
                 })
                 .verifyComplete();
     }

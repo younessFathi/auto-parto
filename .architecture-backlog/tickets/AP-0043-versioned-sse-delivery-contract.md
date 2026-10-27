@@ -39,6 +39,15 @@ so cancellation or replacement closes the old response and runs matching-sink cl
 full unit and Docker-backed verification suites now pass, including post-claim exception and
 retry-state coverage.
 
+Review follow-up (2026-10-26): the per-instance connection cap is enforced while holding the
+registry lock across registration and removal. A same-user reconnect replaces its current sink
+without consuming another slot, and concurrent registrations for distinct users cannot exceed
+the configured cap. Stale sink cleanup checks the expected sink before removing a registry entry.
+
+Verification (2026-10-26): focused SSE/API tests passed (27 tests); `./mvnw -B test` passed
+(378 tests, 1 skipped); `./mvnw -B verify` passed (378 unit tests and 143 integration tests,
+1 skipped in each suite, with packaging and JaCoCo checks passing).
+
 ## Test Scenarios
 
 1. **Given** persisted notifications and a valid `Last-Event-ID`, **when** the owner reconnects, **then** a bounded ordered replay uses the persisted public UUIDs as event IDs.

@@ -13,6 +13,8 @@ import auto.parto.api.SellerProfileController;
 import auto.parto.api.VersionedNotificationController;
 import auto.parto.service.PieceService;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 import java.util.Arrays;
@@ -28,7 +30,6 @@ class ApiBoundaryRouteContractTest {
         assertThat(paths(PartListingController.class)).contains("/api/v1/part-listings");
         assertThat(paths(OfferController.class)).contains("/api/v1/offers");
         assertThat(paths(ImageController.class)).containsExactly("/api/v1/files");
-        assertThat(paths(NotificationController.class)).contains("/api/v1/notifications");
         assertThat(paths(VersionedNotificationController.class)).contains("/api/v1/notifications");
         assertThat(paths(BuyerProfileController.class)).contains("/api/v1/profiles/buyer");
         assertThat(paths(SellerProfileController.class)).contains("/api/v1/profiles/seller");
@@ -45,10 +46,35 @@ class ApiBoundaryRouteContractTest {
 
     @Test
     void everyRetainedLegacySurfaceHasAnExplicitFutureSunset() {
-        assertThat(paths(NotificationController.class)).contains("/notifications");
         assertThat(paths(PieceController.class)).contains("/pieces");
+        assertThat(methodPaths(NotificationController.class, GetMapping.class))
+                .contains("/notifications/subscribe", "/notifications/subscribe/{userId}")
+                .doesNotContain("/api/v1/notifications/subscribe", "/api/v1/notifications/subscribe/{userId}");
+        assertThat(Arrays.stream(NotificationController.class.getDeclaredMethods())
+                .filter(method -> method.getName().equals("subscribe") || method.getName().equals("subscribeToUser"))
+                .allMatch(method -> method.isAnnotationPresent(Deprecated.class)))
+                .isTrue();
+        assertThat(methodPaths(VersionedNotificationController.class, GetMapping.class))
+                .containsExactly("/stream");
+        assertThat(methodPaths(NotificationController.class, PostMapping.class))
+                .contains("/api/v1/notifications/broadcast", "/api/v1/notifications/send");
         assertThat(java.time.LocalDate.of(2027, 4, 1))
                 .isAfter(java.time.LocalDate.now());
+    }
+
+    private static List<String> methodPaths(Class<?> controller, Class<? extends java.lang.annotation.Annotation> mappingType) {
+        return Arrays.stream(controller.getDeclaredMethods())
+                .flatMap(method -> {
+                    if (mappingType == GetMapping.class) {
+                        GetMapping mapping = method.getAnnotation(GetMapping.class);
+                        return mapping == null ? java.util.stream.Stream.empty()
+                                : Arrays.stream(mapping.value());
+                    }
+                    PostMapping mapping = method.getAnnotation(PostMapping.class);
+                    return mapping == null ? java.util.stream.Stream.empty()
+                            : Arrays.stream(mapping.value());
+                })
+                .toList();
     }
 
     private static List<String> paths(Class<?> controller) {

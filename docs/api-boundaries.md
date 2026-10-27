@@ -24,6 +24,10 @@ read surface is deprecated because part requests are the supported buyer aggrega
 former update contract was removed: it validated image IDs but never persisted a mutation.
 File associations are created through the authenticated upload lifecycle instead.
 
+The only versioned SSE route is `GET /api/v1/notifications/stream`. The unversioned
+`/notifications/subscribe` and `/notifications/subscribe/{userId}` routes remain deprecated
+until 2027-04-01; they are not mounted under `/api/v1`.
+
 ## Canonical examples
 
 ```text

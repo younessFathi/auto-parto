@@ -24,7 +24,6 @@ import static auto.parto.utils.Constants.Notification.*;
 
 
 @RestController
-@RequestMapping({"/api/v1/notifications", "/notifications"})
 @Slf4j
 public class NotificationController {
     // Use Sinks for handling multiple subscribers
@@ -44,7 +43,7 @@ public class NotificationController {
         this.resilientPendingNotificationService = resilientPendingNotificationService;
     }
 
-    @GetMapping(value = "/subscribe", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @GetMapping(value = "/notifications/subscribe", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Deprecated(forRemoval = false)
     @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public Flux<ServerSentEvent<NotificationRequest>> subscribe() {
@@ -70,7 +69,7 @@ public class NotificationController {
     }
 
     // Subscribe with user-specific notifications
-    @GetMapping(value = "/subscribe/{userId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @GetMapping(value = "/notifications/subscribe/{userId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Deprecated(forRemoval = false)
     @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public Flux<ServerSentEvent<NotificationRequest>> subscribeToUser(
@@ -122,7 +121,7 @@ public class NotificationController {
     }
 
     // Broadcast notification to all connected clients
-    @PostMapping("/broadcast")
+    @PostMapping({"/api/v1/notifications/broadcast", "/notifications/broadcast"})
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
     public Mono<Void> broadcast(
             @RequestBody NotificationRequest notificationRequest,
@@ -135,7 +134,7 @@ public class NotificationController {
     }
 
     // Send notification to specific user
-    @PostMapping("/send")
+    @PostMapping({"/api/v1/notifications/send", "/notifications/send"})
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
     public Mono<ResponseEntity<Map<String, Object>>> sendToUser(
             @RequestBody NotificationRequest notificationRequest,
