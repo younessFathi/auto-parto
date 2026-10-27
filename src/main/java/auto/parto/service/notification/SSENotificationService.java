@@ -221,6 +221,8 @@ public class SSENotificationService {
         synchronized (connectionRegistryLock) {
             if (userConnections.get(userId) == expectedConnection) {
                 userConnections.remove(userId);
+                DomainMetrics.setRegisteredSseConnections(userConnections.size());
+                DomainMetrics.sseConnectionClosed();
                 completeConnection(userId, expectedConnection);
             }
         }

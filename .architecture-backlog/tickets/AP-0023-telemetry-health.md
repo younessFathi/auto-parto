@@ -36,6 +36,7 @@ The whole ticket is implemented, every acceptance criterion is satisfied, every 
 - Readiness tracks application readiness, PostgreSQL R2DBC, and Redis. Audit PostgreSQL and optional providers do not remove the business instance from rotation. Detailed health responses remain disabled on public actuator routes.
 - Removed user identity and role values from successful authentication logs, and removed provider exception text from Firebase health details.
 - Focused coverage verifies safe public probes, audit-outage degradation, and Firebase health redaction.
+- Follow-up to review `5dee760`: internal SSE sink cleanup now updates the registered-connection gauge and records a close in the same registry lock as removal. A canceled-subscriber regression test checks that the connection map, gauge, and close counter move together.
 - Follow-up to review `41e2522`: request IDs are carried in Reactor context and bridged into MDC with Micrometer context propagation; the asynchronous scheduler-boundary log test verifies the structured logging context without clearing tracing MDC fields.
 - Verification: `./mvnw -B test` passed (357 tests, 1 skipped); Docker-backed `./mvnw -B verify` passed (139 integration tests, 1 skipped).
 - Review follow-up verification (2026-10-25): `./mvnw -B test` passed (358 tests, 1 skipped); Docker-backed `./mvnw -B verify` passed (139 integration tests, 1 skipped); JaCoCo passed.
