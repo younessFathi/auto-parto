@@ -118,6 +118,20 @@ auto:
         access-key: ${APP_FILE_STORAGE_S3_ACCESS_KEY:}
         secret-key: ${APP_FILE_STORAGE_S3_SECRET_KEY:}
         max-concurrency: ${APP_FILE_STORAGE_S3_MAX_CONCURRENCY:32}
+        max-pending-requests: ${APP_FILE_STORAGE_S3_MAX_PENDING_REQUESTS:64}
+        operation-timeout: ${APP_FILE_STORAGE_S3_OPERATION_TIMEOUT:30s}
+    providers:
+      firebase:
+        timeout: ${APP_FIREBASE_PROVIDER_TIMEOUT:10s}
+        retry-backoff: ${APP_FIREBASE_PROVIDER_RETRY_BACKOFF:1s}
+        max-retries: ${APP_FIREBASE_PROVIDER_MAX_RETRIES:3}
+        max-in-flight: ${APP_FIREBASE_PROVIDER_MAX_IN_FLIGHT:64}
+        batch-concurrency: ${APP_FIREBASE_PROVIDER_BATCH_CONCURRENCY:32}
+      email:
+        timeout: ${APP_EMAIL_PROVIDER_TIMEOUT:10s}
+        threads: ${APP_EMAIL_PROVIDER_THREADS:4}
+        queue-capacity: ${APP_EMAIL_PROVIDER_QUEUE_CAPACITY:64}
+        shutdown-grace: ${APP_EMAIL_PROVIDER_SHUTDOWN_GRACE:10s}
     executor:
       retry:
         pool-size: ${APP_RETRY_EXECUTOR_POOL_SIZE:3}

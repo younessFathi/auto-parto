@@ -1,37 +1,73 @@
 package auto.parto.service.notification;
 
 import auto.parto.exception.NoActiveTokensException;
+import auto.parto.config.ProviderCallTelemetry;
+import com.google.api.core.ApiFuture;
+import com.google.api.core.ApiFutureCallback;
+import com.google.api.core.ApiFutures;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.firebase.messaging.*;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.retry.support.RetryTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 import reactor.util.retry.Retry;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.reactor.circuitbreaker.operator.CircuitBreakerOperator;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeoutException;
 
 @Service
 @ConditionalOnProperty(name = "app.firebase.components-enabled", havingValue = "true", matchIfMissing = true)
 @Slf4j
-@RequiredArgsConstructor
 public class ResilientFcmService {
 
     private final FirebaseMessaging firebaseMessaging;
     private final DeviceTokenService deviceTokenService;
     private final CircuitBreaker circuitBreaker;
-    private final RetryTemplate retryTemplate;
+    private final ProviderCallTelemetry telemetry;
+    private final Duration fcmTimeout;
+    private final Duration retryBackoff;
+    private final int maxRetries;
+    private final int batchConcurrency;
+    private final Semaphore inFlight;
 
-    @Value("${firebase.messaging.timeout:10s}")
-    private Duration fcmTimeout;
+    public ResilientFcmService(FirebaseMessaging firebaseMessaging,
+                               DeviceTokenService deviceTokenService,
+                               CircuitBreaker circuitBreaker,
+                               ProviderCallTelemetry telemetry,
+                               @Value("${auto.parto.providers.firebase.timeout:${firebase.messaging.timeout:10s}}") Duration fcmTimeout,
+                               @Value("${auto.parto.providers.firebase.retry-backoff:1s}") Duration retryBackoff,
+                               @Value("${auto.parto.providers.firebase.max-retries:3}") int maxRetries,
+                               @Value("${auto.parto.providers.firebase.max-in-flight:64}") int maxInFlight,
+                               @Value("${auto.parto.providers.firebase.batch-concurrency:32}") int batchConcurrency) {
+        if (maxRetries < 0 || maxRetries > 10) throw new IllegalArgumentException("maxRetries must be between 0 and 10");
+        if (fcmTimeout == null || fcmTimeout.isZero() || fcmTimeout.isNegative()) {
+            throw new IllegalArgumentException("fcmTimeout must be positive");
+        }
+        if (retryBackoff == null || retryBackoff.isZero() || retryBackoff.isNegative()) {
+            throw new IllegalArgumentException("retryBackoff must be positive");
+        }
+        if (maxInFlight < 1 || maxInFlight > 512) throw new IllegalArgumentException("maxInFlight must be between 1 and 512");
+        if (batchConcurrency < 1 || batchConcurrency > maxInFlight) {
+            throw new IllegalArgumentException("batchConcurrency must be between 1 and maxInFlight");
+        }
+        this.firebaseMessaging = firebaseMessaging;
+        this.deviceTokenService = deviceTokenService;
+        this.circuitBreaker = circuitBreaker;
+        this.telemetry = telemetry;
+        this.fcmTimeout = fcmTimeout;
+        this.retryBackoff = retryBackoff;
+        this.maxRetries = maxRetries;
+        this.batchConcurrency = batchConcurrency;
+        this.inFlight = new Semaphore(maxInFlight);
+    }
 
     /**
      * Send notification to a single user
@@ -60,7 +96,7 @@ public class ResilientFcmService {
                 })
                 // 5. Handle unexpected errors (Queue for retry)
                 .onErrorResume(e -> {
-                    log.error("Failed to send FCM to user {}", userId);
+                    log.error("FCM delivery failed; notification retry policy will handle the result");
                     return Mono.just(FcmDeliveryResult.failed(userId, "PROVIDER_UNAVAILABLE"));
                 });
     }
@@ -70,7 +106,7 @@ public class ResilientFcmService {
      */
     private Mono<FcmDeliveryResult> sendToAllTokens(String userId, List<String> tokens, FcmNotification notification) {
         return Flux.fromIterable(tokens)
-                .flatMap(token -> sendToToken(token, notification))
+                .flatMap(token -> sendToToken(token, notification), batchConcurrency)
                 .collectList()
                 .map(results -> buildDeliveryResult(userId, tokens.size(), results));
     }
@@ -102,7 +138,7 @@ public class ResilientFcmService {
                         .onErrorResume(e -> Mono.just(
                                 new BatchFcmResult.UserDeliveryResult(userId, FcmDeliveryResult.failed(userId, "PROVIDER_UNAVAILABLE"), null)
                         ))
-                )
+                , batchConcurrency)
                 .collectList()
                 .map(results -> {
                     int successCount = (int) results.stream()
@@ -123,8 +159,7 @@ public class ResilientFcmService {
      * Send to single token with circuit breaker and retry
      */
     Mono<FcmDeliveryResult> sendToToken(String token, FcmNotification notification) {
-        // 1. Define the task with internal Retry logic
-        Mono<FcmDeliveryResult> sendTask = Mono.fromCallable(() -> {
+        Mono<FcmDeliveryResult> sendTask = telemetry.observe("firebase", "send_message", Mono.defer(() -> {
                     Message message = Message.builder()
                             .setToken(token)
                             .setNotification(com.google.firebase.messaging.Notification.builder()
@@ -135,29 +170,21 @@ public class ResilientFcmService {
                             .setAndroidConfig(getAndroidConfig(notification))
                             .setApnsConfig(getApnsConfig(notification))
                             .build();
-
-                    String messageId = firebaseMessaging.send(message);
-
-                    log.debug("FCM sent successfully");
-
-                    return FcmDeliveryResult.success(token, messageId);
-                })
-                .subscribeOn(Schedulers.boundedElastic())
-                .timeout(fcmTimeout)
-                .retryWhen(Retry.backoff(3, Duration.ofSeconds(1))
+                    if (!inFlight.tryAcquire()) {
+                        return Mono.error(new RejectedExecutionException("Firebase in-flight limit reached"));
+                    }
+                    return sendAsync(message)
+                            .map(messageId -> FcmDeliveryResult.success(token, messageId))
+                            .doFinally(ignored -> inFlight.release());
+                }), fcmTimeout)
+                .retryWhen(Retry.backoff(maxRetries, retryBackoff)
                         .filter(this::isRetryableError)
-                        .doBeforeRetry(retry ->
-                                log.warn("Retrying FCM send, attempt: {}", retry.totalRetries())
-                        ));
+                        .doBeforeRetry(retry -> log.warn("Retrying FCM provider request attempt={}", retry.totalRetries() + 1)));
 
-        // 2. Wrap the task with Circuit Breaker and Fallback
         return sendTask
                 .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
                 .onErrorResume(throwable -> {
-                    // Circuit open or non-retryable error
-                    log.error("FCM circuit open or provider request failed");
-
-                    // Handle invalid token
+                    log.error("FCM provider request failed; result will be handled by notification retry policy");
                     if (isInvalidTokenError(throwable)) {
                         Mono<Void> invalidation = deviceTokenService.markTokenInvalid(token);
                         return (invalidation == null ? Mono.<Void>empty() : invalidation)
@@ -167,6 +194,30 @@ public class ResilientFcmService {
 
                     return Mono.just(FcmDeliveryResult.failed(null, "PROVIDER_UNAVAILABLE"));
                 });
+    }
+
+    private Mono<String> sendAsync(Message message) {
+        return Mono.create(sink -> {
+            ApiFuture<String> future;
+            try {
+                future = firebaseMessaging.sendAsync(message);
+            } catch (RuntimeException startupFailure) {
+                sink.error(startupFailure);
+                return;
+            }
+            sink.onCancel(() -> future.cancel(true));
+            ApiFutures.addCallback(future, new ApiFutureCallback<>() {
+                @Override
+                public void onFailure(Throwable failure) {
+                    sink.error(failure);
+                }
+
+                @Override
+                public void onSuccess(String messageId) {
+                    sink.success(messageId);
+                }
+            }, MoreExecutors.directExecutor());
+        });
     }
 
 

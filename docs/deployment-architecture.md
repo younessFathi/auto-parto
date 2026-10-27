@@ -326,6 +326,18 @@ The application supports RS256 JWT signing with a `kid`, a published `/.well-kno
 
 Prefer asynchronous clients for Firebase, email, OpenBao, and object storage. If a blocking SDK is unavoidable, isolate it on a bounded scheduler with explicit thread count, queue size, concurrency, timeout, cancellation, and shutdown behavior.
 
+### Provider execution inventory and bounds
+
+| Operation | Execution model and path | Isolation policy |
+|---|---|---|
+| Firebase FCM send | Firebase Admin `sendAsync` API; background notification delivery | Reactor adapts the `ApiFuture`, cancels it on downstream cancellation, and bounds per-instance in-flight requests and batch concurrency. Timeouts and retryable failures feed the existing PostgreSQL-authoritative notification retry flow. |
+| Resend email | Resend Java SDK is synchronous; OTP request path | Run on the dedicated `resend-provider` fixed-size scheduler with a bounded queue, timeout, interruption on cancellation, immediate rejection at capacity, and graceful shutdown. Do not use shared `boundedElastic` for provider calls. |
+| SeaweedFS/S3 | AWS `S3AsyncClient`; upload/download service paths | Bound Netty HTTP concurrency and pending connection acquisition; configure acquisition, API-call, attempt, and read/write timeouts. Cancel the SDK future with Reactor cancellation and close the client during bean shutdown. |
+| OpenBao | Host-side OpenBao Agent, not an application SDK | Agent renders scoped renewable credentials to protected files; token renewal/revocation is handled outside the app process. There is no JVM provider call or application root token. |
+| Firebase health | Local initialization check only | No provider network call is part of readiness. |
+
+Provider settings use `auto.parto.providers.firebase.*`, `auto.parto.providers.email.*`, and `auto.parto.storage.s3.*` in `application.yml`. Values have bounded defaults and may be supplied through deployment environment configuration. `auto.parto.provider.calls` records provider, operation, and one of the fixed outcomes (`success`, `timeout`, `saturated`, `cancelled`, or `failure`); logs contain only those low-cardinality dimensions and never provider response bodies, credentials, tokens, or notification payloads. See [Provider Isolation Runbook](provider-isolation-runbook.md) for diagnosis and tuning. Provider failure does not move notification intent, claims, attempts, or retry authority from PostgreSQL.
+
 ## Load Balancer and TLS Entry Point
 
 For the initial deployment, use Caddy as the public TLS reverse proxy and load-balancer entry point when the number of application instances is small. Caddy provides automatic certificate management, simple configuration, health checks, and HTTP reverse proxying.
