@@ -142,8 +142,7 @@ class SSENotificationServiceTest {
         subscriber.dispose();
 
         double registeredBeforeSend = meterRegistry.get("auto.parto.sse.connections.registered").gauge().value();
-        double closesBeforeSend = meterRegistry.get("auto.parto.sse.connections")
-                .tag("outcome", "closed").counter().count();
+        double closesBeforeSend = meterRegistry.counter("auto.parto.sse.connections", "outcome", "closed").count();
         NotificationRequest notification = notification("user-1");
 
         assertThat(service.sendViaSSE("user-1", UUID.fromString(notification.id()), notification)).isFalse();
@@ -152,7 +151,7 @@ class SSENotificationServiceTest {
         assertThat(service.getConnectionStats().get("totalUsers")).isEqualTo(0);
         assertThat(meterRegistry.get("auto.parto.sse.connections.registered").gauge().value())
                 .isEqualTo(registeredBeforeSend - 1);
-        assertThat(meterRegistry.get("auto.parto.sse.connections").tag("outcome", "closed").counter().count())
+        assertThat(meterRegistry.counter("auto.parto.sse.connections", "outcome", "closed").count())
                 .isEqualTo(closesBeforeSend + 1);
     }
 
