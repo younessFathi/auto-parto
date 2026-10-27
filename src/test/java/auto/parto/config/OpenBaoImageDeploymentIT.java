@@ -15,6 +15,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -49,6 +50,8 @@ class OpenBaoImageDeploymentIT {
         }
         Path temporary = Files.createTempDirectory("openbao-image-it-");
         Path tls = Files.createDirectory(temporary.resolve("tls"));
+        Files.setPosixFilePermissions(temporary, PosixFilePermissions.fromString("rwxr-xr-x"));
+        Files.setPosixFilePermissions(tls, PosixFilePermissions.fromString("rwxr-xr-x"));
         Path config = temporary.resolve("server.hcl");
         List<String> compose = List.of("docker", "compose", "--project-name", project,
                 "--file", COMPOSE_FILE.toString());
@@ -66,7 +69,10 @@ class OpenBaoImageDeploymentIT {
             assertThat(createdVolume.exitCode()).as(createdVolume.output()).isZero();
             CommandResult started = run(compose, Duration.ofMinutes(3),
                     List.of("up", "-d", "--wait", "--wait-timeout", "90", "openbao"), environment);
-            assertThat(started.exitCode()).as(started.output()).isZero();
+            if (started.exitCode() != 0) {
+                assertThat(started.exitCode()).as(started.output() + startupDiagnostics(compose, environment)).isZero();
+            }
+            assertThat(started.exitCode()).isZero();
 
             String containerId = run(compose, Duration.ofSeconds(20), List.of("ps", "-q", "openbao"), environment)
                     .output().trim();
@@ -175,6 +181,22 @@ class OpenBaoImageDeploymentIT {
         assertThat(process.waitFor(30, TimeUnit.SECONDS)).isTrue();
         assertThat(process.exitValue()).as(output.toString()).isZero();
         Files.copy(tls.resolve("server.crt"), tls.resolve("ca.crt"));
+        // The official image runs as the unprivileged openbao user, unlike the host user creating this fixture.
+        Files.setPosixFilePermissions(tls.resolve("server.key"), PosixFilePermissions.fromString("r--r--r--"));
+    }
+
+    private static String startupDiagnostics(List<String> compose, Map<String, String> environment) {
+        try {
+            CommandResult logs = run(compose, Duration.ofSeconds(20), List.of("logs", "--no-color", "openbao"), environment);
+            String containerId = run(compose, Duration.ofSeconds(20), List.of("ps", "-q", "openbao"), environment)
+                    .output().trim();
+            String healthDetails = containerId.isBlank() ? "" : run(List.of("docker", "inspect", "--format",
+                    "{{json .State.Health}}", containerId),
+                    Duration.ofSeconds(20), List.of(), Map.of()).output();
+            return "\nOpenBao logs:\n" + logs.output() + "\nHealth state:\n" + healthDetails;
+        } catch (Exception diagnosticFailure) {
+            return "\nUnable to collect OpenBao startup diagnostics: " + diagnosticFailure.getClass().getSimpleName();
+        }
     }
 
     private static HttpClient tlsClient(Path caCertificate) throws Exception {
