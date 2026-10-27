@@ -1,0 +1,4 @@
+d /run/auto-parto/secrets 0750 auto-parto-agent 10001 -
+d /run/auto-parto/audit 0750 auto-parto-audit-agent 10001 -
+d /run/openbao-agent 0700 auto-parto-agent auto-parto-agent -
+d /run/openbao-audit-agent 0700 auto-parto-audit-agent auto-parto-audit-agent -

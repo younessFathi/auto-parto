@@ -1,5 +1,6 @@
 package auto.parto.storage;
 
+import auto.parto.config.DomainMetrics;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -45,31 +46,32 @@ public final class LocalFileStorage implements FileStorage {
     public Mono<StoredObject> put(String objectKey, Path stagedFile, String contentType,
                                   long byteSize, String checksum) {
         Path destination = safePath(objectKey);
-        return Mono.fromCallable(() -> {
+        return DomainMetrics.storageCall("put", Mono.fromCallable(() -> {
             Files.createDirectories(destination.getParent());
             Files.move(stagedFile, destination, StandardCopyOption.REPLACE_EXISTING);
             return new StoredObject(objectKey, byteSize, checksum);
-        }).subscribeOn(Schedulers.boundedElastic());
+        }).subscribeOn(Schedulers.boundedElastic()))
+                .doOnSuccess(ignored -> DomainMetrics.storageUploadBytes(byteSize));
     }
 
     @Override
     public Flux<DataBuffer> read(String objectKey) {
         Path source = safePath(objectKey);
-        return DataBufferUtils.read(source, new DefaultDataBufferFactory(), 8192);
+        return DomainMetrics.storageCall("read", DataBufferUtils.read(source, new DefaultDataBufferFactory(), 8192));
     }
 
     @Override
     public Mono<Boolean> exists(String objectKey) {
-        return Mono.fromCallable(() -> Files.exists(safePath(objectKey)))
-                .subscribeOn(Schedulers.boundedElastic());
+        return DomainMetrics.storageCall("head", Mono.fromCallable(() -> Files.exists(safePath(objectKey)))
+                .subscribeOn(Schedulers.boundedElastic()));
     }
 
     @Override
     public Mono<Void> delete(String objectKey) {
-        return Mono.fromCallable(() -> {
+        return DomainMetrics.storageCall("delete", Mono.fromCallable(() -> {
             Files.deleteIfExists(safePath(objectKey));
             return (Void) null;
-        }).subscribeOn(Schedulers.boundedElastic());
+        }).subscribeOn(Schedulers.boundedElastic()));
     }
 
     @Override
@@ -77,7 +79,7 @@ public final class LocalFileStorage implements FileStorage {
         if (limit < 1 || limit > 1000) {
             return Flux.error(new IllegalArgumentException("limit must be between 1 and 1000"));
         }
-        return scanObjectKeys(limit).flatMapMany(scan -> Flux.fromIterable(scan.keys()));
+        return DomainMetrics.storageCall("list", scanObjectKeys(limit).flatMapMany(scan -> Flux.fromIterable(scan.keys())));
     }
 
     @Override
@@ -85,7 +87,7 @@ public final class LocalFileStorage implements FileStorage {
         if (limit < 1 || limit > 1000) {
             return Mono.error(new IllegalArgumentException("limit must be between 1 and 1000"));
         }
-        return Mono.fromCallable(() -> {
+        return DomainMetrics.storageCall("scan", Mono.fromCallable(() -> {
             if (!Files.exists(root)) return new ObjectKeyScan(java.util.List.of(), false);
             try (Stream<Path> paths = Files.walk(root)) {
                 PriorityQueue<String> smallestKeys = new PriorityQueue<>(limit + 1, Comparator.reverseOrder());
@@ -98,7 +100,7 @@ public final class LocalFileStorage implements FileStorage {
                 List<String> keys = smallestKeys.stream().sorted().toList();
                 return new ObjectKeyScan(keys.stream().limit(limit).toList(), keys.size() > limit);
             }
-        }).subscribeOn(Schedulers.boundedElastic());
+        }).subscribeOn(Schedulers.boundedElastic()));
     }
 
     private static void retainSmallest(PriorityQueue<String> keys, String candidate, int capacity) {

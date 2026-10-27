@@ -29,8 +29,8 @@ public class FirebaseConfig {
     @Value("${firebase.credentials.path:}")
     private Resource firebaseCredentialsPath;
 
-    @Bean
-    public FirebaseMessaging firebaseMessaging() throws IOException {
+    @Bean(destroyMethod = "delete")
+    public FirebaseApp firebaseApp() throws IOException {
         FirebaseApp firebaseApp;
         List<FirebaseApp> apps = FirebaseApp.getApps();
 
@@ -53,6 +53,11 @@ public class FirebaseConfig {
             firebaseApp = apps.getFirst();
         }
 
+        return firebaseApp;
+    }
+
+    @Bean
+    public FirebaseMessaging firebaseMessaging(FirebaseApp firebaseApp) {
         return FirebaseMessaging.getInstance(firebaseApp);
     }
 

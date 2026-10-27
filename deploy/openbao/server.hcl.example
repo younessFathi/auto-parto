@@ -1,0 +1,17 @@
+ui = false
+cluster_name = "auto-parto-secrets-prod"
+api_addr = "https://openbao-secrets.internal:8200"
+cluster_addr = "https://openbao-secrets.internal:8201"
+
+listener "tcp" {
+  address         = "0.0.0.0:8200"
+  cluster_address = "0.0.0.0:8201"
+  tls_cert_file   = "/etc/openbao/tls/server.crt"
+  tls_key_file    = "/etc/openbao/tls/server.key"
+  tls_min_version = "tls12"
+}
+
+storage "raft" {
+  path    = "/openbao/file"
+  node_id = "auto-parto-secrets-1"
+}

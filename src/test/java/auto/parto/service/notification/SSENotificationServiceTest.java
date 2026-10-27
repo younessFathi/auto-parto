@@ -2,10 +2,14 @@ package auto.parto.service.notification;
 
 import auto.parto.dto.NotificationRequest;
 import auto.parto.enums.NotificationType;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Sinks;
+import reactor.core.Disposable;
 
 import java.util.List;
 import java.util.Objects;
@@ -21,13 +25,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SSENotificationServiceTest {
 
     private SSENotificationService service;
+    private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
+        Metrics.addRegistry(meterRegistry);
         service = new SSENotificationService();
         ReflectionTestUtils.setField(service, "timeout", 100);
         ReflectionTestUtils.setField(service, "maxConnections", 1000);
         ReflectionTestUtils.setField(service, "bufferSize", 1000);
+    }
+
+    @AfterEach
+    void tearDown() {
+        Metrics.removeRegistry(meterRegistry);
+        meterRegistry.close();
     }
 
     @Test
@@ -120,6 +133,26 @@ class SSENotificationServiceTest {
         );
         boolean result = service.sendViaSSE("user-1", notification);
         assertThat(result).isFalse();
+    }
+
+    @Test
+    void cancelledSinkCleanupUpdatesRegisteredGaugeAndClosedCounter() {
+        Sinks.Many<SseNotificationEvent> sink = service.registerConnection("user-1");
+        Disposable subscriber = sink.asFlux().subscribe();
+        subscriber.dispose();
+
+        double registeredBeforeSend = meterRegistry.get("auto.parto.sse.connections.registered").gauge().value();
+        double closesBeforeSend = meterRegistry.counter("auto.parto.sse.connections", "outcome", "closed").count();
+        NotificationRequest notification = notification("user-1");
+
+        assertThat(service.sendViaSSE("user-1", UUID.fromString(notification.id()), notification)).isFalse();
+
+        assertThat(service.getUserConnections("user-1")).isNull();
+        assertThat(service.getConnectionStats().get("totalUsers")).isEqualTo(0);
+        assertThat(meterRegistry.get("auto.parto.sse.connections.registered").gauge().value())
+                .isEqualTo(registeredBeforeSend - 1);
+        assertThat(meterRegistry.counter("auto.parto.sse.connections", "outcome", "closed").count())
+                .isEqualTo(closesBeforeSend + 1);
     }
 
     @Test

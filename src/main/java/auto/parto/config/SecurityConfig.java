@@ -10,6 +10,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.context.NoOpServerSecurityContextRepository;
+import org.springframework.beans.factory.annotation.Value;
 
 @Configuration
 @EnableWebFluxSecurity
@@ -26,7 +27,8 @@ public class SecurityConfig {
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http,
                                                          JwtTokenGenerator jwtTokenGenerator,
-                                                         ApiErrorResponseWriter errorResponseWriter) {
+                                                         ApiErrorResponseWriter errorResponseWriter,
+                                                         @Value("${management.server.port:0}") int managementPort) {
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
@@ -35,9 +37,11 @@ public class SecurityConfig {
                         .pathMatchers("/auth/**").permitAll()
                         .pathMatchers(SWAGGER_WHITELIST).permitAll()
                         .pathMatchers("/actuator/health/**").permitAll()
+                        .pathMatchers("/actuator/prometheus").permitAll()
+                        .pathMatchers("/.well-known/jwks.json").permitAll()
                         .anyExchange().authenticated()
                 )
-                .addFilterAt(new JwtTokenAuthenticationFilter(jwtTokenGenerator, errorResponseWriter), SecurityWebFiltersOrder.HTTP_BASIC)
+                .addFilterAt(new JwtTokenAuthenticationFilter(jwtTokenGenerator, errorResponseWriter, managementPort), SecurityWebFiltersOrder.HTTP_BASIC)
                 .build();
     }
 

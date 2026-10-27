@@ -1,0 +1,4 @@
+{{- with secret "database/creds/production-audit" -}}
+auto.parto.audit.username={{ .Data.username }}
+auto.parto.audit.password={{ .Data.password }}
+{{- end }}

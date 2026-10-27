@@ -1,0 +1,64 @@
+services:
+  openbao:
+    image: openbao/openbao@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf
+    command: ["server", "-config=/openbao/config/server.hcl"]
+    environment:
+      BAO_ADDR: https://127.0.0.1:8200
+      BAO_CACERT: /etc/openbao/tls/ca.crt
+      BAO_TLS_SERVER_NAME: ${OPENBAO_TLS_SERVER_NAME:?set the TLS certificate DNS name}
+    ports:
+      - target: 8200
+        published: ${OPENBAO_API_PUBLISHED_PORT:-8200}
+        host_ip: ${OPENBAO_PRIVATE_BIND_IP:?set this node's private interface address}
+        protocol: tcp
+      - target: 8201
+        published: ${OPENBAO_CLUSTER_PUBLISHED_PORT:-8201}
+        host_ip: ${OPENBAO_PRIVATE_BIND_IP:?set this node's private interface address}
+        protocol: tcp
+    volumes:
+      - type: bind
+        source: ${OPENBAO_SERVER_CONFIG:?set the protected server config path}
+        target: /openbao/config/server.hcl
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${OPENBAO_TLS_DIR:?set the protected TLS material directory}
+        target: /etc/openbao/tls
+        read_only: true
+        bind:
+          create_host_path: false
+      - openbao-data:/openbao/file
+    read_only: true
+    tmpfs:
+      - /tmp
+    init: true
+    stop_grace_period: 30s
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: "1.0"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          bao status >/dev/null 2>&1; result=$$?;
+          [ "$$result" -eq 0 ] || [ "$$result" -eq 2 ]
+      interval: 20s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+volumes:
+  openbao-data:
+    external: true
+    name: ${OPENBAO_DATA_VOLUME:?create a named volume on encrypted persistent host storage}

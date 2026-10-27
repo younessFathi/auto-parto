@@ -1,0 +1,26 @@
+vault {
+  address = "https://openbao-secrets.internal:8200"
+  ca_cert = "/etc/auto-parto/openbao/ca.crt"
+}
+
+auto_auth {
+  method "approle" {
+    mount_path = "auth/approle"
+    config = {
+      role_id_file_path                   = "/etc/auto-parto/openbao/audit-role-id"
+      secret_id_file_path                 = "/run/credentials/openbao-audit-agent.service/openbao-secret-id"
+      secret_id_response_wrapping_path    = "auth/approle/role/production-audit/secret-id"
+      remove_secret_id_file_after_reading = true
+    }
+  }
+  sink "file" {
+    config = { path = "/run/openbao-audit-agent/token", mode = 0400 }
+  }
+}
+
+template_config { exit_on_retry_failure = true }
+template {
+  source      = "/etc/auto-parto/openbao/templates/audit.ctmpl"
+  destination = "/run/auto-parto/audit/secrets.properties"
+  perms       = "0440"
+}

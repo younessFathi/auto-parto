@@ -14,15 +14,24 @@ import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
+import java.util.Optional;
+
 @Slf4j
 public class JwtTokenAuthenticationFilter implements WebFilter {
     public static final String HEADER_PREFIX = "Bearer ";
     private final JwtTokenGenerator jwtTokenGenerator;
     private final ApiErrorResponseWriter errorResponseWriter;
+    private final int managementPort;
 
     public JwtTokenAuthenticationFilter(JwtTokenGenerator jwtTokenGenerator, ApiErrorResponseWriter errorResponseWriter){
+        this(jwtTokenGenerator, errorResponseWriter, 0);
+    }
+
+    public JwtTokenAuthenticationFilter(JwtTokenGenerator jwtTokenGenerator, ApiErrorResponseWriter errorResponseWriter,
+                                        int managementPort){
         this.jwtTokenGenerator = jwtTokenGenerator;
         this.errorResponseWriter = errorResponseWriter;
+        this.managementPort = managementPort;
     }
 
     @NotNull
@@ -30,7 +39,7 @@ public class JwtTokenAuthenticationFilter implements WebFilter {
     public Mono<Void> filter(ServerWebExchange exchange, @NotNull WebFilterChain chain) {
         String path = exchange.getRequest().getURI().getPath();
 
-        if (isPublicEndpoint(path)) {
+        if (isPublicEndpoint(path) || isPrivateManagementMetrics(exchange, path)) {
             return chain.filter(exchange);
         }
 
@@ -57,8 +66,15 @@ public class JwtTokenAuthenticationFilter implements WebFilter {
                 "AUTHENTICATION_FAILED", "Authentication failed");
     }
 
+    private boolean isPrivateManagementMetrics(ServerWebExchange exchange, String path) {
+        return path.equals("/actuator/prometheus") && managementPort > 0
+                && Optional.ofNullable(exchange.getRequest().getLocalAddress())
+                .map(address -> address.getPort() == managementPort).orElse(false);
+    }
+
     private boolean isPublicEndpoint(String path) {
         return path.startsWith("/auth/")
+                || path.equals("/.well-known/jwks.json")
                 || path.equals("/actuator/health")
                 || path.startsWith("/v3/api-docs")
                 || path.startsWith("/swagger-ui")

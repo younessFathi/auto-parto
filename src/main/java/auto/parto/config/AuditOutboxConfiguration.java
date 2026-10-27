@@ -2,6 +2,8 @@ package auto.parto.config;
 
 import auto.parto.audit.AuditOutboxRepository;
 import auto.parto.audit.AuditOutboxWorker;
+import io.micrometer.observation.ObservationRegistry;
+import org.springframework.beans.factory.ObjectProvider;
 import auto.parto.audit.AuditProcessingProperties;
 import auto.parto.audit.AuditPublisher;
 import auto.parto.audit.AuditReplayAuthorizer;
@@ -68,7 +70,9 @@ public class AuditOutboxConfiguration {
     }
 
     @Bean
-    AuditOutboxWorker auditOutboxWorker(AuditPublisher publisher, AuditProcessingProperties properties) {
-        return new AuditOutboxWorker(publisher, properties, Clock.systemUTC());
+    AuditOutboxWorker auditOutboxWorker(AuditPublisher publisher, AuditProcessingProperties properties,
+                                        ObjectProvider<ObservationRegistry> observationRegistry) {
+        return new AuditOutboxWorker(publisher, properties, Clock.systemUTC(),
+                observationRegistry.getIfAvailable(() -> ObservationRegistry.NOOP));
     }
 }

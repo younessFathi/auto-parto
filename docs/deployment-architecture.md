@@ -318,13 +318,25 @@ Recommended usage:
 - Keep OpenBao unexposed to the public Internet and protect it with TLS.
 - Back up and test the OpenBao storage and unseal/recovery process.
 
-The application-side AP-0022 increment validates the OpenBao address, role, and approved authentication method as part of the production boundary, but it does not claim that OpenBao is provisioned. Deployment still needs least-privilege policies, short-lived workload credentials, lease renewal and revocation, TLS trust distribution, rotation drills, and recovery/unseal procedures. Those operational controls remain linked work in F07 and must be completed before production readiness is declared.
+The AP-0022 repository increment now includes a digest-pinned OpenBao production image Compose template for a dedicated host, TLS/Raft server configuration, systemd lifecycle, separated environment/application/audit/migration policies, AppRole Agent and systemd templates, a private production app Compose boundary, fail-closed required properties-file import, and staging authorization/lease drill scripts. The host Agent renders credentials to tmpfs and alone holds its renewable token. The app receives no OpenBao token. The local dev image profile is loopback-only, in-memory, and disposable. These artifacts are templates: service provisioning, role binding, certificate issuance, dynamic database plugin setup, and successful staging/recovery drills still require operations evidence.
 
 OpenBao is not free operationally. A single OpenBao instance on the same PostgreSQL VPS creates a shared failure and compromise boundary. Initially use a separate small protected host or a managed secret service if available. If OpenBao is deployed on one node, document that it is a temporary availability risk and protect its recovery keys separately.
 
-For JWTs, prefer asymmetric signing and key rotation with a published verification key set when possible. Do not put a long-lived root credential in the application container.
+The application supports RS256 JWT signing with a `kid`, a published `/.well-known/jwks.json` key set, overlapping verification keys, and removal-based revocation. Keep private key material in OpenBao and publish only public keys. Tests cover overlap and removal; the staging rollout/revocation drill is still required. Do not put a long-lived root credential in the application container.
 
 Prefer asynchronous clients for Firebase, email, OpenBao, and object storage. If a blocking SDK is unavoidable, isolate it on a bounded scheduler with explicit thread count, queue size, concurrency, timeout, cancellation, and shutdown behavior.
+
+### Provider execution inventory and bounds
+
+| Operation | Execution model and path | Isolation policy |
+|---|---|---|
+| Firebase FCM send | Firebase Admin `sendAsync` API; background notification delivery | Reactor adapts the `ApiFuture`, cancels it on downstream cancellation, and bounds per-instance in-flight requests and batch concurrency. Timeouts and retryable failures feed the existing PostgreSQL-authoritative notification retry flow. |
+| Resend email | Resend Java SDK is synchronous; OTP request path | Run on the dedicated `resend-provider` fixed-size scheduler with a bounded queue, timeout, interruption on cancellation, immediate rejection at capacity, and graceful shutdown. Do not use shared `boundedElastic` for provider calls. |
+| SeaweedFS/S3 | AWS `S3AsyncClient`; upload/download service paths | Bound Netty HTTP concurrency and pending connection acquisition; configure acquisition, API-call, attempt, and read/write timeouts. Cancel the SDK future with Reactor cancellation and close the client during bean shutdown. |
+| OpenBao | Host-side OpenBao Agent, not an application SDK | Agent renders scoped renewable credentials to protected files; token renewal/revocation is handled outside the app process. There is no JVM provider call or application root token. |
+| Firebase health | Local initialization check only | No provider network call is part of readiness. |
+
+Provider settings use `auto.parto.providers.firebase.*`, `auto.parto.providers.email.*`, and `auto.parto.storage.s3.*` in `application.yml`. Values have bounded defaults and may be supplied through deployment environment configuration. `auto.parto.provider.calls` records provider, operation, and one of the fixed outcomes (`success`, `timeout`, `saturated`, `cancelled`, or `failure`); logs contain only those low-cardinality dimensions and never provider response bodies, credentials, tokens, or notification payloads. See [Provider Isolation Runbook](provider-isolation-runbook.md) for diagnosis and tuning. Provider failure does not move notification intent, claims, attempts, or retry authority from PostgreSQL.
 
 ## Load Balancer and TLS Entry Point
 
@@ -452,13 +464,15 @@ Expose separate checks:
 
 Public liveness and readiness endpoints must not require a user JWT. Readiness includes only dependencies required for the routes served by that instance. Firebase, email, notification, and upload failures should support documented degraded behavior instead of automatically removing every API instance from service. Detailed dependency information should be protected or exposed only to the orchestrator and operations team.
 
-The current application baseline exposes status-only `/actuator/health/liveness` and `/actuator/health/readiness` probes without JWT. Readiness includes application readiness, PostgreSQL R2DBC, and Redis; audit PostgreSQL, Firebase, email, and object storage diagnostics are not public readiness dependencies. Component details are disabled on public health routes. The Prometheus scrape endpoint remains protected by application authentication until the deployment supplies a private, authenticated scrape path. Do not route public traffic from an overall health response that includes optional provider components.
+The current application exposes status-only `/actuator/health/liveness` and `/actuator/health/readiness` probes without JWT. Readiness includes application readiness, PostgreSQL R2DBC, and Redis; audit PostgreSQL, Firebase, email, and object storage diagnostics are not public readiness dependencies. Component details are disabled on public health routes. Production Compose assigns a separate management listener; the Prometheus scrape path bypasses JWT only when the request arrived on the configured management port. The deployment must keep that listener on the private app/observability networks and must not publish it at the host or TLS edge. Do not route public traffic from an overall health response that includes optional provider components.
 
 ### Application observability configuration
 
 Spring Boot emits console logs in Logstash-compatible JSON, including MDC request IDs and trace/span fields when present. Micrometer Tracing uses W3C propagation and samples traces at the configured `OTEL_TRACES_SAMPLING_PROBABILITY`; OTLP export is opt-in with `OTEL_TRACES_EXPORT_ENABLED=true` and the collector endpoint in `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`. Keep collector credentials and endpoints in protected runtime configuration. Prometheus metrics are exposed at `/actuator/prometheus` and must be scraped over a private authenticated management path.
 
-This is an application baseline, not a complete production observability deployment. Before go-live, install and protect the Prometheus/collector/log backend, define retention, access, sampling, and storage budgets, validate redaction across application log call sites, add bounded domain metrics, and verify trace context through provider clients and scheduled/outbox work. Keep optional provider health details out of public probes.
+`deploy/observability/compose.yml` is a single-host deployment template for Prometheus, an OTLP collector, Tempo, Loki, and Grafana. It publishes only Grafana on loopback (operator access should use an SSH tunnel), disables anonymous Grafana access, keeps data services on private Docker networks, and sets initial retention and ingestion limits. Prometheus is limited to 15 days/5 GB, Tempo to 72 hours, and Loki to 7 days. The collector redacts common credential patterns and removes common sensitive JSON fields before log export. Review the redaction rules against real sanitized fixtures before staging.
+
+This Compose file is not evidence of a deployed observability/recovery system. Docker named volumes have no portable size quotas; provision and monitor filesystem quotas for Tempo, Loki, and Grafana, and define an incident deletion procedure for each backend. Verify Grafana operator authentication, private-network access, retention expiry, deletion, collector sampling, and disk exhaustion behavior on staging. Application wallet/notification/SSE/storage metrics and provider/scheduler observations are present; durable notification outbox rows do not persist the originating trace context, so background recovery has its own span rather than a linked originating span. AP-0023 remains In Progress until staging confirms the remaining controls and trace linkage.
 
 ### Alerting
 

@@ -25,7 +25,7 @@ class ProductionConfigValidationTest {
                 .hasMessageContaining("auto.parto.secrets.provider")
                 .hasMessageContaining("spring.r2dbc.url")
                 .hasMessageContaining("spring.data.redis.password")
-                .hasMessageContaining("jwt.secretKey")
+                .hasMessageContaining("jwt.signing.private-key")
                 .hasMessageContaining("auto.parto.storage.provider");
     }
 
@@ -34,14 +34,14 @@ class ProductionConfigValidationTest {
         MockEnvironment environment = validProductionEnvironment();
         environment.setProperty("spring.r2dbc.url", "r2dbc:postgresql://localhost:5432/app");
         environment.setProperty("spring.data.redis.port", "70000");
-        environment.setProperty("jwt.secretKey", "too-short");
+        environment.setProperty("jwt.signing.algorithm", "HS256");
         environment.setProperty("auto.parto.storage.s3.endpoint", "http://storage.internal");
 
         assertThatThrownBy(() -> new ProductionConfigValidation(environment).afterPropertiesSet())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("spring.r2dbc.url must not use a loopback host")
                 .hasMessageContaining("spring.data.redis.port must be between 1 and 65535")
-                .hasMessageContaining("jwt.secretKey must be Base64 encoded")
+                .hasMessageContaining("jwt.signing.algorithm=RS256")
                 .hasMessageContaining("auto.parto.storage.s3.endpoint must use HTTPS");
     }
 
@@ -59,6 +59,16 @@ class ProductionConfigValidationTest {
         assertRejectsLoopback("spring.data.redis.host", "[::1]", "spring.data.redis.host");
         assertRejectsLoopback("auto.parto.secrets.openbao.address", "https://[::1]", "auto.parto.secrets.openbao.address");
         assertRejectsLoopback("auto.parto.storage.s3.endpoint", "https://[::1]", "auto.parto.storage.s3.endpoint");
+    }
+
+    @Test
+    void rejectsDatabaseCredentialsEmbeddedInProductionUrl() {
+        MockEnvironment environment = validProductionEnvironment()
+                .withProperty("spring.r2dbc.url", "r2dbc:postgresql://runtime:secret@postgres.internal:5432/app");
+
+        assertThatThrownBy(() -> new ProductionConfigValidation(environment).afterPropertiesSet())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("spring.r2dbc.url must not contain embedded credentials");
     }
 
     @Test
@@ -122,7 +132,10 @@ class ProductionConfigValidationTest {
                 .withProperty("spring.data.redis.host", "redis.internal")
                 .withProperty("spring.data.redis.port", "6379")
                 .withProperty("spring.data.redis.password", "redis-password")
-                .withProperty("jwt.secretKey", "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=")
+                .withProperty("jwt.signing.algorithm", "RS256")
+                .withProperty("jwt.signing.key-id", "active")
+                .withProperty("jwt.signing.private-key", "test-key-material")
+                .withProperty("jwt.signing.verification-keys", "{\"active\":\"test-key\"}")
                 .withProperty("auto.parto.storage.provider", "s3")
                 .withProperty("auto.parto.storage.s3.endpoint", "https://storage.internal")
                 .withProperty("auto.parto.storage.s3.bucket", "auto-parto")

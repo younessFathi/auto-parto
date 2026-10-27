@@ -8,7 +8,6 @@ import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
@@ -23,6 +22,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.Base64;
 import java.util.Date;
+import java.net.InetSocketAddress;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -44,12 +44,12 @@ class JwtTokenAuthenticationFilterTest {
     @BeforeEach
     void stubErrorWriter() {
         lenient().when(errorResponseWriter.write(any(), any(), anyString(), anyString())).thenReturn(Mono.empty());
+        filter = new JwtTokenAuthenticationFilter(jwtTokenGenerator, errorResponseWriter);
     }
 
     @Mock
     private WebFilterChain chain;
 
-    @InjectMocks
     private JwtTokenAuthenticationFilter filter;
 
     @Test
@@ -129,6 +129,36 @@ class JwtTokenAuthenticationFilterTest {
         verify(chain).filter(exchange);
         verify(errorResponseWriter, never()).write(any(), any(), anyString(), anyString());
         assertThat(exchange.getResponse().getStatusCode()).isNull();
+    }
+
+    @Test
+    void allowsMetricsWithoutJwtOnlyOnConfiguredPrivateManagementPort() {
+        JwtTokenAuthenticationFilter managementFilter = new JwtTokenAuthenticationFilter(
+                jwtTokenGenerator, errorResponseWriter, 8081);
+        MockServerHttpRequest request = MockServerHttpRequest.get("/actuator/prometheus")
+                .localAddress(new InetSocketAddress("127.0.0.1", 8081)).build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        when(chain.filter(exchange)).thenReturn(Mono.empty());
+
+        managementFilter.filter(exchange, chain).block();
+
+        verify(chain).filter(exchange);
+        verify(errorResponseWriter, never()).write(any(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void doesNotAllowMetricsWithoutJwtOnPublicPort() {
+        JwtTokenAuthenticationFilter managementFilter = new JwtTokenAuthenticationFilter(
+                jwtTokenGenerator, errorResponseWriter, 8081);
+        MockServerHttpRequest request = MockServerHttpRequest.get("/actuator/prometheus")
+                .localAddress(new InetSocketAddress("127.0.0.1", 8080)).build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        managementFilter.filter(exchange, chain).block();
+
+        verify(chain, never()).filter(any());
+        verify(errorResponseWriter).write(exchange, HttpStatus.UNAUTHORIZED,
+                "AUTHENTICATION_REQUIRED", "Authentication required");
     }
 
     @Test
