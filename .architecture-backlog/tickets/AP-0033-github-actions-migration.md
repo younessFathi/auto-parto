@@ -29,3 +29,4 @@ Move repository CI from GitLab CI to GitHub Actions while preserving build, unit
 - Added `.github/workflows/ci.yml` with the preserved Maven and PostgreSQL gate stages.
 - Added `GithubActionsWorkflowTest` for workflow structure, report retention, and gate configuration.
 - GitHub Actions workflow coverage is in place. The operational `.gitlab-ci.yml` remains a supported pipeline until retirement is deliberately implemented and verified.
+- The manual cutover is restricted to `main`, uses the `postgresql-cutover` protected GitHub Environment, validates backup/cutover attestations before Flyway, and performs migration, fixture, reconciliation, and final preflight steps sequentially. Repository environment reviewer/branch protection and secret configuration, an end-to-end GitHub Actions run, and GitLab retirement remain operational acceptance evidence; the ticket stays In Progress until those are verified.

@@ -20,4 +20,4 @@ if [ "${APP_FILE_STORAGE_PROVIDER:-local}" = s3 ]; then
   : "${APP_FILE_STORAGE_S3_SECRET_KEY:?set the S3-compatible secret key through protected variables}"
 fi
 
-echo "PostgreSQL cutover preflight passed for backup ${APP_POSTGRES_BACKUP_REFERENCE} verified at ${APP_POSTGRES_BACKUP_VERIFIED_AT}."
+echo "PostgreSQL cutover preflight passed with a verified backup attestation."

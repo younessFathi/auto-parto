@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - 'feat/**'
+      - 'fix/**'
       - 'chore/**'
   pull_request:
     branches:
@@ -78,70 +79,73 @@ jobs:
           retention-days: 1
 
   postgresql-migration-gate:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_cutover_gate == true }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_cutover_gate == true && github.ref == 'refs/heads/main' }}
     needs: integration-test
     runs-on: ubuntu-latest
+    environment:
+      name: postgresql-cutover
     steps:
       - uses: actions/checkout@v4
-      - name: Validate migration credentials
+      - name: Validate protected migration and cutover values
         env:
           APP_POSTGRES_MIGRATION_JDBC_URL: ${{ secrets.APP_POSTGRES_MIGRATION_JDBC_URL }}
           APP_POSTGRES_MIGRATION_USER: ${{ secrets.APP_POSTGRES_MIGRATION_USER }}
           APP_POSTGRES_MIGRATION_PASSWORD: ${{ secrets.APP_POSTGRES_MIGRATION_PASSWORD }}
-        run: |
-          test -n "$APP_POSTGRES_MIGRATION_JDBC_URL"
-          test -n "$APP_POSTGRES_MIGRATION_USER"
-          test -n "$APP_POSTGRES_MIGRATION_PASSWORD"
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE/src/main/resources/db/migration:/flyway/sql:ro" \
-            flyway/flyway:10.20.1 \
-            -url="$APP_POSTGRES_MIGRATION_JDBC_URL" \
-            -user="$APP_POSTGRES_MIGRATION_USER" \
-            -password="$APP_POSTGRES_MIGRATION_PASSWORD" \
-            -locations=filesystem:/flyway/sql migrate
-
-  postgresql-reconciliation-gate:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_cutover_gate == true }}
-    needs: postgresql-migration-gate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run fixtures and reconciliation
-        env:
           APP_POSTGRES_RUNTIME_HOST: ${{ secrets.APP_POSTGRES_RUNTIME_HOST }}
           APP_POSTGRES_RUNTIME_DB: ${{ secrets.APP_POSTGRES_RUNTIME_DB }}
           APP_POSTGRES_RUNTIME_USER: ${{ secrets.APP_POSTGRES_RUNTIME_USER }}
           APP_POSTGRES_RUNTIME_PASSWORD: ${{ secrets.APP_POSTGRES_RUNTIME_PASSWORD }}
+          APP_POSTGRES_CUTOVER_ENABLED: ${{ secrets.APP_POSTGRES_CUTOVER_ENABLED }}
+          APP_POSTGRES_MONGO_DISABLED: ${{ secrets.APP_POSTGRES_MONGO_DISABLED }}
+          APP_POSTGRES_CUTOVER_API_CONTRACTS_READY: ${{ secrets.APP_POSTGRES_CUTOVER_API_CONTRACTS_READY }}
+          APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_ENABLED: ${{ secrets.APP_POSTGRES_CUTOVER_STORAGE_RECONCILIATION_ENABLED }}
+          APP_POSTGRES_BACKUP_VERIFIED_AT: ${{ secrets.APP_POSTGRES_BACKUP_VERIFIED_AT }}
+          APP_POSTGRES_BACKUP_REFERENCE: ${{ secrets.APP_POSTGRES_BACKUP_REFERENCE }}
+          APP_FILE_STORAGE_PROVIDER: ${{ secrets.APP_FILE_STORAGE_PROVIDER }}
+          APP_FILE_STORAGE_S3_ENDPOINT: ${{ secrets.APP_FILE_STORAGE_S3_ENDPOINT }}
+          APP_FILE_STORAGE_S3_BUCKET: ${{ secrets.APP_FILE_STORAGE_S3_BUCKET }}
+          APP_FILE_STORAGE_S3_ACCESS_KEY: ${{ secrets.APP_FILE_STORAGE_S3_ACCESS_KEY }}
+          APP_FILE_STORAGE_S3_SECRET_KEY: ${{ secrets.APP_FILE_STORAGE_S3_SECRET_KEY }}
+          FLYWAY_URL: ${{ secrets.APP_POSTGRES_MIGRATION_JDBC_URL }}
+          FLYWAY_USER: ${{ secrets.APP_POSTGRES_MIGRATION_USER }}
+          FLYWAY_PASSWORD: ${{ secrets.APP_POSTGRES_MIGRATION_PASSWORD }}
+          PGHOST: ${{ secrets.APP_POSTGRES_RUNTIME_HOST }}
+          PGDATABASE: ${{ secrets.APP_POSTGRES_RUNTIME_DB }}
+          PGUSER: ${{ secrets.APP_POSTGRES_RUNTIME_USER }}
+          PGPASSWORD: ${{ secrets.APP_POSTGRES_RUNTIME_PASSWORD }}
         run: |
+          test -n "$APP_POSTGRES_MIGRATION_JDBC_URL"
+          test -n "$APP_POSTGRES_MIGRATION_USER"
+          test -n "$APP_POSTGRES_MIGRATION_PASSWORD"
           test -n "$APP_POSTGRES_RUNTIME_HOST"
           test -n "$APP_POSTGRES_RUNTIME_DB"
           test -n "$APP_POSTGRES_RUNTIME_USER"
           test -n "$APP_POSTGRES_RUNTIME_PASSWORD"
+          bash deploy/postgres/operations/preflight-cutover.sh
           docker run --rm \
-            -e PGPASSWORD="$APP_POSTGRES_RUNTIME_PASSWORD" \
-            -e PGHOST="$APP_POSTGRES_RUNTIME_HOST" \
-            -e PGDATABASE="$APP_POSTGRES_RUNTIME_DB" \
-            -e PGUSER="$APP_POSTGRES_RUNTIME_USER" \
+            --env FLYWAY_URL \
+            --env FLYWAY_USER \
+            --env FLYWAY_PASSWORD \
+            -v "$GITHUB_WORKSPACE/src/main/resources/db/migration:/flyway/sql:ro" \
+            flyway/flyway:10.20.1 \
+            -locations=filesystem:/flyway/sql migrate
+          docker run --rm \
+            --env PGPASSWORD \
+            --env PGHOST \
+            --env PGDATABASE \
+            --env PGUSER \
             -v "$GITHUB_WORKSPACE:/workspace:ro" \
             postgres:16-alpine \
             psql --set ON_ERROR_STOP=1 --file /workspace/deploy/postgres/fixtures/identity-fixtures.sql
           docker run --rm \
-            -e PGPASSWORD="$APP_POSTGRES_RUNTIME_PASSWORD" \
-            -e PGHOST="$APP_POSTGRES_RUNTIME_HOST" \
-            -e PGDATABASE="$APP_POSTGRES_RUNTIME_DB" \
-            -e PGUSER="$APP_POSTGRES_RUNTIME_USER" \
+            --env PGPASSWORD \
+            --env PGHOST \
+            --env PGDATABASE \
+            --env PGUSER \
             -v "$GITHUB_WORKSPACE:/workspace:ro" \
             postgres:16-alpine \
             bash /workspace/deploy/postgres/operations/reconcile-development-fixtures.sh
-
-  postgresql-cutover-preflight:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_cutover_gate == true }}
-    needs: postgresql-reconciliation-gate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run cutover preflight
-        run: bash deploy/postgres/operations/preflight-cutover.sh
+          bash deploy/postgres/operations/preflight-cutover.sh
 
   package:
     needs: [test, integration-test]
