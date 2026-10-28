@@ -39,6 +39,8 @@ class GithubActionsWorkflowTest {
     @Test
     void workflowExposesTheOptionalProtectedMainOnlyCutoverGate() throws IOException {
         String content = Files.readString(WORKFLOW);
+        String cutoverJob = content.substring(content.indexOf("  postgresql-migration-gate:"),
+                content.indexOf("\n  package:"));
 
         assertThat(content).contains("workflow_dispatch:")
                 .contains("run_cutover_gate:")
@@ -50,6 +52,11 @@ class GithubActionsWorkflowTest {
                 .contains("APP_POSTGRES_BACKUP_REFERENCE")
                 .contains("--env FLYWAY_PASSWORD")
                 .contains("preflight-cutover.sh");
+        assertThat(cutoverJob).contains("needs: [test, integration-test]")
+                .contains("group: ap-0033-private-cutover")
+                .contains("labels: [self-hosted, linux]")
+                .contains("persist-credentials: false")
+                .doesNotContain("runs-on: ubuntu-latest");
         assertThat(content).doesNotContain("-password=\"$APP_POSTGRES_MIGRATION_PASSWORD\"")
                 .doesNotContain("-e PGPASSWORD=\"$APP_POSTGRES_RUNTIME_PASSWORD\"");
 
