@@ -53,9 +53,9 @@ class GithubActionsWorkflowTest {
                 .contains("--env FLYWAY_PASSWORD")
                 .contains("preflight-cutover.sh");
         assertThat(cutoverJob).contains("needs: [test, integration-test]")
-                .contains("group: ap-0033-private-cutover")
-                .contains("labels: [self-hosted, linux]")
+                .contains("runs-on: [self-hosted, linux, ap-0033-private-cutover]")
                 .contains("persist-credentials: false")
+                .doesNotContain("group: ap-0033-private-cutover")
                 .doesNotContain("runs-on: ubuntu-latest");
         assertThat(content).doesNotContain("-password=\"$APP_POSTGRES_MIGRATION_PASSWORD\"")
                 .doesNotContain("-e PGPASSWORD=\"$APP_POSTGRES_RUNTIME_PASSWORD\"");

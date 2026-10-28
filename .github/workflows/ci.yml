@@ -81,9 +81,7 @@ jobs:
   postgresql-migration-gate:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_cutover_gate == true && github.ref == 'refs/heads/main' }}
     needs: [test, integration-test]
-    runs-on:
-      group: ap-0033-private-cutover
-      labels: [self-hosted, linux]
+    runs-on: [self-hosted, linux, ap-0033-private-cutover]
     timeout-minutes: 30
     environment:
       name: postgresql-cutover
