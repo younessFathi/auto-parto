@@ -23,6 +23,7 @@ This feature is a release gate, not a replacement for the implementation tickets
 - [AP-0021](../tickets/AP-0021-tls-entrypoint.md): Configure TLS, trusted proxies, health checks, and SSE timeouts.
 - [AP-0022](../tickets/AP-0022-openbao-secrets.md): Deliver and rotate protected production secrets.
 - [AP-0044](../tickets/AP-0044-openbao-vps-go-live.md): Provision the production OpenBao service on its approved private failure boundary and complete workload, recovery, rotation, and alerting drills after go-live approval.
+- [AP-0045](../tickets/AP-0045-ansible-vault-vps-secrets.md): Proposed single-VPS Ansible Vault alternative. Resolve this architecture choice before starting AP-0044; select one production secret-delivery model.
 - [AP-0023](../tickets/AP-0023-telemetry-health.md): Provide production telemetry and health groups.
 - [AP-0024](../tickets/AP-0024-alerts-recovery.md): Establish alerts, backups, restoration, and recovery drills.
 - [AP-0026](../tickets/AP-0026-data-infrastructure.md): Harden PostgreSQL, Redis, and VPS database infrastructure.

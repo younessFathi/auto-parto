@@ -8,6 +8,7 @@ Deploy stateless application instances behind TLS with isolated configuration an
 - [AP-0021](../tickets/AP-0021-tls-entrypoint.md): Configure Caddy, trusted proxies, and SSE timeouts.
 - [AP-0022](../tickets/AP-0022-openbao-secrets.md): Establish OpenBao-backed secret delivery and rotation. Repository/image configuration and local Docker evidence are complete, but AP-0022 remains In Progress until the deployed service, workload identities, live rotation, and recovery drills meet its full acceptance criteria. [AP-0044](../tickets/AP-0044-openbao-vps-go-live.md) tracks approved VPS evidence and does not close AP-0022.
 - [AP-0044](../tickets/AP-0044-openbao-vps-go-live.md): Provision and verify the private OpenBao service and workload integration when production go-live is approved. A non-production dev-mode container is disposable and is not production evidence.
+- [AP-0045](../tickets/AP-0045-ansible-vault-vps-secrets.md): Proposed simpler Ansible Vault delivery alternative for a single VPS. This is a decision ticket; it does not supersede OpenBao or change AP-0022/AP-0044 until explicitly approved.
 - [AP-0026](../tickets/AP-0026-data-infrastructure.md): Harden PostgreSQL and Redis production infrastructure.
 - [AP-0028](../tickets/AP-0028-provider-isolation.md): Isolate blocking external provider clients.
 
