@@ -37,37 +37,13 @@ class GithubActionsWorkflowTest {
     }
 
     @Test
-    void workflowExposesTheOptionalProtectedMainOnlyCutoverGate() throws IOException {
+    void applicationRepositoryWorkflowNeverSchedulesJobsOnPrivateSelfHostedRunners() throws IOException {
         String content = Files.readString(WORKFLOW);
-        String cutoverJob = content.substring(content.indexOf("  postgresql-migration-gate:"),
-                content.indexOf("\n  package:"));
 
-        assertThat(content).contains("workflow_dispatch:")
-                .contains("run_cutover_gate:")
-                .contains("github.ref == 'refs/heads/main'")
-                .contains("name: postgresql-cutover")
-                .contains("flyway/flyway:10.20.1")
-                .contains("APP_POSTGRES_MIGRATION_JDBC_URL")
-                .contains("APP_POSTGRES_RUNTIME_PASSWORD")
-                .contains("APP_POSTGRES_BACKUP_REFERENCE")
-                .contains("--env FLYWAY_PASSWORD")
-                .contains("preflight-cutover.sh");
-        assertThat(cutoverJob).contains("needs: [test, integration-test]")
-                .contains("runs-on: [self-hosted, linux, ap-0033-private-cutover]")
-                .contains("persist-credentials: false")
-                .doesNotContain("group: ap-0033-private-cutover")
-                .doesNotContain("runs-on: ubuntu-latest");
-        assertThat(content).doesNotContain("-password=\"$APP_POSTGRES_MIGRATION_PASSWORD\"")
-                .doesNotContain("-e PGPASSWORD=\"$APP_POSTGRES_RUNTIME_PASSWORD\"");
-
-        int backupGate = content.indexOf("bash deploy/postgres/operations/preflight-cutover.sh");
-        int flyway = content.indexOf("flyway/flyway:10.20.1");
-        int fixtures = content.indexOf("identity-fixtures.sql");
-        int reconciliation = content.indexOf("reconcile-development-fixtures.sh");
-        int finalPreflight = content.lastIndexOf("bash deploy/postgres/operations/preflight-cutover.sh");
-        assertThat(backupGate).isLessThan(flyway);
-        assertThat(flyway).isLessThan(fixtures);
-        assertThat(fixtures).isLessThan(reconciliation);
-        assertThat(reconciliation).isLessThan(finalPreflight);
+        assertThat(content).doesNotContain("self-hosted")
+                .doesNotContain("postgresql-migration-gate")
+                .doesNotContain("APP_POSTGRES_MIGRATION_PASSWORD")
+                .doesNotContain("APP_POSTGRES_RUNTIME_PASSWORD")
+                .doesNotContain("postgresql-cutover");
     }
 }
