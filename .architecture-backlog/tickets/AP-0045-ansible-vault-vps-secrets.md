@@ -1,4 +1,4 @@
-# AP-0045 Use Ansible Vault for Single-VPS Secret Delivery
+# AP-0045 Use Ansible Vault for VPS Secret Delivery
 
 - **Status:** Proposed
 - **Type:** Technical Enhancement
@@ -8,17 +8,17 @@
 
 ## Description
 
-Evaluate and, if explicitly approved, implement a simpler secret-delivery path for the initial single-VPS deployment using Ansible Vault. The operator keeps an encrypted production variables file and deploys only the required credential files to the VPS through a reviewed Ansible playbook. The application receives those files through read-only Compose mounts and continues to fail startup when required secrets are absent or invalid.
+Evaluate and, if explicitly approved, implement a simpler secret-delivery path for the initial four-VPS deployment in one provider using Ansible Vault. The operator keeps encrypted production variables and deploys only the required credential files to each VPS through a reviewed Ansible playbook. The app, application database/backup, audit database, and S3 hosts receive separate role-scoped files. The application receives its required files through read-only Compose mounts and continues to fail startup when required secrets are absent or invalid.
 
 This is an alternative to the OpenBao deployment path, not a second parallel secret architecture. Ansible Vault encrypts data at rest for deployment; it does not provide a runtime secret API, workload identity, dynamic credentials, lease renewal, or immediate centralized revocation. AP-0022 and AP-0044 remain OpenBao-based until the architecture owner explicitly selects this alternative and updates their scope and acceptance criteria. Do not mark AP-0022 or F07 Done solely because this ticket is implemented.
 
 ## Acceptance Criteria
 
 1. Before implementation, record an explicit architecture decision selecting Ansible Vault for the initial VPS or retaining OpenBao. If OpenBao is retained, cancel this alternative with the decision recorded; do not operate both delivery systems for the same production credentials.
-2. Keep production values in an encrypted Ansible Vault file with separate vault IDs for production and other environments where needed. Keep the vault unlock password outside the repository, VPS, CI variables, command arguments, logs, and traces; document secure operator access and recovery of that password.
-3. Provide a reviewed, idempotent Ansible playbook that connects to an allowlisted VPS using verified SSH host keys, writes only the enabled application/audit/migration credential bundles to their intended host paths, and applies restrictive owner/group/mode settings. Tasks that handle secret material use `no_log: true` and do not print decrypted content.
+2. Keep production values in encrypted Ansible Vault files with separate vault IDs for production and other environments where needed. Keep the vault unlock password outside the repository, VPSs, CI variables, command arguments, logs, and traces; document secure operator access and recovery of that password.
+3. Provide a reviewed, idempotent Ansible playbook that connects to allowlisted VPSs using verified SSH host keys, writes only the enabled app/cache, application database/backup, audit database, S3, and migration credentials to their intended host paths, and applies restrictive owner/group/mode settings. Tasks that handle secret material use `no_log: true` and do not print decrypted content.
 4. Adapt the production Compose delivery to mount only required secret files read-only into the workload that consumes them. Preserve the current application imports under `/run/auto-parto/secrets/secrets.properties` and, when audit processing is enabled, `/run/auto-parto/audit/secrets.properties`, or update the profile and fail-closed validation with equivalent focused tests. Remove OpenBao-specific runtime endpoint/role requirements from the production profile if this alternative is selected. Do not bake secrets into images, Compose values, or checked-in plaintext files.
-5. Ensure production startup fails closed when required bundles or enabled-provider credentials are absent, malformed, or incomplete. Keep development and test secret sources separate from the production Vault file.
+5. Ensure production startup fails closed when required bundles or enabled-provider credentials are absent, malformed, or incomplete. Keep development and test secret sources separate from the production Vault files; do not leave migration or database-administration credentials on the app VPS.
 6. Document and exercise credential rotation: provision a replacement credential, deploy the replacement, restart and verify readiness, reject the old credential, and describe a bounded rollback path that does not restore a revoked credential.
 7. Document encrypted backup and restore of the Vault file, separate recovery of the unlock password, operator replacement/loss scenarios, and measured staging restore results. Store no decrypted backup in ordinary backups.
 8. Preserve RS256/JWKS overlap and revocation behavior. Include signing-key rotation and old-key removal in the staging deployment drill.
