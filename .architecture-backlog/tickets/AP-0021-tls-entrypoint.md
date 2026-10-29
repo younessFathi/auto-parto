@@ -3,7 +3,7 @@
 - **Status:** Proposed
 - **Type:** Technical Enhancement
 - **Feature:** [Deployment and Secrets](../features/F07-deployment-and-secrets.md)
-- **Linked Tickets:** [AP-0020](AP-0020-stateless-deployment.md), [AP-0028](AP-0028-provider-isolation.md)
+- **Linked Tickets:** [AP-0020](AP-0020-stateless-deployment.md), [AP-0028](AP-0028-provider-isolation.md), [AP-0046 VPS Infrastructure Automation](AP-0046-provision-vps-topology-with-opentofu-ansible.md)
 - **Source:** `deployment-architecture.md` Load Balancer and TLS Entry Point
 
 ## Description

@@ -3,14 +3,14 @@
 - **Status:** Proposed
 - **Type:** Technical Enhancement
 - **Feature:** [Deployment and Secrets](../features/F07-deployment-and-secrets.md)
-- **Linked Tickets:** [AP-0022](AP-0022-openbao-secrets.md), [AP-0020](AP-0020-stateless-deployment.md), [AP-0021](AP-0021-tls-entrypoint.md), [AP-0024](AP-0024-alerts-recovery.md), [AP-0026](AP-0026-data-infrastructure.md), [AP-0033](AP-0033-github-actions-migration.md)
+- **Linked Tickets:** [AP-0022](AP-0022-openbao-secrets.md), [AP-0020](AP-0020-stateless-deployment.md), [AP-0021](AP-0021-tls-entrypoint.md), [AP-0024](AP-0024-alerts-recovery.md), [AP-0026](AP-0026-data-infrastructure.md), [AP-0033](AP-0033-github-actions-migration.md), [AP-0045 Secret Delivery Decision](AP-0045-ansible-vault-vps-secrets.md), [AP-0046 VPS Infrastructure Automation](AP-0046-provision-vps-topology-with-opentofu-ansible.md)
 - **Source:** `docs/deployment-architecture.md` Secrets and Configuration / OpenBao
 
 ## Description
 
 When production go-live is explicitly approved, provision and verify the OpenBao service and its application-host Agent integration for the selected VPS deployment. The secret service must remain private, TLS-protected, and outside the application and audit PostgreSQL failure boundary. A container image may be used, but the production service must run in normal initialized/sealed server mode with persistent storage and an approved recovery design. It must not use OpenBao dev mode or share the application Compose project, host, storage, or failure boundary. Development may use a separate disposable dev-mode Compose service with non-production values.
 
-This ticket is a production go-live gate; creating it does not authorize provisioning or change AP-0022 status. Begin only after the product/operations owners approve the production go-live decision and deployment topology.
+This ticket is conditional on AP-0045's ADR selecting OpenBao or another approved protected runtime secret service. If Ansible Vault deploy-time injection is selected, defer or supersede this initial OpenBao VPS delivery path in the linked tracking; do not provision both models for the same production credentials. AP-0046 must include a dedicated protected secret-service boundary or approved managed service before this ticket can proceed. Creating AP-0044 does not authorize provisioning or change AP-0022 status. Begin only after product/operations owners approve the secret model, deployment topology, and production go-live decision.
 
 ## Acceptance Criteria
 

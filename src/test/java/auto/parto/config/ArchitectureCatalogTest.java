@@ -47,6 +47,46 @@ class ArchitectureCatalogTest {
         }
     }
 
+    @Test
+    void productionSecretAndInfrastructurePlansKeepTheirDecisionBlockersExplicit() throws IOException {
+        String secretDecision = Files.readString(BACKLOG.resolve("tickets/AP-0045-ansible-vault-vps-secrets.md"));
+        String infrastructure = Files.readString(
+                BACKLOG.resolve("tickets/AP-0046-provision-vps-topology-with-opentofu-ansible.md"));
+
+        assertThat(secretDecision).contains("**Status:** Proposed")
+                .contains("Architecture Decision Record (ADR)")
+                .contains("selecting exactly one initial production secret-delivery model")
+                .contains("operator-controlled Ansible Vault deploy-time injection")
+                .contains("OpenBao/an approved protected runtime secret service")
+                .contains("ordinary CI secrets")
+                .contains("separately approved secure unlock/retrieval design")
+                .contains("cancel AP-0045");
+        assertThat(infrastructure).contains("**Status:** Proposed")
+                .contains("remains Proposed until both the secret-delivery model and provider/private-network capability are selected")
+                .contains("dedicated protected secret-service infrastructure")
+                .contains("monthly cost estimate")
+                .contains("maintained OpenTofu provider")
+                .contains("state-changing migration/deployment runner")
+                .contains("Never expose PostgreSQL publicly")
+                .contains("Keep GitLab CI active until");
+    }
+
+    @Test
+    void secretAndInfrastructurePlanningDoesNotCloseDependentReadinessWork() throws IOException {
+        assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0022-openbao-secrets.md")))
+                .contains("**Status:** In Progress");
+        assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0044-openbao-vps-go-live.md")))
+                .contains("**Status:** Proposed");
+        assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0026-data-infrastructure.md")))
+                .contains("**Status:** Proposed");
+        assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0033-github-actions-migration.md")))
+                .contains("## Status\n\nIn Progress");
+        assertThat(Files.readString(BACKLOG.resolve("features/F07-deployment-and-secrets.md")))
+                .contains("**Status:** In Progress");
+        assertThat(Files.readString(BACKLOG.resolve("features/F09-go-live-readiness.md")))
+                .contains("**Status:** Deferred until a go-live decision is approved.");
+    }
+
     private void assertLinksResolve(Path markdown) {
         try {
             String content = Files.readString(markdown);

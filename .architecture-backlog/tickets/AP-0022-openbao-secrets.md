@@ -3,7 +3,7 @@
 - **Status:** In Progress
 - **Type:** Technical Enhancement
 - **Feature:** [Deployment and Secrets](../features/F07-deployment-and-secrets.md)
-- **Linked Tickets:** [AP-0020](AP-0020-stateless-deployment.md), [AP-0044](AP-0044-openbao-vps-go-live.md)
+- **Linked Tickets:** [AP-0020](AP-0020-stateless-deployment.md), [AP-0044](AP-0044-openbao-vps-go-live.md), [AP-0045 Secret Delivery Decision](AP-0045-ansible-vault-vps-secrets.md), [AP-0046 VPS Infrastructure Automation](AP-0046-provision-vps-topology-with-opentofu-ansible.md)
 - **Source:** `deployment-architecture.md` Secrets and Configuration
 
 ## Description
@@ -30,6 +30,8 @@ The repository and image-based implementation increment is complete, but AP-0022
 | 7. Asymmetric rotating JWT | RS256 signing with `kid`, public JWKS, overlap/removal behavior, and unit/HTTP tests. | Repository behavior is tested; deployment rollover and revocation rehearsal remains outstanding (AP-0044). |
 
 AP-0022 remains **In Progress** until every acceptance criterion is verified, including the actual protected secret service, production workload bindings, credential rotation and old-value rejection, and backup/restore/unseal recovery. AP-0044 tracks approved VPS provisioning and operational evidence; it does not replace or close AP-0022.
+
+AP-0045 is a Proposed architecture decision gate for the mutually exclusive Ansible Vault deploy-time model versus OpenBao/another approved protected runtime service. Until its ADR is approved, the current OpenBao design and AP-0022 acceptance criteria remain in force. AP-0046 must reflect the selected model's actual topology before it can become Ready; none of these planning links changes AP-0022 status.
 
 ### OpenBao image startup health-check follow-up (2026-10-27)
 

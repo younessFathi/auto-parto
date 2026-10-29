@@ -12,6 +12,8 @@ Coordinate the final production readiness, database cutover, and VPS release gat
 4. **AP-0021** — after AP-0028 and AP-0020. Configure the approved public TLS edge, strict-TLS origin proxy, trusted proxy addresses, health-gated routing, private data-service paths, edge rate limits, and SSE timeouts. Resolve the current Caddy recommendation in `docs/deployment-architecture.md` against the AP-0021 Nginx-origin requirement before deployment.
 5. **AP-0024** — Blocked until AP-0021, AP-0022, AP-0023, and AP-0026 are demonstrably complete; AP-0013 and AP-0019 are Done. Then define each alert's named owner, severity, recovery objective, escalation path, and runbook. Independently back up and restore application and audit PostgreSQL, use PITR for business data and reconcile wallet balances with immutable ledger entries, restore audit history and replay its application outbox idempotently, rebuild Redis projections from PostgreSQL, and restore SeaweedFS volumes/filer metadata/IAM/key material before bounded file reconciliation. Exercise credential rotation, application rollback, duplicate notification delivery, and repeat each drill with recorded RPO/RTO, outcomes, and follow-up owners.
 
+AP-0045 and AP-0046 remain Proposed and block readiness. First approve the AP-0045 ADR selecting exactly one secret model. Then align AP-0046's topology: Ansible Vault may use the four VPS roles with its documented limitations; OpenBao requires a separate protected secret-service host/service or approved managed service. AP-0046 also requires provider/network capability evidence and an externally controlled state-changing runner with private PostgreSQL access. Keep GitLab CI active until the protected migration/deployment path has successful end-to-end staging evidence and retirement is explicitly approved.
+
 The deployment design keeps PostgreSQL, audit PostgreSQL, Redis, and object storage private and on explicitly defined failure boundaries. Recovery drills must record measured RPO/RTO, results, owners, and follow-up actions. CloudEvents remain out of scope unless an external consumer or cross-service contract is approved.
 
 This feature is a release gate, not a replacement for the implementation tickets below. No production traffic should be enabled merely because the application builds or the PostgreSQL development bootstrap succeeds.
@@ -22,9 +24,9 @@ This feature is a release gate, not a replacement for the implementation tickets
 - [AP-0020](../tickets/AP-0020-stateless-deployment.md): Deploy bounded non-root application replicas.
 - [AP-0021](../tickets/AP-0021-tls-entrypoint.md): Configure TLS, trusted proxies, health checks, and SSE timeouts.
 - [AP-0022](../tickets/AP-0022-openbao-secrets.md): Deliver and rotate protected production secrets.
-- [AP-0044](../tickets/AP-0044-openbao-vps-go-live.md): Provision the production OpenBao service on its approved private failure boundary and complete workload, recovery, rotation, and alerting drills after go-live approval.
-- [AP-0045](../tickets/AP-0045-ansible-vault-vps-secrets.md): Proposed Ansible Vault alternative for the four-VPS deployment. Resolve this architecture choice before starting AP-0044; select one production secret-delivery model.
-- [AP-0046](../tickets/AP-0046-provision-vps-topology-with-opentofu-ansible.md): Proposed repeatable provisioning/configuration for the four-VPS topology, including provider-specific network boundaries, off-provider database/audit/object backups, and recovery drills.
+- [AP-0044](../tickets/AP-0044-openbao-vps-go-live.md): Conditional OpenBao deployment only if the AP-0045 ADR selects that model and AP-0046 provides a separate protected service boundary or approved managed service.
+- [AP-0045](../tickets/AP-0045-ansible-vault-vps-secrets.md): Proposed architecture decision gate. Approve an ADR selecting operator-controlled Ansible Vault deploy-time injection or OpenBao/an approved protected runtime service, never both for the same credentials.
+- [AP-0046](../tickets/AP-0046-provision-vps-topology-with-opentofu-ansible.md): Proposed OpenTofu/Ansible provisioning. Four VPSs are the Ansible Vault topology; OpenBao requires an added protected secret-service boundary. Provider, private-network, and separately controlled private-database runner checks block Ready.
 - [AP-0023](../tickets/AP-0023-telemetry-health.md): Provide production telemetry and health groups.
 - [AP-0024](../tickets/AP-0024-alerts-recovery.md): Establish alerts, backups, restoration, and recovery drills.
 - [AP-0026](../tickets/AP-0026-data-infrastructure.md): Harden PostgreSQL, Redis, and VPS database infrastructure.
@@ -41,7 +43,7 @@ This feature is a release gate, not a replacement for the implementation tickets
 - [ ] Add a protected backup job before production migration.
 - [ ] Add a dedicated Flyway migration job; a nonzero migration result must block application rollout.
 - [ ] Make application deployment depend on successful backup, preflight, migration, and smoke checks.
-- [ ] Select and document the deployment transport: GitHub-hosted or self-hosted runner, or restricted SSH to the VPS.
+- [ ] Run state-changing migration/deployment work only through a separately controlled deployment repository or orchestrator; do not permit application PR workflows to access it or its runner.
 - [ ] Ensure deployment jobs use pinned artifacts and do not build from an uncommitted VPS checkout.
 - [ ] Add separate application and audit database migration jobs with explicit ordering.
 
@@ -55,13 +57,14 @@ This feature is a release gate, not a replacement for the implementation tickets
 
 ### Secrets and database access
 
-- [ ] Deliver production secrets through OpenBao, Docker Secrets, or an approved protected secret system.
+- [ ] Approve the AP-0045 ADR selecting exactly one production secret-delivery model; keep encrypted Ansible Vault inputs and their unlock password separate, or provision OpenBao/approved protected runtime service on its required failure boundary.
 - [ ] Keep bootstrap/DBA, migration, runtime, and audit credentials separate.
 - [ ] Rotate credentials and verify that old credentials are rejected.
 - [ ] Provision existing PostgreSQL volumes through the AP-0003 recovery procedure; never delete a volume to force initialization.
 - [ ] Verify runtime grants, migration ownership, Flyway history access, and audit-database isolation before rollout.
 - [ ] Confirm no secrets appear in GitHub Actions logs, Compose files, images, traces, or process arguments.
-- [ ] Provision the separate TLS-protected OpenBao cluster, bind environment-scoped app/audit/migration workload identities, and record successful authorization, renewal/revocation, credential rotation, old-credential rejection, Raft snapshot restore, and unseal drills.
+- [ ] If OpenBao is selected, provision its separate protected service boundary (and selected HA topology), bind environment-scoped app/audit/migration identities, and record authorization, renewal/revocation, credential rotation, old-credential rejection, snapshot restore, and unseal drills.
+- [ ] If Ansible Vault is selected, verify operator-controlled deploy-time injection, password recovery controls, role-scoped files, rotation/rejection, host rebuild, and the accepted no-lease/plaintext-on-host limitations.
 
 ### Data cutover and rollback
 
