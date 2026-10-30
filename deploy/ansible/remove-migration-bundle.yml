@@ -5,8 +5,8 @@
   become: true
 
   tasks:
-    - name: Remove the migration-only secret file
+    - name: Remove all temporary migration secret generations
       ansible.builtin.file:
-        path: /run/auto-parto/migration/secrets.properties
+        path: /run/auto-parto-migration
         state: absent
       no_log: true
