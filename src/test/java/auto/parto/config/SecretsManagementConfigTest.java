@@ -86,7 +86,9 @@ class SecretsManagementConfigTest {
     void productionComposeUsesOnlyReadOnlyRoleScopedFileMounts() throws IOException {
         String compose = Files.readString(Path.of("docker-compose.prod.yml"));
         assertThat(compose)
-                .contains("/run/auto-parto/active:/run/auto-parto:ro")
+                .contains("source: /run/auto-parto/active")
+                .contains("create_host_path: false")
+                .contains("read_only: true")
                 .contains("user: \"10001:10001\"")
                 .doesNotContain("OPENBAO_ADDR")
                 .doesNotContain("OPENBAO_ROLE")
@@ -109,8 +111,14 @@ class SecretsManagementConfigTest {
                 .contains("application_database")
                 .contains("migration_runner")
                 .contains("audit-runtime")
-                .contains("item.gid | int == 10001")
-                .contains("generation_path == secret_bundle_paths[item.role]")
+                .contains("item.gid is match('^[0-9]+$')")
+                .contains("item.gid | string == '10001'")
+                .contains("item.generation_path == secret_bundle_paths[item.role]")
+                .contains("selectattr('role', 'equalto', 'application-runtime')")
+                .contains("secret_lock_path")
+                .contains("Acquire exclusive host and secret-root lock")
+                .contains("failed_active_secret_generation.stat.lnk_source")
+                .contains("secret_role_root ~ '/generations/' ~ secret_generation_id")
                 .contains("generations/{{ secret_generation_id }}")
                 .contains("Secret bundle staging failed")
                 .contains("activate-secret-generation.sh")
@@ -123,13 +131,19 @@ class SecretsManagementConfigTest {
                 .contains("mv -Tf")
                 .contains("/run/auto-parto:secrets/secrets.properties")
                 .doesNotContain("eval ");
+
+        String migrationCleanup = Files.readString(Path.of("deploy/ansible/remove-migration-bundle.yml"));
+        assertThat(migrationCleanup)
+                .contains("hosts: secret_bundle_targets")
+                .contains("when: secret_target_role == 'migration_runner'")
+                .contains("auto-parto-secret-delivery-migration_runner");
     }
 
     @Test
     void openBaoDeliveryDoesNotPlaceAgentTokenInApplicationCompose() throws IOException {
         String compose = Files.readString(Path.of("docker-compose.prod.yml"));
         String agent = Files.readString(Path.of("deploy/openbao/agent.hcl.example"));
-        assertThat(compose).contains("/run/auto-parto/active:/run/auto-parto:ro")
+        assertThat(compose).contains("source: /run/auto-parto/active")
                 .doesNotContain("OPENBAO_TOKEN")
                 .doesNotContain("BAO_TOKEN");
         assertThat(agent).contains("secret_id_response_wrapping_path")

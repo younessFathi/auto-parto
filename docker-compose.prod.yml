@@ -18,7 +18,12 @@ services:
       FIREBASE_ENABLED: ${FIREBASE_ENABLED:-false}
       RESEND_ENABLED: ${RESEND_ENABLED:-false}
     volumes:
-      - /run/auto-parto/active:/run/auto-parto:ro
+      - type: bind
+        source: /run/auto-parto/active
+        target: /run/auto-parto
+        read_only: true
+        bind:
+          create_host_path: false
     read_only: true
     tmpfs: [/tmp]
     user: "10001:10001"
