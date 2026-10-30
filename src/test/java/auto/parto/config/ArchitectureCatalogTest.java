@@ -63,6 +63,10 @@ class ArchitectureCatalogTest {
                 .contains("cancel AP-0045");
         assertThat(infrastructure).contains("**Status:** Proposed")
                 .contains("remains Proposed until both the secret-delivery model and provider/private-network capability are selected")
+                .contains("Contabo was selected as the intended provider on 2026-10-30")
+                .contains("requires a paid add-on per participating server")
+                .contains("has no built-in firewall")
+                .contains("https://github.com/contabo/terraform-provider-contabo")
                 .contains("dedicated protected secret-service infrastructure")
                 .contains("monthly cost estimate")
                 .contains("maintained OpenTofu provider")
