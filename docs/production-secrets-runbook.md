@@ -46,4 +46,4 @@ Ansible Vault encrypts stored inputs but does not provide runtime identity, dyna
 
 ## Evidence status
 
-The production profile now uses a required properties-file import and no longer requires an OpenBao URL, role, or auth method. Focused tests cover the configuration contract and playbook safety markers; Ansible itself is unavailable in this environment, so playbook syntax/execution has not been verified. Password custody/recovery, Contabo provisioning, old-credential rejection, host rebuild, and end-to-end deployment have not been performed. Repository documentation and unit tests alone are not deployment evidence.
+The production profile now uses a required properties-file import and no longer requires an OpenBao URL, role, or auth method. The playbook is executed with pinned Ansible Core in a disposable Docker integration test, including role-scoped file delivery and retry failure cases. This does not verify deployment on a provider host. Password custody/recovery, Contabo provisioning, old-credential rejection, host rebuild, and end-to-end staging deployment have not been performed; those remain operational gates.

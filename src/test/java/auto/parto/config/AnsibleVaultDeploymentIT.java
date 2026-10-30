@@ -43,9 +43,17 @@ class AnsibleVaultDeploymentIT {
                     chmod 0600 /fixtures/app-password /fixtures/audit-password
                     printf 'APP_TEST_PROPERTY=app-readable-marker\\n' > /fixtures/application.clear
                     printf 'AUDIT_TEST_PROPERTY=audit-readable-marker\\n' > /fixtures/audit.clear
+                    printf 'DB_BOOTSTRAP_TEST_PROPERTY=db-bootstrap-marker\\n' > /fixtures/database-bootstrap.clear
+                    printf 'BACKUP_TEST_PROPERTY=backup-marker\\n' > /fixtures/backup.clear
+                    printf 'AUDIT_ADMIN_TEST_PROPERTY=audit-admin-marker\\n' > /fixtures/audit-admin.clear
+                    printf 'OBJECT_STORAGE_TEST_PROPERTY=object-storage-admin-marker\\n' > /fixtures/object-storage-admin.clear
                     printf 'MIGRATION_TEST_PROPERTY=migration-cleanup-marker\\n' > /fixtures/migration.clear
                     /opt/ansible/bin/ansible-vault encrypt --vault-id app@/fixtures/app-password --output /fixtures/application.vault /fixtures/application.clear
                     /opt/ansible/bin/ansible-vault encrypt --vault-id audit@/fixtures/audit-password --output /fixtures/audit.vault /fixtures/audit.clear
+                    /opt/ansible/bin/ansible-vault encrypt --vault-id app@/fixtures/app-password --output /fixtures/database-bootstrap.vault /fixtures/database-bootstrap.clear
+                    /opt/ansible/bin/ansible-vault encrypt --vault-id app@/fixtures/app-password --output /fixtures/backup.vault /fixtures/backup.clear
+                    /opt/ansible/bin/ansible-vault encrypt --vault-id app@/fixtures/app-password --output /fixtures/audit-admin.vault /fixtures/audit-admin.clear
+                    /opt/ansible/bin/ansible-vault encrypt --vault-id app@/fixtures/app-password --output /fixtures/object-storage-admin.vault /fixtures/object-storage-admin.clear
                     /opt/ansible/bin/ansible-vault encrypt --vault-id app@/fixtures/app-password --output /fixtures/migration.vault /fixtures/migration.clear
                     printf '%s\\n' \\
                       'all:' \\
@@ -68,6 +76,32 @@ class AnsibleVaultDeploymentIT {
                     sed '/source: \\/fixtures\\/application.vault/,/generation_path: secrets\\/secrets.properties/d' /fixtures/inventory.yml > /fixtures/audit-only.yml
                     sed -e 's/role: audit-runtime/role: application-runtime/' -e 's#generation_path: audit/secrets.properties#generation_path: secrets/secrets.properties#' /fixtures/inventory.yml > /fixtures/duplicate-destination.yml
                     sed 's/gid: 10001/gid: postgres/g' /fixtures/inventory.yml > /fixtures/invalid-gid.yml
+                    printf '%s\\n' \\
+                      'all:' '  children:' '    secret_bundle_targets:' '      hosts:' '        localhost:' \\
+                      '          ansible_connection: local' '          secret_target_role: application_database' \\
+                      '          vault_bundles:' \\
+                      '            - source: /fixtures/database-bootstrap.vault' \\
+                      '              role: database-bootstrap' '              gid: 10002' \\
+                      '              generation_path: database/bootstrap.properties' \\
+                      '            - source: /fixtures/backup.vault' '              role: backup' \\
+                      '              gid: 10003' '              generation_path: backup/secrets.properties' \\
+                      > /fixtures/application-database-inventory.yml
+                    printf '%s\\n' \\
+                      'all:' '  children:' '    secret_bundle_targets:' '      hosts:' '        localhost:' \\
+                      '          ansible_connection: local' '          secret_target_role: audit_database' \\
+                      '          vault_bundles:' \\
+                      '            - source: /fixtures/audit-admin.vault' \\
+                      '              role: audit-admin' '              gid: 10004' \\
+                      '              generation_path: database/audit-admin.properties' \\
+                      > /fixtures/audit-database-inventory.yml
+                    printf '%s\\n' \\
+                      'all:' '  children:' '    secret_bundle_targets:' '      hosts:' '        localhost:' \\
+                      '          ansible_connection: local' '          secret_target_role: object_storage' \\
+                      '          vault_bundles:' \\
+                      '            - source: /fixtures/object-storage-admin.vault' \\
+                      '              role: object-storage-admin' '              gid: 10005' \\
+                      '              generation_path: object-storage/admin.properties' \\
+                      > /fixtures/object-storage-inventory.yml
                     printf '%s\\n' \\
                       'all:' \\
                       '  children:' \\
@@ -137,6 +171,34 @@ class AnsibleVaultDeploymentIT {
             var restoreApplicationMode = controller.execInContainer("chmod", "0440",
                     "/run/auto-parto/active/secrets/secrets.properties");
             assertThat(restoreApplicationMode.getExitCode()).as(restoreApplicationMode.getStderr()).isZero();
+            assertBothBundlesReadable(controller);
+
+            var applicationDatabaseDeployment = runPlaybook(
+                    controller, "/fixtures/application-database-inventory.yml", APP_VAULT_ID);
+            assertThat(applicationDatabaseDeployment.getExitCode())
+                    .as(applicationDatabaseDeployment.getStdout() + "\n" + applicationDatabaseDeployment.getStderr())
+                    .isZero();
+            assertRoleBundle(controller, "/run/auto-parto-db/active/database/bootstrap.properties",
+                    "DB_BOOTSTRAP_TEST_PROPERTY=db-bootstrap-marker");
+            assertRoleBundle(controller, "/run/auto-parto-db/active/backup/secrets.properties",
+                    "BACKUP_TEST_PROPERTY=backup-marker");
+
+            var auditDatabaseDeployment = runPlaybook(
+                    controller, "/fixtures/audit-database-inventory.yml", APP_VAULT_ID);
+            assertThat(auditDatabaseDeployment.getExitCode())
+                    .as(auditDatabaseDeployment.getStdout() + "\n" + auditDatabaseDeployment.getStderr())
+                    .isZero();
+            assertRoleBundle(controller, "/run/auto-parto-audit/active/database/audit-admin.properties",
+                    "AUDIT_ADMIN_TEST_PROPERTY=audit-admin-marker");
+
+            var objectStorageDeployment = runPlaybook(
+                    controller, "/fixtures/object-storage-inventory.yml", APP_VAULT_ID);
+            assertThat(objectStorageDeployment.getExitCode())
+                    .as(objectStorageDeployment.getStdout() + "\n" + objectStorageDeployment.getStderr())
+                    .isZero();
+            assertRoleBundle(controller,
+                    "/run/auto-parto-object-storage/active/object-storage/admin.properties",
+                    "OBJECT_STORAGE_TEST_PROPERTY=object-storage-admin-marker");
             assertBothBundlesReadable(controller);
 
             var auditOnly = runPlaybook(controller, "/fixtures/audit-only.yml", APP_VAULT_ID, AUDIT_VAULT_ID);
@@ -245,6 +307,13 @@ class AnsibleVaultDeploymentIT {
     private static void assertApplicationLockReleased(GenericContainer<?> controller) throws Exception {
         var result = controller.execInContainer("sh", "-ec",
                 "test ! -e /run/lock/auto-parto-secret-delivery-application");
+        assertThat(result.getExitCode()).as(result.getStderr()).isZero();
+    }
+
+    private static void assertRoleBundle(GenericContainer<?> controller, String path, String expectedLine)
+            throws Exception {
+        var result = controller.execInContainer("sh", "-ec", "test -r '" + path + "' && grep -Fqx '"
+                + expectedLine + "' '" + path + "'");
         assertThat(result.getExitCode()).as(result.getStderr()).isZero();
     }
 
