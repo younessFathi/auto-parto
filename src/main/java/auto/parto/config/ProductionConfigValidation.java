@@ -22,7 +22,6 @@ public class ProductionConfigValidation implements InitializingBean {
     public void afterPropertiesSet() {
         if (!isProdProfileActive()) return;
         List<String> errors = new ArrayList<>();
-        validateSecretDelivery(errors);
         validatePostgresql(errors);
         validatePostgresqlCutover(errors);
         validateRedis(errors);
@@ -31,17 +30,6 @@ public class ProductionConfigValidation implements InitializingBean {
         validateConditionalProviders(errors);
         if (!errors.isEmpty()) {
             throw new IllegalStateException("Invalid required production configuration: " + String.join(", ", errors));
-        }
-    }
-
-    private void validateSecretDelivery(List<String> errors) {
-        if (!"openbao".equalsIgnoreCase(value("auto.parto.secrets.provider"))) errors.add("auto.parto.secrets.provider=openbao");
-        validateHttpsUri("auto.parto.secrets.openbao.address", errors);
-        validateRequiredProperty("auto.parto.secrets.openbao.role", errors);
-        String authMethod = value("auto.parto.secrets.openbao.auth-method");
-        if (!"kubernetes".equalsIgnoreCase(authMethod) && !"jwt".equalsIgnoreCase(authMethod)
-                && !"approle-agent".equalsIgnoreCase(authMethod)) {
-            errors.add("auto.parto.secrets.openbao.auth-method=kubernetes|jwt|approle-agent");
         }
     }
 

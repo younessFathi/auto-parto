@@ -279,7 +279,11 @@ SSE requires additional deployment settings:
 
 ## Secrets and Configuration
 
-Use a secret manager or protected deployment variables for:
+For the initial production deployment, use the operator-controlled Ansible Vault model selected by [ADR-0001](architecture-decisions/ADR-0001-production-secret-delivery.md). Do not use OpenBao or another runtime service to deliver the same credentials. AP-0045 has removed the runtime OpenBao requirement and added the initial encrypted-file installation playbook. It is not yet a deployable production secret-delivery setup: the playbook has not been run with Ansible or verified on staging hosts, and custody/recovery controls remain outstanding.
+
+Keep the encrypted Ansible Vault inputs partitioned by environment and workload role. An authorized operator unlocks them interactively on a trusted workstation and runs reviewed playbooks from a separately controlled infrastructure/deployment repository. The Vault password is held separately in an access-controlled password manager with independent operator and recovery custody. It must not be stored in Git, on VPSs, command lines, logs, traces, or ordinary CI secrets. Any automated unlock/retrieval path requires a separately approved design. The playbook installs only needed role-scoped files with restrictive permissions; Compose mounts consuming bundles read-only. Migration credentials exist only for migration operations and are removed afterward. Plaintext exists on the host and within the consuming workload while in use, and rotation/revocation requires an operator deployment.
+
+Keep secrets external to source/configuration for:
 
 - PostgreSQL credentials
 - Audit PostgreSQL credentials
@@ -296,7 +300,7 @@ Configuration should be separated by profile:
 - `test`: fake providers and isolated containers
 - `prod`: required external secrets with startup validation
 
-The production profile has no development fallback for PostgreSQL, Redis, JWT signing material, object storage, or OpenBao. Startup validation rejects missing, malformed, or loopback dependency endpoints and requires the PostgreSQL-only cutover flags. Email, Firebase, and audit credentials are validated when their capabilities are enabled. The application image and Compose configuration contain no secret values; protected deployment variables or OpenBao must supply them at runtime.
+The production profile has no development fallback for PostgreSQL, Redis, JWT signing material, or object storage. Its required properties-file import and startup validation reject absent required files/values, malformed configuration, and loopback dependency endpoints; cutover flags are also required. Email, Firebase, and audit credentials are validated when their capabilities are enabled. The application image and Compose configuration contain no secret values; the selected Ansible Vault workflow is intended to supply role-scoped files. Production remains blocked until AP-0045 verifies the selected injection path in staging.
 
 Runtime application-database access uses R2DBC. Audit publishing uses a bounded non-blocking client or isolated bounded scheduler when the driver is blocking. Application and audit schema migrations use separate restricted JDBC migration jobs, run in deployment order before the corresponding workers and application rollout. Use expand-contract migrations when application versions overlap.
 
@@ -304,27 +308,13 @@ The PostgreSQL migration job, identity/profile fixture job, reconciliation proce
 
 Applications must fail safely when required production secrets are missing. They must not silently use development credentials.
 
-### OpenBao
+### OpenBao prototype disposition
 
-OpenBao is a suitable self-hosted secret-management choice for this project. It can store encrypted KV secrets, issue dynamic database credentials, manage leases, and support revocation.
+OpenBao's normal-mode image, policies, Agent templates, and integration tests are retained as prototype/development artifacts. They are not the selected initial production delivery path and must not deliver initial production credentials. `docker-compose.openbao-dev.yml` remains an isolated disposable local sandbox. AP-0022 is cancelled/superseded for its OpenBao production acceptance path, while AP-0045 tracks implementing the accepted Ansible Vault model. Do not claim production secret readiness from the prototype or image tests.
 
-Recommended usage:
+The application supports RS256 JWT signing with a `kid`, a published `/.well-known/jwks.json` key set, overlapping verification keys, and removal-based revocation. Keep private signing keys in the encrypted role-scoped Vault inputs and publish only public keys. Tests cover overlap and removal; staging rollout/revocation remains required.
 
-- Store PostgreSQL, Redis, Firebase, OAuth, email, SeaweedFS, and JWT configuration secrets in OpenBao.
-- Use separate policies and paths for local, test, staging, and production.
-- Use dynamic PostgreSQL credentials where practical.
-- Use OpenBao Transit or an external KMS for key operations when required.
-- Authenticate workloads with short-lived machine identity, not a permanent root token.
-- Keep OpenBao unexposed to the public Internet and protect it with TLS.
-- Back up and test the OpenBao storage and unseal/recovery process.
-
-The AP-0022 repository increment now includes a digest-pinned OpenBao production image Compose template for a dedicated host, TLS/Raft server configuration, systemd lifecycle, separated environment/application/audit/migration policies, AppRole Agent and systemd templates, a private production app Compose boundary, fail-closed required properties-file import, and staging authorization/lease drill scripts. The host Agent renders credentials to tmpfs and alone holds its renewable token. The app receives no OpenBao token. The local dev image profile is loopback-only, in-memory, and disposable. These artifacts are templates: service provisioning, role binding, certificate issuance, dynamic database plugin setup, and successful staging/recovery drills still require operations evidence.
-
-OpenBao is not free operationally. A single OpenBao instance on the same PostgreSQL VPS creates a shared failure and compromise boundary. Initially use a separate small protected host or a managed secret service if available. If OpenBao is deployed on one node, document that it is a temporary availability risk and protect its recovery keys separately.
-
-The application supports RS256 JWT signing with a `kid`, a published `/.well-known/jwks.json` key set, overlapping verification keys, and removal-based revocation. Keep private key material in OpenBao and publish only public keys. Tests cover overlap and removal; the staging rollout/revocation drill is still required. Do not put a long-lived root credential in the application container.
-
-Prefer asynchronous clients for Firebase, email, OpenBao, and object storage. If a blocking SDK is unavoidable, isolate it on a bounded scheduler with explicit thread count, queue size, concurrency, timeout, cancellation, and shutdown behavior.
+Prefer asynchronous clients for Firebase, email, and object storage. If a blocking SDK is unavoidable, isolate it on a bounded scheduler with explicit thread count, queue size, concurrency, timeout, cancellation, and shutdown behavior.
 
 ### Provider execution inventory and bounds
 
@@ -333,7 +323,7 @@ Prefer asynchronous clients for Firebase, email, OpenBao, and object storage. If
 | Firebase FCM send | Firebase Admin `sendAsync` API; background notification delivery | Reactor adapts the `ApiFuture`, cancels it on downstream cancellation, and bounds per-instance in-flight requests and batch concurrency. Timeouts and retryable failures feed the existing PostgreSQL-authoritative notification retry flow. |
 | Resend email | Resend Java SDK is synchronous; OTP request path | Run on the dedicated `resend-provider` fixed-size scheduler with a bounded queue, timeout, interruption on cancellation, immediate rejection at capacity, and graceful shutdown. Do not use shared `boundedElastic` for provider calls. |
 | SeaweedFS/S3 | AWS `S3AsyncClient`; upload/download service paths | Bound Netty HTTP concurrency and pending connection acquisition; configure acquisition, API-call, attempt, and read/write timeouts. Cancel the SDK future with Reactor cancellation and close the client during bean shutdown. |
-| OpenBao | Host-side OpenBao Agent, not an application SDK | Agent renders scoped renewable credentials to protected files; token renewal/revocation is handled outside the app process. There is no JVM provider call or application root token. |
+| Ansible Vault delivery | Operator-run Ansible playbook from a trusted workstation | Decrypts role-scoped inputs interactively and installs restricted files on intended hosts; no application JVM secret-manager call, workload token, or CI unlock path. AP-0045 must implement and verify this boundary. |
 | Firebase health | Local initialization check only | No provider network call is part of readiness. |
 
 Provider settings use `auto.parto.providers.firebase.*`, `auto.parto.providers.email.*`, and `auto.parto.storage.s3.*` in `application.yml`. Values have bounded defaults and may be supplied through deployment environment configuration. `auto.parto.provider.calls` records provider, operation, and one of the fixed outcomes (`success`, `timeout`, `saturated`, `cancelled`, or `failure`); logs contain only those low-cardinality dimensions and never provider response bodies, credentials, tokens, or notification payloads. See [Provider Isolation Runbook](provider-isolation-runbook.md) for diagnosis and tuning. Provider failure does not move notification intent, claims, attempts, or retry authority from PostgreSQL.

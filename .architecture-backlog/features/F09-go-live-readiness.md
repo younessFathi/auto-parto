@@ -8,9 +8,11 @@ Coordinate the final production readiness, database cutover, and VPS release gat
 
 1. **AP-0023** — application metrics, provider/background observations, structured redacted logs, safe probes, and a protected observability deployment template are implemented. AP-0023 remains In Progress until protected staging deployment, retention/deletion, quotas, and trace linkage are verified.
 2. **AP-0033** — independent CI track, already In Progress. Complete and verify GitHub Actions compile, unit tests, Docker/Testcontainers verification, and packaging. Keep private database access and migration credentials out of application-repository workflows; implement the manual gate only in a separately controlled deployment repository/orchestrator, with a runner registered only there and protected workflow ownership. The gate must validate an immutable reviewed application commit and backup attestation, then run Flyway, fixtures, reconciliation, and cutover preflight in order. Keep `.gitlab-ci.yml` active until equivalent workflow runs are verified end to end; do not publish application packages as short-lived test-report artifacts.
-3. **AP-0028 and AP-0026** — AP-0022's repository secret-delivery implementation is available, so these implementation tracks can proceed using isolated test credentials and providers. AP-0022 remains In Progress until its deployed service, workload identity, rotation, and recovery criteria are met; this implementation dependency does not permit go-live. AP-0028 also requires AP-0020 and AP-0017 (both Done); AP-0026 requires AP-0002 (Done) and AP-0016. These can proceed in parallel. AP-0028 uses Firebase Admin's async future API and the existing AWS `S3AsyncClient`; Resend remains synchronous and therefore runs on a dedicated bounded scheduler. Provider concurrency, timeouts, cancellation, bounded rejection, shutdown, correlation, and low-cardinality redacted telemetry are covered by the ticket's focused tests.
+3. **AP-0028 and AP-0026** — use isolated test credentials and providers. AP-0022's OpenBao production path was cancelled by ADR-0001; its prototype does not satisfy production secret delivery. AP-0045 implements the selected Ansible Vault path. AP-0028 also requires AP-0020 and AP-0017 (both Done); AP-0026 requires AP-0002 (Done) and AP-0016. These can proceed in parallel. AP-0028 uses Firebase Admin's async future API and the existing AWS `S3AsyncClient`; Resend remains synchronous and therefore runs on a dedicated bounded scheduler. Provider concurrency, timeouts, cancellation, bounded rejection, shutdown, correlation, and low-cardinality redacted telemetry are covered by the ticket's focused tests.
 4. **AP-0021** — after AP-0028 and AP-0020. Configure the approved public TLS edge, strict-TLS origin proxy, trusted proxy addresses, health-gated routing, private data-service paths, edge rate limits, and SSE timeouts. Resolve the current Caddy recommendation in `docs/deployment-architecture.md` against the AP-0021 Nginx-origin requirement before deployment.
-5. **AP-0024** — Blocked until AP-0021, AP-0022, AP-0023, and AP-0026 are demonstrably complete; AP-0013 and AP-0019 are Done. Then define each alert's named owner, severity, recovery objective, escalation path, and runbook. Independently back up and restore application and audit PostgreSQL, use PITR for business data and reconcile wallet balances with immutable ledger entries, restore audit history and replay its application outbox idempotently, rebuild Redis projections from PostgreSQL, and restore SeaweedFS volumes/filer metadata/IAM/key material before bounded file reconciliation. Exercise credential rotation, application rollback, duplicate notification delivery, and repeat each drill with recorded RPO/RTO, outcomes, and follow-up owners.
+5. **AP-0024** — Blocked until AP-0021, AP-0023, AP-0026, and AP-0045 are demonstrably complete; AP-0013 and AP-0019 are Done. AP-0022's OpenBao production scope is cancelled and does not satisfy the selected secret-delivery dependency. Then define each alert's named owner, severity, recovery objective, escalation path, and runbook. Independently back up and restore application and audit PostgreSQL, use PITR for business data and reconcile wallet balances with immutable ledger entries, restore audit history and replay its application outbox idempotently, rebuild Redis projections from PostgreSQL, and restore SeaweedFS volumes/filer metadata/IAM/key material before bounded file reconciliation. Exercise credential rotation, application rollback, duplicate notification delivery, and repeat each drill with recorded RPO/RTO, outcomes, and follow-up owners.
+
+ADR-0001 selects operator-controlled Ansible Vault injection for initial production and cancels the OpenBao production VPS path. AP-0045 is In Progress; AP-0046 remains Proposed until Contabo region/account/cost, private-network/provider validation, and the separately controlled state-changing runner with private PostgreSQL access are evidenced. The four VPS roles remain the planned topology. Keep GitLab CI active until the protected migration/deployment path has successful end-to-end staging evidence and retirement is explicitly approved.
 
 The deployment design keeps PostgreSQL, audit PostgreSQL, Redis, and object storage private and on explicitly defined failure boundaries. Recovery drills must record measured RPO/RTO, results, owners, and follow-up actions. CloudEvents remain out of scope unless an external consumer or cross-service contract is approved.
 
@@ -21,8 +23,10 @@ This feature is a release gate, not a replacement for the implementation tickets
 - [AP-0002](../tickets/AP-0002-reactive-persistence.md): Complete the verified PostgreSQL application cutover.
 - [AP-0020](../tickets/AP-0020-stateless-deployment.md): Deploy bounded non-root application replicas.
 - [AP-0021](../tickets/AP-0021-tls-entrypoint.md): Configure TLS, trusted proxies, health checks, and SSE timeouts.
-- [AP-0022](../tickets/AP-0022-openbao-secrets.md): Deliver and rotate protected production secrets.
-- [AP-0044](../tickets/AP-0044-openbao-vps-go-live.md): Provision the production OpenBao service on its approved private failure boundary and complete workload, recovery, rotation, and alerting drills after go-live approval.
+- [AP-0022](../tickets/AP-0022-openbao-secrets.md): Cancelled/superseded OpenBao production model; historical prototype artifacts do not satisfy this release gate.
+- [AP-0044](../tickets/AP-0044-openbao-vps-go-live.md): Cancelled by ADR-0001; do not provision OpenBao for initial production credentials.
+- [AP-0045](../tickets/AP-0045-ansible-vault-vps-secrets.md): In Progress implementing the accepted operator-controlled Ansible Vault model.
+- [AP-0046](../tickets/AP-0046-provision-vps-topology-with-opentofu-ansible.md): Proposed Contabo OpenTofu/Ansible four-VPS provisioning; provider-specific, network, cost, and separately controlled private-database runner checks block Ready.
 - [AP-0023](../tickets/AP-0023-telemetry-health.md): Provide production telemetry and health groups.
 - [AP-0024](../tickets/AP-0024-alerts-recovery.md): Establish alerts, backups, restoration, and recovery drills.
 - [AP-0026](../tickets/AP-0026-data-infrastructure.md): Harden PostgreSQL, Redis, and VPS database infrastructure.
@@ -39,27 +43,27 @@ This feature is a release gate, not a replacement for the implementation tickets
 - [ ] Add a protected backup job before production migration.
 - [ ] Add a dedicated Flyway migration job; a nonzero migration result must block application rollout.
 - [ ] Make application deployment depend on successful backup, preflight, migration, and smoke checks.
-- [ ] Select and document the deployment transport: GitHub-hosted or self-hosted runner, or restricted SSH to the VPS.
+- [ ] Run state-changing migration/deployment work only through a separately controlled deployment repository or orchestrator; do not permit application PR workflows to access it or its runner.
 - [ ] Ensure deployment jobs use pinned artifacts and do not build from an uncommitted VPS checkout.
 - [ ] Add separate application and audit database migration jobs with explicit ordering.
 
 ### VPS and network hardening
 
 - [ ] Provision a hardened VPS with patched OS, least-privilege administration, firewall rules, SSH key access, and audit logging.
-- [ ] Keep PostgreSQL, Redis, OpenBao, and internal storage private; expose only the approved TLS entry point.
+- [ ] Keep PostgreSQL, Redis, and internal storage private; expose only the approved TLS entry point.
 - [ ] Configure persistent, monitored storage for PostgreSQL and verify disk-capacity alerts.
 - [ ] Run application containers as non-root users with resource limits and restart policies.
 - [ ] Document VPS replacement and rebuild procedures without relying on mutable container state.
 
 ### Secrets and database access
 
-- [ ] Deliver production secrets through OpenBao, Docker Secrets, or an approved protected secret system.
+- [ ] Implement the accepted AP-0045 Ansible Vault design; keep encrypted Vault inputs and their unlock password separate and use only operator-controlled deploy-time injection.
 - [ ] Keep bootstrap/DBA, migration, runtime, and audit credentials separate.
 - [ ] Rotate credentials and verify that old credentials are rejected.
 - [ ] Provision existing PostgreSQL volumes through the AP-0003 recovery procedure; never delete a volume to force initialization.
 - [ ] Verify runtime grants, migration ownership, Flyway history access, and audit-database isolation before rollout.
 - [ ] Confirm no secrets appear in GitHub Actions logs, Compose files, images, traces, or process arguments.
-- [ ] Provision the separate TLS-protected OpenBao cluster, bind environment-scoped app/audit/migration workload identities, and record successful authorization, renewal/revocation, credential rotation, old-credential rejection, Raft snapshot restore, and unseal drills.
+- [ ] Verify operator-controlled deploy-time injection, password recovery controls, role-scoped files, rotation/rejection, host rebuild, and the accepted no-lease/plaintext-on-host limitations.
 
 ### Data cutover and rollback
 
