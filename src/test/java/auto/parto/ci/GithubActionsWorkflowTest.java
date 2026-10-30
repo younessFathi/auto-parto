@@ -18,6 +18,7 @@ class GithubActionsWorkflowTest {
 
         assertThat(content).contains("actions/checkout@v4")
                 .contains("actions/setup-java@v4")
+                .contains("- 'fix/**'")
                 .contains("./mvnw -B -e clean compile")
                 .contains("./mvnw -B -e clean test")
                 .contains("./mvnw -B -e clean verify")
@@ -36,14 +37,13 @@ class GithubActionsWorkflowTest {
     }
 
     @Test
-    void workflowExposesTheOptionalProtectedCutoverGate() throws IOException {
+    void applicationRepositoryWorkflowNeverSchedulesJobsOnPrivateSelfHostedRunners() throws IOException {
         String content = Files.readString(WORKFLOW);
 
-        assertThat(content).contains("workflow_dispatch:")
-                .contains("run_cutover_gate:")
-                .contains("flyway/flyway:10.20.1")
-                .contains("APP_POSTGRES_MIGRATION_JDBC_URL")
-                .contains("APP_POSTGRES_RUNTIME_PASSWORD")
-                .contains("preflight-cutover.sh");
+        assertThat(content).doesNotContain("self-hosted")
+                .doesNotContain("postgresql-migration-gate")
+                .doesNotContain("APP_POSTGRES_MIGRATION_PASSWORD")
+                .doesNotContain("APP_POSTGRES_RUNTIME_PASSWORD")
+                .doesNotContain("postgresql-cutover");
     }
 }
