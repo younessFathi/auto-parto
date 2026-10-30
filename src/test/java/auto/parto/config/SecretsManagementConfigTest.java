@@ -72,14 +72,46 @@ class SecretsManagementConfigTest {
         assertThat(content)
                 .contains("url: ${APP_POSTGRES_R2DBC_URL}")
                 .contains("file:/run/auto-parto/secrets/secrets.properties")
-                .contains("provider: ${APP_SECRET_PROVIDER}")
-                .contains("address: ${OPENBAO_ADDR}")
                 .contains("provider: ${APP_FILE_STORAGE_PROVIDER}")
                 .contains("MongoReactiveAutoConfiguration")
                 .contains("mongo-disabled: true")
                 .doesNotContain("localhost")
                 .doesNotContain("root")
+                .doesNotContain("openbao")
+                .doesNotContain("APP_SECRET_PROVIDER")
                 .doesNotContain("JWT_SECRET");
+    }
+
+    @Test
+    void productionComposeUsesOnlyReadOnlyRoleScopedFileMounts() throws IOException {
+        String compose = Files.readString(Path.of("docker-compose.prod.yml"));
+        assertThat(compose)
+                .contains("/run/auto-parto/secrets:/run/auto-parto/secrets:ro")
+                .contains("/run/auto-parto/audit:/run/auto-parto/audit:ro")
+                .doesNotContain("OPENBAO_ADDR")
+                .doesNotContain("OPENBAO_ROLE")
+                .doesNotContain("APP_SECRET_PROVIDER");
+    }
+
+    @Test
+    void ansibleVaultPlaybookValidatesEncryptedInputsAndSuppressesSecretOutput() throws IOException {
+        String playbook = Files.readString(Path.of("deploy/ansible/deploy-secret-bundles.yml"));
+        Object parsedPlaybook = new org.yaml.snakeyaml.Yaml().load(playbook);
+        assertThat(parsedPlaybook).isInstanceOf(List.class);
+        assertThat(playbook)
+                .contains("hosts: secret_bundle_targets")
+                .contains("head")
+                .contains("$ANSIBLE_VAULT;")
+                .contains("decrypt: true")
+                .contains("mode: \"0440\"")
+                .contains("secret_target_role")
+                .contains("application_database")
+                .contains("migration_runner")
+                .contains("audit-runtime")
+                .contains("no_log: true")
+                .contains("diff: false")
+                .doesNotContain("vault_password_file")
+                .doesNotContain("debug:");
     }
 
     @Test

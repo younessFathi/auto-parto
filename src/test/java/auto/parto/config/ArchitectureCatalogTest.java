@@ -53,12 +53,12 @@ class ArchitectureCatalogTest {
         String infrastructure = Files.readString(
                 BACKLOG.resolve("tickets/AP-0046-provision-vps-topology-with-opentofu-ansible.md"));
 
-        assertThat(secretDecision).contains("**Status:** Ready")
+        assertThat(secretDecision).contains("**Status:** In Progress")
                 .contains("ADR-0001 records the product owner's selection")
                 .contains("operator-controlled Ansible Vault deploy-time injection")
                 .contains("ordinary CI secrets")
                 .contains("separately approved secure unlock/retrieval design")
-                .contains("Do not mark it Done");
+                .contains("Do not mark this ticket Done");
         assertThat(infrastructure).contains("**Status:** Proposed")
                 .contains("ADR-0001 resolves the secret model in favor of Ansible Vault")
                 .contains("Contabo was selected as the intended provider on 2026-10-30")
@@ -86,7 +86,7 @@ class ArchitectureCatalogTest {
                 .contains("**Status:** Cancelled")
                 .contains("ADR-0001");
         assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0045-ansible-vault-vps-secrets.md")))
-                .contains("**Status:** Ready");
+                .contains("**Status:** In Progress");
         assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0026-data-infrastructure.md")))
                 .contains("**Status:** Proposed");
         assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0033-github-actions-migration.md")))

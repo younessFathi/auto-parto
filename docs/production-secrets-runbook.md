@@ -4,7 +4,7 @@
 
 [ADR-0001](architecture-decisions/ADR-0001-production-secret-delivery.md) selects operator-controlled Ansible Vault deploy-time injection for initial production. OpenBao is not selected to deliver these credentials. Do not use both systems for the same production secret.
 
-This is the approved target procedure, not a claim that production delivery is implemented. The current application production profile still has OpenBao-specific requirements and must be reconciled by AP-0045 before any VPS receives production credentials. AP-0045 is Ready for implementation; AP-0046 remains Proposed pending Contabo region, owner, cost, private-network/provider validation, and the separately controlled deployment path. Keep F07 In Progress and do not enable production traffic.
+This is the approved target procedure, not a claim that production delivery is ready for staging or production. AP-0045 has removed OpenBao-specific runtime requirements, made production depend on role-scoped mounted files, and added an initial Ansible playbook. That playbook has not yet been run with Ansible or on a staging host. AP-0045 remains In Progress; AP-0046 remains Proposed pending Contabo region, owner, cost, private-network/provider validation, and the separately controlled deployment path. Keep F07 In Progress and do not enable production traffic.
 
 For local development only, `docker-compose.openbao-dev.yml` remains a loopback-only disposable sandbox with non-production values. Do not connect production workloads or credentials to it.
 
@@ -46,4 +46,4 @@ Ansible Vault encrypts stored inputs but does not provide runtime identity, dyna
 
 ## Evidence status
 
-The application currently still requires OpenBao-specific production configuration. AP-0045 must replace that contract with the selected Vault-mounted-file contract and add focused fail-closed/configuration tests before this runbook can be used for staging. The password custody/recovery rehearsal, Contabo provisioning, old-credential rejection, host rebuild, and end-to-end deployment have not been performed. Repository documentation and unit tests alone are not deployment evidence.
+The production profile now uses a required properties-file import and no longer requires an OpenBao URL, role, or auth method. Focused tests cover the configuration contract and playbook safety markers; Ansible itself is unavailable in this environment, so playbook syntax/execution has not been verified. Password custody/recovery, Contabo provisioning, old-credential rejection, host rebuild, and end-to-end deployment have not been performed. Repository documentation and unit tests alone are not deployment evidence.

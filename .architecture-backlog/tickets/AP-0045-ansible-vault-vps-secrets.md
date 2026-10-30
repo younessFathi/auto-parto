@@ -1,6 +1,6 @@
 # AP-0045 Use Ansible Vault for VPS Secret Delivery
 
-- **Status:** Ready
+- **Status:** In Progress
 - **Type:** Technical Enhancement
 - **Feature:** [Deployment and Secrets](../features/F07-deployment-and-secrets.md)
 - **Linked Tickets:** [AP-0022 OpenBao Secret Management](AP-0022-openbao-secrets.md), [AP-0044 OpenBao VPS Go-Live](AP-0044-openbao-vps-go-live.md), [AP-0046 OpenTofu and Ansible VPS Topology](AP-0046-provision-vps-topology-with-opentofu-ansible.md)
@@ -15,16 +15,23 @@ ADR-0001 records the product owner's selection of operator-controlled Ansible Va
 
 1. Implement the accepted ADR-0001 decision; keep the Vault deployment model mutually exclusive with OpenBao for production credentials. AP-0022 and AP-0044 remain cancelled/superseded, and F07 remains In Progress until its active criteria have evidence.
 2. Keep production values in encrypted Vault files with independent passwords for production and non-production environments. Keep the Vault password out of Git, all VPSs, command lines, logs, traces, and ordinary CI secrets. Unlock interactively from a trusted operator workstation using the separately controlled password-manager custody path. Any later automated deployment requires a separately approved secure unlock/retrieval design; GitHub Actions must not be assumed able to decrypt production Vault data.
-4. For the Ansible Vault option, provide a reviewed, idempotent Ansible playbook that connects to allowlisted VPSs using verified SSH host keys, writes only enabled app/cache, application database/backup, audit database, S3, and migration credentials to their intended paths, and applies restrictive owner/group/mode settings. Secret-bearing tasks use `no_log: true` and do not print decrypted content.
-5. Adapt production Compose delivery to mount only required secret files read-only into consuming workloads. Preserve current application imports under `/run/auto-parto/secrets/secrets.properties` and, when audit processing is enabled, `/run/auto-parto/audit/secrets.properties`, or update profile and fail-closed validation with equivalent tests. If Ansible Vault is selected, remove OpenBao-specific runtime endpoint/role requirements. Do not bake secrets into images, Compose values, or checked-in plaintext files.
-6. Ensure production startup fails closed when required bundles or enabled-provider credentials are absent, malformed, or incomplete. Keep development/test secret sources separate; do not leave migration or database-administration credentials on the app VPS.
-7. Document and exercise rotation: provision replacement credentials, deploy, restart and verify readiness, reject old credentials, and define bounded rollback without restoring revoked credentials.
-8. Document encrypted backup and restore of Vault files, separate recovery of the Vault password, operator replacement/loss scenarios, and measured staging restore results. Store no decrypted backup in ordinary backups.
-9. Preserve RS256/JWKS overlap and revocation behavior and include signing-key rotation/removal in staging. Document that secrets exist in plaintext on the VPS while in use, rotation/revocation require operator deployment, and Vault provides no dynamic leases or automatic workload-token renewal. Define host hardening, disk/backup protection, access ownership, and incident response for suspected host compromise.
+3. Provide a reviewed, idempotent Ansible playbook that connects to allowlisted VPSs using verified SSH host keys, writes only enabled app/cache, application database/backup, audit database, S3, and migration credentials to their intended paths, and applies restrictive owner/group/mode settings. Secret-bearing tasks use `no_log: true` and do not print decrypted content.
+4. Adapt production Compose delivery to mount only required secret files read-only into consuming workloads. Preserve current application imports under `/run/auto-parto/secrets/secrets.properties` and, when audit processing is enabled, `/run/auto-parto/audit/secrets.properties`, or update profile and fail-closed validation with equivalent tests. Remove OpenBao-specific runtime endpoint/role requirements. Do not bake secrets into images, Compose values, or checked-in plaintext files.
+5. Ensure production startup fails closed when required bundles or enabled-provider credentials are absent, malformed, or incomplete. Keep development/test secret sources separate; do not leave migration or database-administration credentials on the app VPS.
+6. Document and exercise rotation: provision replacement credentials, deploy, restart and verify readiness, reject old credentials, and define bounded rollback without restoring revoked credentials.
+7. Document encrypted backup and restore of Vault files, separate recovery of the Vault password, operator replacement/loss scenarios, and measured staging restore results. Store no decrypted backup in ordinary backups.
+8. Preserve RS256/JWKS overlap and revocation behavior and include signing-key rotation/removal in staging. Document that secrets exist in plaintext on the VPS while in use, rotation/revocation require operator deployment, and Vault provides no dynamic leases or automatic workload-token renewal. Define host hardening, disk/backup protection, access ownership, and incident response for suspected host compromise.
 
 ## Status Transition
 
-ADR-0001 is accepted and selects Ansible Vault with an operator-controlled deployment path, separate password-manager custody/recovery roles, role separation, and explicit plaintext-at-rest/no-lease limitations. The ticket is Ready for implementation. Do not mark it Done until deployment automation and required tests/drills pass.
+ADR-0001 is accepted and selects Ansible Vault with an operator-controlled deployment path, separate password-manager custody/recovery roles, role separation, and explicit plaintext-at-rest/no-lease limitations. Initial implementation has started. Do not mark this ticket Done until deployment automation and required tests/drills pass.
+
+## Implementation Tracking
+
+- Removed OpenBao endpoint, role, auth-method, and provider requirements from the production Spring profile and Compose environment. Production still requires `/run/auto-parto/secrets/secrets.properties`; missing runtime values fail closed through file import and production validation.
+- Added an operator-run Ansible playbook that rejects non-Vault source files, decrypts role-scoped files for target installation, suppresses task output/diffs, installs restrictive root-owned `0440` files, and verifies destination metadata. Added a separate migration-bundle cleanup playbook and SSH host-key checking configuration.
+- No encrypted secrets, production inventory, unlock password, Contabo credentials, or VPS details were added. The playbook has not been run with Ansible because Ansible is not installed in this environment. No staging, rotation, password recovery, host rebuild, or old-credential rejection drill has run.
+- Remaining AP-0045 work includes auditing all enabled production properties against the bundle contract, validating the playbooks in disposable staging, password custody/recovery, role-target separation, migration cleanup evidence, rotation and rejection, JWT overlap/revocation, and host recovery evidence.
 
 ## Test Scenarios
 

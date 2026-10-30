@@ -1,0 +1,12 @@
+---
+- name: Remove temporary migration secret bundle
+  hosts: migration_runner
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Remove the migration-only secret file
+      ansible.builtin.file:
+        path: /run/auto-parto/migration/secrets.properties
+        state: absent
+      no_log: true
