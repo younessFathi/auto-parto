@@ -88,9 +88,55 @@ class AnsibleVaultDeploymentIT {
             var firstDeployment = runPlaybook(controller, "/fixtures/inventory.yml", APP_VAULT_ID, AUDIT_VAULT_ID);
             assertThat(firstDeployment.getExitCode()).as(firstDeployment.getStderr()).isZero();
             assertBothBundlesReadable(controller);
+            String activeTarget = activeTarget(controller);
+            String healthyBundleSnapshot = bundleSnapshot(controller);
 
             var identicalRetry = runPlaybook(controller, "/fixtures/inventory.yml", APP_VAULT_ID, AUDIT_VAULT_ID);
             assertThat(identicalRetry.getExitCode()).as(identicalRetry.getStderr()).isZero();
+            assertThat(activeTarget(controller)).isEqualTo(activeTarget);
+            assertThat(bundleSnapshot(controller)).isEqualTo(healthyBundleSnapshot);
+            assertBothBundlesReadable(controller);
+
+            var removeRequiredApplicationBundle = controller.execInContainer("rm", "--",
+                    "/run/auto-parto/active/secrets/secrets.properties");
+            assertThat(removeRequiredApplicationBundle.getExitCode())
+                    .as(removeRequiredApplicationBundle.getStderr()).isZero();
+            var missingApplicationRetry = runPlaybook(
+                    controller, "/fixtures/inventory.yml", APP_VAULT_ID, AUDIT_VAULT_ID);
+            String missingApplicationOutput = missingApplicationRetry.getStdout() + "\n" + missingApplicationRetry.getStderr();
+            assertThat(missingApplicationRetry.getExitCode())
+                    .as("an identical retry must reject a missing required application file").isNotZero();
+            assertThat(missingApplicationOutput)
+                    .contains("application-runtime", "secrets/secrets.properties")
+                    .doesNotContain("app-readable-marker", "audit-readable-marker");
+            assertThat(activeTarget(controller)).isEqualTo(activeTarget);
+            assertAuditBundleReadable(controller);
+            assertApplicationLockReleased(controller);
+
+            var restoreApplicationBundle = controller.execInContainer("install", "-o", "root", "-g", "10001",
+                    "-m", "0440", "/fixtures/application.clear",
+                    "/run/auto-parto/active/secrets/secrets.properties");
+            assertThat(restoreApplicationBundle.getExitCode()).as(restoreApplicationBundle.getStderr()).isZero();
+            var makeApplicationBundleTooPermissive = controller.execInContainer("chmod", "0644",
+                    "/run/auto-parto/active/secrets/secrets.properties");
+            assertThat(makeApplicationBundleTooPermissive.getExitCode())
+                    .as(makeApplicationBundleTooPermissive.getStderr()).isZero();
+            String incorrectModeSnapshot = bundleSnapshot(controller);
+            var incorrectModeRetry = runPlaybook(
+                    controller, "/fixtures/inventory.yml", APP_VAULT_ID, AUDIT_VAULT_ID);
+            String incorrectModeOutput = incorrectModeRetry.getStdout() + "\n" + incorrectModeRetry.getStderr();
+            assertThat(incorrectModeRetry.getExitCode())
+                    .as("an identical retry must reject an incorrectly permissioned application file").isNotZero();
+            assertThat(incorrectModeOutput)
+                    .contains("application-runtime", "secrets/secrets.properties")
+                    .doesNotContain("app-readable-marker", "audit-readable-marker");
+            assertThat(activeTarget(controller)).isEqualTo(activeTarget);
+            assertThat(bundleSnapshot(controller)).isEqualTo(incorrectModeSnapshot);
+            assertAuditBundleReadable(controller);
+            assertApplicationLockReleased(controller);
+            var restoreApplicationMode = controller.execInContainer("chmod", "0440",
+                    "/run/auto-parto/active/secrets/secrets.properties");
+            assertThat(restoreApplicationMode.getExitCode()).as(restoreApplicationMode.getStderr()).isZero();
             assertBothBundlesReadable(controller);
 
             var auditOnly = runPlaybook(controller, "/fixtures/audit-only.yml", APP_VAULT_ID, AUDIT_VAULT_ID);
@@ -186,6 +232,35 @@ class AnsibleVaultDeploymentIT {
                 grep -q '^AUDIT_TEST_PROPERTY=audit-readable-marker$' /run/auto-parto/active/audit/secrets.properties
                 """);
         assertThat(result.getExitCode()).as(result.getStderr()).isZero();
+    }
+
+    private static void assertAuditBundleReadable(GenericContainer<?> controller) throws Exception {
+        var result = controller.execInContainer("sh", "-ec", """
+                test -r /run/auto-parto/active/audit/secrets.properties
+                grep -q '^AUDIT_TEST_PROPERTY=audit-readable-marker$' /run/auto-parto/active/audit/secrets.properties
+                """);
+        assertThat(result.getExitCode()).as(result.getStderr()).isZero();
+    }
+
+    private static void assertApplicationLockReleased(GenericContainer<?> controller) throws Exception {
+        var result = controller.execInContainer("sh", "-ec",
+                "test ! -e /run/lock/auto-parto-secret-delivery-application");
+        assertThat(result.getExitCode()).as(result.getStderr()).isZero();
+    }
+
+    private static String activeTarget(GenericContainer<?> controller) throws Exception {
+        var result = controller.execInContainer("readlink", "/run/auto-parto/active");
+        assertThat(result.getExitCode()).as(result.getStderr()).isZero();
+        return result.getStdout().trim();
+    }
+
+    private static String bundleSnapshot(GenericContainer<?> controller) throws Exception {
+        var result = controller.execInContainer("sh", "-ec", """
+                stat -c '%d:%i:%Y:%a:%u:%g' /run/auto-parto/active/secrets/secrets.properties
+                stat -c '%d:%i:%Y:%a:%u:%g' /run/auto-parto/active/audit/secrets.properties
+                """);
+        assertThat(result.getExitCode()).as(result.getStderr()).isZero();
+        return result.getStdout().trim();
     }
 
     private static String createVolume(String prefix) {
