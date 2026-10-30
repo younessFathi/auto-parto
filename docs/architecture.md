@@ -299,7 +299,7 @@ Detailed deployment, persistence, storage, and observability guidance is in [`de
 
 - Local profile: Docker Compose and safe development defaults.
 - Test profile: Testcontainers or isolated test doubles with no real credentials.
-- Production profile: validated external configuration delivered through protected deployment variables or a secret manager, restricted PostgreSQL/Redis networking, versioned database migrations, explicit indexes, persistent object storage, resource limits, and deployment health checks. The production profile fails closed when PostgreSQL, Redis, JWT signing material, object storage, OpenBao, or an enabled provider lacks protected configuration; it never inherits local defaults. PostgreSQL is the only application persistence authority, while Redis remains a bounded, rebuildable projection.
+- Production profile: validated external configuration delivered through the operator-controlled Ansible Vault workflow selected by [ADR-0001](architecture-decisions/ADR-0001-production-secret-delivery.md), restricted PostgreSQL/Redis networking, versioned database migrations, explicit indexes, persistent object storage, resource limits, and deployment health checks. The production profile must fail closed when PostgreSQL, Redis, JWT signing material, object storage, or an enabled provider lacks protected configuration; it never inherits local defaults. PostgreSQL is the only application persistence authority, while Redis remains a bounded, rebuildable projection. AP-0045 must replace the current OpenBao-specific production contract before deployment.
 
 Production must not depend on local relative filesystem paths, development passwords, committed credentials, or host-exposed database ports.
 
@@ -317,7 +317,7 @@ The application uses reactive PostgreSQL through R2DBC repository boundaries. Fl
 
 Live dual-read and dual-write are not part of the current runtime. PostgreSQL is authoritative for all application business data.
 
-Production secret delivery and infrastructure hardening are staged separately from the application boundary. AP-0022 currently covers fail-closed validation, protected configuration placeholders, and deployment-level verification; OpenBao policy/lease automation, rotation operations, and the remaining PostgreSQL/Redis infrastructure controls remain tracked follow-ups in F07.
+Production secret delivery and infrastructure hardening are staged separately from the application boundary. AP-0022's OpenBao production scope was cancelled by ADR-0001; AP-0045 implements the selected Ansible Vault workflow, while AP-0026 and the remaining controls track PostgreSQL/Redis infrastructure and recovery in F07. Do not treat the retained OpenBao prototype as a production secret source.
 
 Do not introduce a second persistence source of truth for an application entity without a documented synchronization and recovery strategy.
 

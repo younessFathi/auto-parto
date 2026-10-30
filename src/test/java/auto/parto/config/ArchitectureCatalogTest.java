@@ -53,34 +53,40 @@ class ArchitectureCatalogTest {
         String infrastructure = Files.readString(
                 BACKLOG.resolve("tickets/AP-0046-provision-vps-topology-with-opentofu-ansible.md"));
 
-        assertThat(secretDecision).contains("**Status:** Proposed")
-                .contains("Architecture Decision Record (ADR)")
-                .contains("selecting exactly one initial production secret-delivery model")
+        assertThat(secretDecision).contains("**Status:** Ready")
+                .contains("ADR-0001 records the product owner's selection")
                 .contains("operator-controlled Ansible Vault deploy-time injection")
-                .contains("OpenBao/an approved protected runtime secret service")
                 .contains("ordinary CI secrets")
                 .contains("separately approved secure unlock/retrieval design")
-                .contains("cancel AP-0045");
+                .contains("Do not mark it Done");
         assertThat(infrastructure).contains("**Status:** Proposed")
-                .contains("remains Proposed until both the secret-delivery model and provider/private-network capability are selected")
+                .contains("ADR-0001 resolves the secret model in favor of Ansible Vault")
                 .contains("Contabo was selected as the intended provider on 2026-10-30")
                 .contains("requires a paid add-on per participating server")
                 .contains("has no built-in firewall")
                 .contains("https://github.com/contabo/terraform-provider-contabo")
-                .contains("dedicated protected secret-service infrastructure")
                 .contains("monthly cost estimate")
                 .contains("maintained OpenTofu provider")
                 .contains("state-changing migration/deployment runner")
                 .contains("Never expose PostgreSQL publicly")
                 .contains("Keep GitLab CI active until");
+        String adr = Files.readString(Path.of("docs/architecture-decisions/ADR-0001-production-secret-delivery.md"));
+        assertThat(adr).contains("**Status:** Accepted")
+                .contains("Use **Ansible Vault with operator-controlled deploy-time injection**")
+                .contains("Never store the password in Git, on any VPS, in a command line, logs, traces, or ordinary CI secrets")
+                .contains("Do not use OpenBao or another runtime secret service to deliver the same production credentials");
     }
 
     @Test
     void secretAndInfrastructurePlanningDoesNotCloseDependentReadinessWork() throws IOException {
         assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0022-openbao-secrets.md")))
-                .contains("**Status:** In Progress");
+                .contains("**Status:** Cancelled")
+                .contains("ADR-0001");
         assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0044-openbao-vps-go-live.md")))
-                .contains("**Status:** Proposed");
+                .contains("**Status:** Cancelled")
+                .contains("ADR-0001");
+        assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0045-ansible-vault-vps-secrets.md")))
+                .contains("**Status:** Ready");
         assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0026-data-infrastructure.md")))
                 .contains("**Status:** Proposed");
         assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0033-github-actions-migration.md")))
@@ -89,6 +95,9 @@ class ArchitectureCatalogTest {
                 .contains("**Status:** In Progress");
         assertThat(Files.readString(BACKLOG.resolve("features/F09-go-live-readiness.md")))
                 .contains("**Status:** Deferred until a go-live decision is approved.");
+        assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0024-alerts-recovery.md")))
+                .contains("AP-0045 (selected Ansible Vault delivery")
+                .contains("AP-0022's OpenBao production scope is cancelled");
     }
 
     private void assertLinksResolve(Path markdown) {

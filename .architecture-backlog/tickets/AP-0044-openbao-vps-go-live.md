@@ -1,6 +1,6 @@
 # AP-0044 Provision OpenBao for VPS Go-Live
 
-- **Status:** Proposed
+- **Status:** Cancelled
 - **Type:** Technical Enhancement
 - **Feature:** [Deployment and Secrets](../features/F07-deployment-and-secrets.md)
 - **Linked Tickets:** [AP-0022](AP-0022-openbao-secrets.md), [AP-0020](AP-0020-stateless-deployment.md), [AP-0021](AP-0021-tls-entrypoint.md), [AP-0024](AP-0024-alerts-recovery.md), [AP-0026](AP-0026-data-infrastructure.md), [AP-0033](AP-0033-github-actions-migration.md), [AP-0045 Secret Delivery Decision](AP-0045-ansible-vault-vps-secrets.md), [AP-0046 VPS Infrastructure Automation](AP-0046-provision-vps-topology-with-opentofu-ansible.md)
@@ -8,11 +8,9 @@
 
 ## Description
 
-When production go-live is explicitly approved, provision and verify the OpenBao service and its application-host Agent integration for the selected VPS deployment. The secret service must remain private, TLS-protected, and outside the application and audit PostgreSQL failure boundary. A container image may be used, but the production service must run in normal initialized/sealed server mode with persistent storage and an approved recovery design. It must not use OpenBao dev mode or share the application Compose project, host, storage, or failure boundary. Development may use a separate disposable dev-mode Compose service with non-production values.
+ADR-0001 selects operator-controlled Ansible Vault deploy-time injection for initial production. This OpenBao VPS delivery ticket is cancelled and superseded; no OpenBao service will deliver the initial production credentials. Retain any OpenBao image artifacts only as non-production prototypes until their disposition is handled under AP-0045. This cancellation is an architecture choice, not evidence of deployment or secret-management completion.
 
-This ticket is conditional on AP-0045's ADR selecting OpenBao or another approved protected runtime secret service. If Ansible Vault deploy-time injection is selected, defer or supersede this initial OpenBao VPS delivery path in the linked tracking; do not provision both models for the same production credentials. AP-0046 must include a dedicated protected secret-service boundary or approved managed service before this ticket can proceed. Creating AP-0044 does not authorize provisioning or change AP-0022 status. Begin only after product/operations owners approve the secret model, deployment topology, and production go-live decision.
-
-## Acceptance Criteria
+## Historical Acceptance Criteria (Superseded by ADR-0001)
 
 1. Record the approved VPS/host topology, owner, threat boundary, availability target, and dependency/failure boundaries. OpenBao is on a dedicated secret-service host or an explicitly approved protected service, separate from application and audit database failure domains.
 2. Deploy a pinned, verified OpenBao image or package in normal server mode with TLS certificate validation, private network/firewall rules, persistent encrypted Raft storage, non-root execution where supported, resource limits, and monitored disk capacity. No public listener is exposed.
@@ -35,4 +33,4 @@ This ticket is conditional on AP-0045's ADR selecting OpenBao or another approve
 
 ## Definition of Done
 
-The approved VPS/service topology is deployed and verified; every acceptance criterion is satisfied; all test scenarios and recovery drills have recorded evidence; ownership and runbooks are operational; the protected release workflow and rollback are verified; and all applicable tests pass. AP-0022 and F07 remain In Progress until their broader criteria are independently met.
+This ticket was cancelled before any production OpenBao service was provisioned. Its historical criteria are not active and no completion evidence is claimed. AP-0045 implements the selected Ansible Vault path; AP-0022 is cancelled/superseded, and F07 remains In Progress.
