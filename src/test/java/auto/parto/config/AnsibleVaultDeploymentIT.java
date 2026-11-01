@@ -42,6 +42,7 @@ class AnsibleVaultDeploymentIT {
                     printf 'audit-test-unlock-value\\n' > /fixtures/audit-password
                     chmod 0600 /fixtures/app-password /fixtures/audit-password
                     printf 'APP_TEST_PROPERTY=app-readable-marker\\n' > /fixtures/application.clear
+                    printf 'APP_TEST_PROPERTY=changed-app-marker\\n' > /fixtures/application-changed.clear
                     printf 'AUDIT_TEST_PROPERTY=audit-readable-marker\\n' > /fixtures/audit.clear
                     printf 'DB_BOOTSTRAP_TEST_PROPERTY=db-bootstrap-marker\\n' > /fixtures/database-bootstrap.clear
                     printf 'BACKUP_TEST_PROPERTY=backup-marker\\n' > /fixtures/backup.clear
@@ -49,6 +50,7 @@ class AnsibleVaultDeploymentIT {
                     printf 'OBJECT_STORAGE_TEST_PROPERTY=object-storage-admin-marker\\n' > /fixtures/object-storage-admin.clear
                     printf 'MIGRATION_TEST_PROPERTY=migration-cleanup-marker\\n' > /fixtures/migration.clear
                     /opt/ansible/bin/ansible-vault encrypt --vault-id app@/fixtures/app-password --output /fixtures/application.vault /fixtures/application.clear
+                    /opt/ansible/bin/ansible-vault encrypt --vault-id app@/fixtures/app-password --output /fixtures/application-changed.vault /fixtures/application-changed.clear
                     /opt/ansible/bin/ansible-vault encrypt --vault-id audit@/fixtures/audit-password --output /fixtures/audit.vault /fixtures/audit.clear
                     /opt/ansible/bin/ansible-vault encrypt --vault-id app@/fixtures/app-password --output /fixtures/database-bootstrap.vault /fixtures/database-bootstrap.clear
                     /opt/ansible/bin/ansible-vault encrypt --vault-id app@/fixtures/app-password --output /fixtures/backup.vault /fixtures/backup.clear
@@ -76,6 +78,7 @@ class AnsibleVaultDeploymentIT {
                     sed '/source: \\/fixtures\\/application.vault/,/generation_path: secrets\\/secrets.properties/d' /fixtures/inventory.yml > /fixtures/audit-only.yml
                     sed -e 's/role: audit-runtime/role: application-runtime/' -e 's#generation_path: audit/secrets.properties#generation_path: secrets/secrets.properties#' /fixtures/inventory.yml > /fixtures/duplicate-destination.yml
                     sed 's/gid: 10001/gid: postgres/g' /fixtures/inventory.yml > /fixtures/invalid-gid.yml
+                    sed 's#/fixtures/application.vault#/fixtures/application-changed.vault#' /fixtures/inventory.yml > /fixtures/changed-inventory.yml
                     printf '%s\\n' \\
                       'all:' '  children:' '    secret_bundle_targets:' '      hosts:' '        localhost:' \\
                       '          ansible_connection: local' '          secret_target_role: application_database' \\
@@ -122,15 +125,33 @@ class AnsibleVaultDeploymentIT {
             var firstDeployment = runPlaybook(controller, "/fixtures/inventory.yml", APP_VAULT_ID, AUDIT_VAULT_ID);
             assertThat(firstDeployment.getExitCode()).as(firstDeployment.getStderr()).isZero();
             assertBothBundlesReadable(controller);
-            String activeTarget = activeTarget(controller);
+            String expectedActiveLink = activeTarget(controller);
             String healthyBundleSnapshot = bundleSnapshot(controller);
 
             var identicalRetry = runPlaybook(controller, "/fixtures/inventory.yml", APP_VAULT_ID, AUDIT_VAULT_ID);
             assertThat(identicalRetry.getExitCode()).as(identicalRetry.getStderr()).isZero();
-            assertThat(activeTarget(controller)).isEqualTo(activeTarget);
+            assertThat(activeTarget(controller)).isEqualTo(expectedActiveLink);
             assertThat(bundleSnapshot(controller)).isEqualTo(healthyBundleSnapshot);
             assertBothBundlesReadable(controller);
 
+            var convertActiveLinkToAbsolute = controller.execInContainer("sh", "-ec", """
+                    resolved_target=$(readlink -f /run/auto-parto/active)
+                    ln -s "$resolved_target" /run/auto-parto/active.absolute
+                    mv -Tf /run/auto-parto/active.absolute /run/auto-parto/active
+                    """);
+            assertThat(convertActiveLinkToAbsolute.getExitCode())
+                    .as(convertActiveLinkToAbsolute.getStderr()).isZero();
+            expectedActiveLink = activeTarget(controller);
+            assertThat(expectedActiveLink).startsWith("/run/auto-parto/generations/");
+            String absoluteLinkBundleSnapshot = bundleSnapshot(controller);
+            var absoluteIdenticalRetry = runPlaybook(
+                    controller, "/fixtures/inventory.yml", APP_VAULT_ID, AUDIT_VAULT_ID);
+            assertThat(absoluteIdenticalRetry.getExitCode()).as(absoluteIdenticalRetry.getStderr()).isZero();
+            assertThat(activeTarget(controller)).isEqualTo(expectedActiveLink);
+            assertThat(bundleSnapshot(controller)).isEqualTo(absoluteLinkBundleSnapshot);
+            assertBothBundlesReadable(controller);
+
+            String auditMetadataBeforeMissingRetry = auditBundleSnapshot(controller);
             var removeRequiredApplicationBundle = controller.execInContainer("rm", "--",
                     "/run/auto-parto/active/secrets/secrets.properties");
             assertThat(removeRequiredApplicationBundle.getExitCode())
@@ -143,8 +164,9 @@ class AnsibleVaultDeploymentIT {
             assertThat(missingApplicationOutput)
                     .contains("application-runtime", "secrets/secrets.properties")
                     .doesNotContain("app-readable-marker", "audit-readable-marker");
-            assertThat(activeTarget(controller)).isEqualTo(activeTarget);
+            assertThat(activeTarget(controller)).isEqualTo(expectedActiveLink);
             assertAuditBundleReadable(controller);
+            assertThat(auditBundleSnapshot(controller)).isEqualTo(auditMetadataBeforeMissingRetry);
             assertApplicationLockReleased(controller);
 
             var restoreApplicationBundle = controller.execInContainer("install", "-o", "root", "-g", "10001",
@@ -164,7 +186,7 @@ class AnsibleVaultDeploymentIT {
             assertThat(incorrectModeOutput)
                     .contains("application-runtime", "secrets/secrets.properties")
                     .doesNotContain("app-readable-marker", "audit-readable-marker");
-            assertThat(activeTarget(controller)).isEqualTo(activeTarget);
+            assertThat(activeTarget(controller)).isEqualTo(expectedActiveLink);
             assertThat(bundleSnapshot(controller)).isEqualTo(incorrectModeSnapshot);
             assertAuditBundleReadable(controller);
             assertApplicationLockReleased(controller);
@@ -238,17 +260,13 @@ class AnsibleVaultDeploymentIT {
             assertThat(lockReleasedByTest.getExitCode()).as(lockReleasedByTest.getStderr()).isZero();
             assertBothBundlesReadable(controller);
 
-            var forceEquivalentAbsoluteActiveLink = controller.execInContainer("sh", "-ec", """
-                    active_target=$(readlink -f /run/auto-parto/active)
-                    ln -s "$active_target" /run/auto-parto/active.absolute
-                    mv -Tf /run/auto-parto/active.absolute /run/auto-parto/active
-                    """);
-            assertThat(forceEquivalentAbsoluteActiveLink.getExitCode())
-                    .as(forceEquivalentAbsoluteActiveLink.getStderr()).isZero();
-
-            var failedRetry = runPlaybook(controller, "/fixtures/inventory.yml", APP_VAULT_ID);
-            assertThat(failedRetry.getExitCode()).as("the audit ciphertext must fail without its vault ID")
+            String bundleSnapshotBeforeFailedDecrypt = bundleSnapshot(controller);
+            var failedRetry = runPlaybook(controller, "/fixtures/changed-inventory.yml", APP_VAULT_ID);
+            assertThat(failedRetry.getExitCode())
+                    .as("the distinct changed generation must fail without the audit vault ID")
                     .isNotZero();
+            assertThat(activeTarget(controller)).isEqualTo(expectedActiveLink);
+            assertThat(bundleSnapshot(controller)).isEqualTo(bundleSnapshotBeforeFailedDecrypt);
             assertBothBundlesReadable(controller);
 
             var lockWasReleased = controller.execInContainer("sh", "-ec",
@@ -328,6 +346,13 @@ class AnsibleVaultDeploymentIT {
                 stat -c '%d:%i:%Y:%a:%u:%g' /run/auto-parto/active/secrets/secrets.properties
                 stat -c '%d:%i:%Y:%a:%u:%g' /run/auto-parto/active/audit/secrets.properties
                 """);
+        assertThat(result.getExitCode()).as(result.getStderr()).isZero();
+        return result.getStdout().trim();
+    }
+
+    private static String auditBundleSnapshot(GenericContainer<?> controller) throws Exception {
+        var result = controller.execInContainer("stat", "-c", "%d:%i:%Y:%a:%u:%g",
+                "/run/auto-parto/active/audit/secrets.properties");
         assertThat(result.getExitCode()).as(result.getStderr()).isZero();
         return result.getStdout().trim();
     }
