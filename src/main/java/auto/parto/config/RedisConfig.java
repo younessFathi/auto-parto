@@ -114,7 +114,7 @@ public class RedisConfig {
         }
 
         LettuceConnectionFactory factory = new LettuceConnectionFactory(config, clientConfig.build());
-        // Route reactive and synchronous operations through the bounded pool.
+        // Spring Data keeps separate bounded pools for synchronous and asynchronous access.
         factory.setShareNativeConnection(false);
         return factory;
     }
