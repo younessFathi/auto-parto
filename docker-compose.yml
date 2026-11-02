@@ -64,14 +64,12 @@ services:
   redis:
     image: redis:7-alpine
     container_name: redis
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile}
     volumes:
       - redis_data:/data
     restart: unless-stopped
     mem_limit: 512m
     cpus: "0.5"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile} --maxmemory 384mb --maxmemory-policy allkeys-lru
     logging:
       driver: "json-file"
       options:

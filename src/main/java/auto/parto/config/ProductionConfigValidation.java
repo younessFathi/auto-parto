@@ -43,6 +43,7 @@ public class ProductionConfigValidation implements InitializingBean {
         } else if (url != null && isLoopbackR2dbcUrl(url)) {
             errors.add("spring.r2dbc.url must not use a loopback host");
         }
+        validateVerifiedPostgresqlTls("spring.r2dbc.url", url, errors);
         validateRequiredProperty("spring.r2dbc.username", errors);
         validateRequiredProperty("spring.r2dbc.password", errors);
     }
@@ -51,7 +52,16 @@ public class ProductionConfigValidation implements InitializingBean {
         validateRequiredProperty("spring.data.redis.host", errors);
         validatePort("spring.data.redis.port", errors);
         validateRequiredProperty("spring.data.redis.password", errors);
+        if (!"true".equalsIgnoreCase(value("spring.data.redis.ssl.enabled"))) {
+            errors.add("spring.data.redis.ssl.enabled=true");
+        }
         if (isLoopbackHost(value("spring.data.redis.host"))) errors.add("spring.data.redis.host must not be a loopback host");
+    }
+
+    private void validateVerifiedPostgresqlTls(String propertyName, String url, List<String> errors) {
+        if (url != null && !url.matches("(?is).*?[?&]sslMode=VERIFY_FULL(?:&.*)?$")) {
+            errors.add(propertyName + " must require sslMode=VERIFY_FULL");
+        }
     }
 
     private void validatePostgresqlCutover(List<String> errors) {
@@ -110,7 +120,9 @@ public class ProductionConfigValidation implements InitializingBean {
         if (Boolean.parseBoolean(value("firebase.enabled")) && isBlank("firebase.credentials.json") && isBlank("firebase.credentials.path")) errors.add("firebase.credentials.json or firebase.credentials.path");
         validateBoolean("auto.parto.audit.enabled", errors);
         if (Boolean.parseBoolean(value("auto.parto.audit.enabled"))) {
+            String auditUrl = value("auto.parto.audit.r2dbc-url");
             validateRequiredProperty("auto.parto.audit.r2dbc-url", errors);
+            validateVerifiedPostgresqlTls("auto.parto.audit.r2dbc-url", auditUrl, errors);
             validateRequiredProperty("auto.parto.audit.username", errors);
             validateRequiredProperty("auto.parto.audit.password", errors);
         }

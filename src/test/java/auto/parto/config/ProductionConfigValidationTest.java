@@ -69,6 +69,18 @@ class ProductionConfigValidationTest {
     }
 
     @Test
+    void rejectsPostgresqlAndRedisConnectionsWithoutVerifiedTls() {
+        MockEnvironment environment = validProductionEnvironment()
+                .withProperty("spring.r2dbc.url", "r2dbc:postgresql://postgres.internal:5432/app")
+                .withProperty("spring.data.redis.ssl.enabled", "false");
+
+        assertThatThrownBy(() -> new ProductionConfigValidation(environment).afterPropertiesSet())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("spring.r2dbc.url must require sslMode=VERIFY_FULL")
+                .hasMessageContaining("spring.data.redis.ssl.enabled=true");
+    }
+
+    @Test
     void rejectsAProductionProfileThatLeavesMongoOrCutoverRuntimeEnabled() {
         MockEnvironment environment = validProductionEnvironment();
         environment.setProperty("auto.parto.persistence.postgresql.cutover.mongo-disabled", "false");
@@ -110,21 +122,35 @@ class ProductionConfigValidationTest {
                 .withProperty("firebase.enabled", "true")
                 .withProperty("firebase.credentials.json", "credential-document")
                 .withProperty("auto.parto.audit.enabled", "true")
-                .withProperty("auto.parto.audit.r2dbc-url", "r2dbc:postgresql://audit.internal:5432/audit")
+                .withProperty("auto.parto.audit.r2dbc-url", "r2dbc:postgresql://audit.internal:5432/audit?sslMode=VERIFY_FULL")
                 .withProperty("auto.parto.audit.username", "audit-runtime")
                 .withProperty("auto.parto.audit.password", "audit-password");
 
         assertThatCode(() -> new ProductionConfigValidation(environment).afterPropertiesSet()).doesNotThrowAnyException();
     }
 
+    @Test
+    void rejectsEnabledAuditDatabaseWithoutVerifiedTls() {
+        MockEnvironment environment = validProductionEnvironment()
+                .withProperty("auto.parto.audit.enabled", "true")
+                .withProperty("auto.parto.audit.r2dbc-url", "r2dbc:postgresql://audit.internal:5432/audit")
+                .withProperty("auto.parto.audit.username", "audit-runtime")
+                .withProperty("auto.parto.audit.password", "audit-password");
+
+        assertThatThrownBy(() -> new ProductionConfigValidation(environment).afterPropertiesSet())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("auto.parto.audit.r2dbc-url must require sslMode=VERIFY_FULL");
+    }
+
     private static MockEnvironment validProductionEnvironment() {
         MockEnvironment environment = new MockEnvironment()
-                .withProperty("spring.r2dbc.url", "r2dbc:postgresql://postgres.internal:5432/app")
+                .withProperty("spring.r2dbc.url", "r2dbc:postgresql://postgres.internal:5432/app?sslMode=VERIFY_FULL")
                 .withProperty("spring.r2dbc.username", "runtime")
                 .withProperty("spring.r2dbc.password", "runtime-password")
                 .withProperty("spring.data.redis.host", "redis.internal")
                 .withProperty("spring.data.redis.port", "6379")
                 .withProperty("spring.data.redis.password", "redis-password")
+                .withProperty("spring.data.redis.ssl.enabled", "true")
                 .withProperty("jwt.signing.algorithm", "RS256")
                 .withProperty("jwt.signing.key-id", "active")
                 .withProperty("jwt.signing.private-key", "test-key-material")

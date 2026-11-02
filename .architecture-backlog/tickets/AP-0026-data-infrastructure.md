@@ -1,9 +1,9 @@
 # AP-0026 Harden PostgreSQL and Redis Infrastructure
 
-- **Status:** Proposed
+- **Status:** In Progress
 - **Type:** Technical Enhancement
 - **Feature:** [Deployment and Secrets](../features/F07-deployment-and-secrets.md)
-- **Linked Tickets:** [AP-0002](AP-0002-reactive-persistence.md), [AP-0016](AP-0016-redis-projections.md), [AP-0022](AP-0022-openbao-secrets.md), [AP-0046 VPS Infrastructure Automation](AP-0046-provision-vps-topology-with-opentofu-ansible.md)
+- **Linked Tickets:** [AP-0002](AP-0002-reactive-persistence.md), [AP-0016](AP-0016-redis-projections.md), [AP-0045 Ansible Vault credential delivery](AP-0045-ansible-vault-vps-secrets.md), [AP-0046 VPS Infrastructure Automation](AP-0046-provision-vps-topology-with-opentofu-ansible.md)
 - **Source:** `deployment-architecture.md` PostgreSQL and Redis Persistence
 
 ## Description
@@ -24,6 +24,12 @@ Secure, bound, and monitor production PostgreSQL and Redis without exposing eith
 ## AP-0001 Review Follow-up
 
 Provision the separate audit PostgreSQL resource with independent credentials, backups, monitoring, retention, privacy/redaction workflow, legal-hold handling, and approved deletion controls. Keep audit storage and application storage on separate resource and failure boundaries.
+
+## Implementation Tracking
+
+- Local configuration hardening now binds Redis to no host interface by default, provides optional workstation access only through the loopback-only local Compose override, and caps the local Redis process below its container memory limit with `allkeys-lru`. PostgreSQL and audit PostgreSQL remain un-published in the Compose files.
+- Production startup now requires verified TLS for the application PostgreSQL URL (`sslMode=VERIFY_FULL`), requires verified TLS for an enabled audit PostgreSQL URL, and enables TLS for the Redis client. Focused configuration tests cover the fail-closed cases.
+- This is a local configuration slice, not evidence of private VPS networking, certificate deployment/trust, database connection sizing against host limits, off-host backup/PITR, Redis replication/failover, or restore drills. Those acceptance criteria remain open pending AP-0046 and a staging environment; do not mark this ticket Done.
 
 ## Definition of Done
 The whole ticket is implemented, every acceptance criterion is satisfied, every scenario is automated or repeatably verified and passing, infrastructure runbooks are complete, and all applicable suites pass.

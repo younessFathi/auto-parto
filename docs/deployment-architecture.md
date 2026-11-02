@@ -52,6 +52,7 @@ Production requirements:
 - Initially run PostgreSQL on a dedicated VPS, isolated from the public Internet and from application containers.
 - Later, move to a managed PostgreSQL service or highly available PostgreSQL cluster when availability requirements justify it.
 - Enable encrypted connections and restrict network access to application instances.
+- Require PostgreSQL R2DBC `sslMode=VERIFY_FULL` and enable Redis TLS in the production client. Supply the issuing CA through the approved runtime trust configuration; never use a mode that accepts an unverified server certificate.
 - Run versioned schema migrations during deployment.
 - Back up automatically and test restoration regularly.
 - Monitor connections, replication lag, locks, slow queries, storage, and transaction failures.
@@ -71,6 +72,7 @@ Audit PostgreSQL stores high-volume historical audit events exported from the ap
 Production requirements:
 
 - Use a separate PostgreSQL instance or managed database resource; a separate schema on the application instance is not sufficient for production isolation.
+- Require `sslMode=VERIFY_FULL` for the audit PostgreSQL R2DBC connection and verify the issuing CA through the approved runtime trust configuration.
 - Allow network access only from the bounded audit publisher and authorized audit-reader services.
 - Use separate publisher and read-only credentials. The application runtime must not have delete or update privileges on audit history.
 - Enforce a unique constraint on stable audit `event_id` values for idempotent retries.

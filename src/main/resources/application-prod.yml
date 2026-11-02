@@ -12,6 +12,8 @@ spring:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
+      ssl:
+        enabled: true
   r2dbc:
     url: ${APP_POSTGRES_R2DBC_URL}
 

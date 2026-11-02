@@ -88,7 +88,7 @@ class ArchitectureCatalogTest {
         assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0045-ansible-vault-vps-secrets.md")))
                 .contains("**Status:** In Progress");
         assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0026-data-infrastructure.md")))
-                .contains("**Status:** Proposed");
+                .contains("**Status:** In Progress");
         assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0033-github-actions-migration.md")))
                 .contains("## Status\n\nIn Progress");
         assertThat(Files.readString(BACKLOG.resolve("features/F07-deployment-and-secrets.md")))

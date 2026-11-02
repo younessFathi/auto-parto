@@ -32,7 +32,8 @@ class DockerComposeConfigurationTest {
         assertThat(compose).contains("SPRING_DATA_REDIS_HOST: redis");
         assertThat(compose).contains("REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile}");
         assertThat(compose).contains("JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET for the postgres profile}");
-        assertThat(compose).contains("command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile}");
+        assertThat(compose).contains("command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile} --maxmemory 384mb --maxmemory-policy allkeys-lru")
+                .doesNotContain("6379:6379");
         assertThat(compose).contains("test: redis-cli -a '${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile}' ping");
         assertThat(compose).contains("depends_on:");
         assertThat(compose).doesNotContain("MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always");
@@ -106,7 +107,9 @@ class DockerComposeConfigurationTest {
         String localCompose = Files.readString(Path.of("docker-compose.local.yml"));
 
         assertThat(localCompose).contains("127.0.0.1:8081:8080")
-                .doesNotContain("127.0.0.1:8080:8080");
+                .doesNotContain("127.0.0.1:8080:8080")
+                .contains("127.0.0.1:6379:6379")
+                .doesNotContain("\"6379:6379\"");
     }
 
     @Test
