@@ -42,6 +42,17 @@ class DockerComposeConfigurationTest {
     }
 
     @Test
+    void productionComposeMountsTheRequiredRedisCaReadOnlyWithoutCreatingMissingHostPaths() throws IOException {
+        String productionCompose = Files.readString(Path.of("docker-compose.prod.yml"));
+
+        assertThat(productionCompose).contains("APP_REDIS_TLS_CA_FILE: /run/auto-parto/redis-ca.pem")
+                .contains("source: ${REDIS_TLS_CA_HOST_PATH:?set the host path for the Redis issuing CA certificate}")
+                .contains("target: /run/auto-parto/redis-ca.pem")
+                .contains("read_only: true")
+                .contains("create_host_path: false");
+    }
+
+    @Test
     void postgresProfileDefinesIndependentApplicationAndAuditResources() throws IOException {
         String compose = Files.readString(Path.of("docker-compose.yml"));
 

@@ -6,7 +6,7 @@ This runbook describes the AP-0026 operating baseline. It is not proof of a Cont
 
 - Keep application PostgreSQL, audit PostgreSQL, and Redis on their assigned private interfaces. Firewall rules allow only the application host (and the separately controlled migration runner for PostgreSQL migration traffic) to connect. Never add a public load-balancer route or public bind for ports 5432 or 6379.
 - PostgreSQL application and audit clients must use `sslMode=VERIFY_FULL`. The connection hostname must match the server certificate, and the configured trust store must contain the issuing CA.
-- The production Redis client enables TLS and authenticates with its protected password. Redis must present a certificate trusted by the client runtime.
+- The production Redis client uses the named `redis` PEM SSL bundle. Set `REDIS_TLS_CA_HOST_PATH` to the operator-provisioned host file in the production Compose environment; Compose mounts it read-only at `/run/auto-parto/redis-ca.pem`, where `APP_REDIS_TLS_CA_FILE` points. The client loads that CA and enforces full certificate and hostname verification. Keep the CA rotation overlap in place until every app instance trusts the replacement certificate.
 - The base local Compose network publishes no database/cache port. `docker-compose.local.yml` maps app and Redis ports to `127.0.0.1` for workstation access and must not be used on a VPS.
 - Restrict audit PostgreSQL separately to the application audit publisher and authorized audit readers. Keep its credentials, connection budget, backups, and failure domain independent from application PostgreSQL.
 
@@ -19,7 +19,7 @@ The repository defaults are conservative starting limits, not a substitute for l
 | Application R2DBC pool per instance | 10 connections; maximum configurable value 20; 5-second acquire/create timeout | Requests fail within a bound; readiness and pool metrics identify the dependency problem |
 | PostgreSQL application runtime login | 40 total connections | Additional connections are refused; reduce replicas or pool size before raising the limit |
 | PostgreSQL migration login | 5 total connections | Migration job is serialized; excess sessions are refused |
-| Redis Lettuce pool per app instance | 8 active; maximum configurable value 32; 3-second command, connect, and acquire timeouts | Calls fail within a bound and existing endpoint policy applies |
+| Redis Lettuce pool per app instance | 8 active; maximum configurable value 32; 3-second command, connect, and acquire timeouts | Synchronous and reactive factories share one Commons Pool-backed factory with shared native connections disabled; calls fail within the configured bounded acquire wait and existing endpoint policy applies |
 | Audit PostgreSQL pool per app instance | 4 connections; audit worker concurrency may not exceed this pool | Audit work waits/fails within a bound; the durable application outbox remains authoritative |
 | Local Redis process | 384 MB max memory inside a 512 MB container; `allkeys-lru` | Rebuildable projections may be evicted and reconstructed from PostgreSQL |
 

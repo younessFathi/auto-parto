@@ -52,7 +52,7 @@ Production requirements:
 - Initially run PostgreSQL on a dedicated VPS, isolated from the public Internet and from application containers.
 - Later, move to a managed PostgreSQL service or highly available PostgreSQL cluster when availability requirements justify it.
 - Enable encrypted connections and restrict network access to application instances.
-- Require PostgreSQL R2DBC `sslMode=VERIFY_FULL` and enable Redis TLS in the production client. Supply the issuing CA through the approved runtime trust configuration; never use a mode that accepts an unverified server certificate.
+- Require PostgreSQL R2DBC `sslMode=VERIFY_FULL`. Redis uses a Commons Pool-backed Lettuce factory for synchronous and reactive calls, with shared native connections disabled so the configured pool ceiling and acquire timeout apply. Enable TLS with a named PEM trust bundle and full peer/hostname verification; supply the issuing CA through the protected runtime mount and never accept an unverified server certificate.
 - Run versioned schema migrations during deployment.
 - Back up automatically and test restoration regularly.
 - Monitor connections, replication lag, locks, slow queries, storage, and transaction failures.
@@ -182,7 +182,7 @@ For production, prefer a managed Redis service or a Redis HA deployment with:
 
 Redis persistence improves recovery, but it does not replace PostgreSQL transactions or an outbox pattern.
 
-The current four-VPS topology has one app/Redis host and no cross-host Redis failover. Until AP-0046 selects and verifies managed Redis or a replica/Sentinel arrangement, treat Redis host loss as a bounded outage followed by projection rebuild from PostgreSQL. The initial client uses eight pooled connections per app instance (maximum 32), bounded three-second connection/command/acquisition timeouts, and production TLS. See the [PostgreSQL and Redis Operations Runbook](postgresql-redis-operations-runbook.md) for connection-budget calculations, recovery checks, and staging evidence requirements.
+The current four-VPS topology has one app/Redis host and no cross-host Redis failover. Until AP-0046 selects and verifies managed Redis or a replica/Sentinel arrangement, treat Redis host loss as a bounded outage followed by projection rebuild from PostgreSQL. The initial client uses eight pooled connections per app instance (maximum 32), bounded three-second connection/command/acquisition timeouts, a mounted issuing CA, and full certificate/hostname verification. See the [PostgreSQL and Redis Operations Runbook](postgresql-redis-operations-runbook.md) for connection-budget calculations, recovery checks, and staging evidence requirements.
 
 ## File Storage: SeaweedFS S3 Gateway
 

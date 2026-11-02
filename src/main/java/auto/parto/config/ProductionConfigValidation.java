@@ -56,6 +56,10 @@ public class ProductionConfigValidation implements InitializingBean {
         if (!"true".equalsIgnoreCase(value("spring.data.redis.ssl.enabled"))) {
             errors.add("spring.data.redis.ssl.enabled=true");
         }
+        if (!"redis".equals(value("spring.data.redis.ssl.bundle"))) {
+            errors.add("spring.data.redis.ssl.bundle=redis");
+        }
+        validateRequiredProperty("spring.ssl.bundle.pem.redis.truststore.certificate", errors);
         if (isLoopbackHost(value("spring.data.redis.host"))) errors.add("spring.data.redis.host must not be a loopback host");
     }
 

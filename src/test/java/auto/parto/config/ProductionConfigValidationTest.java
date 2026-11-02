@@ -97,6 +97,18 @@ class ProductionConfigValidationTest {
     }
 
     @Test
+    void rejectsRedisTlsWithoutExplicitTrustedCaBundle() {
+        MockEnvironment environment = validProductionEnvironment()
+                .withProperty("spring.data.redis.ssl.bundle", "")
+                .withProperty("spring.ssl.bundle.pem.redis.truststore.certificate", "");
+
+        assertThatThrownBy(() -> new ProductionConfigValidation(environment).afterPropertiesSet())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("spring.data.redis.ssl.bundle=redis")
+                .hasMessageContaining("spring.ssl.bundle.pem.redis.truststore.certificate");
+    }
+
+    @Test
     void rejectsAProductionProfileThatLeavesMongoOrCutoverRuntimeEnabled() {
         MockEnvironment environment = validProductionEnvironment();
         environment.setProperty("auto.parto.persistence.postgresql.cutover.mongo-disabled", "false");
@@ -167,6 +179,8 @@ class ProductionConfigValidationTest {
                 .withProperty("spring.data.redis.port", "6379")
                 .withProperty("spring.data.redis.password", "redis-password")
                 .withProperty("spring.data.redis.ssl.enabled", "true")
+                .withProperty("spring.data.redis.ssl.bundle", "redis")
+                .withProperty("spring.ssl.bundle.pem.redis.truststore.certificate", "/run/auto-parto/certs/redis-ca.pem")
                 .withProperty("spring.data.redis.lettuce.pool.max-active", "8")
                 .withProperty("spring.data.redis.lettuce.pool.max-idle", "8")
                 .withProperty("spring.data.redis.lettuce.pool.min-idle", "0")
