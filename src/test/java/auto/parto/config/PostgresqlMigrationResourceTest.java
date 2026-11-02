@@ -13,6 +13,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PostgresqlMigrationResourceTest {
 
     @Test
+    void postgresqlRoleProvisioningAppliesValidatedConnectionBudgets() throws IOException {
+        String init = Files.readString(Path.of("deploy/postgres/init/01-create-application-roles.sql"));
+        String provision = Files.readString(Path.of("deploy/postgres/operations/provision-existing-volume.sql"));
+        String verify = Files.readString(Path.of("deploy/postgres/operations/verify-existing-volume.sql"));
+
+        assertThat(init).contains("CONNECTION LIMIT %s")
+                .contains("APP_POSTGRES_RUNTIME_CONNECTION_LIMIT must be between 1 and 100")
+                .contains("APP_POSTGRES_MIGRATION_CONNECTION_LIMIT must be between 1 and 10");
+        assertThat(provision).contains("ALTER ROLE %I CONNECTION LIMIT %s")
+                .contains("APP_POSTGRES_RUNTIME_CONNECTION_LIMIT must be between 1 and 100")
+                .contains("APP_POSTGRES_MIGRATION_CONNECTION_LIMIT must be between 1 and 10");
+        assertThat(verify).contains("connection_limit_matches_config")
+                .contains("Runtime role connection limit does not match the configured bound")
+                .contains("Migration role connection limit does not match the configured bound");
+    }
+
+    @Test
     void initialMigrationContainsTargetSchemaBoundaries() throws IOException {
         String sql = readResource("/db/migration/V1__create_initial_postgresql_schema.sql");
 

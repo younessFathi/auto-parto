@@ -81,6 +81,22 @@ class ProductionConfigValidationTest {
     }
 
     @Test
+    void rejectsUnboundedOrOversizedDatabaseAndRedisPools() {
+        MockEnvironment environment = validProductionEnvironment()
+                .withProperty("spring.r2dbc.pool.max-size", "21")
+                .withProperty("spring.r2dbc.pool.max-acquire-time", "-1s")
+                .withProperty("spring.data.redis.lettuce.pool.max-active", "-1")
+                .withProperty("spring.data.redis.lettuce.pool.max-wait", "30s");
+
+        assertThatThrownBy(() -> new ProductionConfigValidation(environment).afterPropertiesSet())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("spring.r2dbc.pool.max-size must be between 1 and 20")
+                .hasMessageContaining("spring.r2dbc.pool.max-acquire-time must be a finite positive timeout")
+                .hasMessageContaining("spring.data.redis.lettuce.pool.max-active must be between 1 and 32")
+                .hasMessageContaining("spring.data.redis.lettuce.pool.max-wait must be a finite positive timeout");
+    }
+
+    @Test
     void rejectsAProductionProfileThatLeavesMongoOrCutoverRuntimeEnabled() {
         MockEnvironment environment = validProductionEnvironment();
         environment.setProperty("auto.parto.persistence.postgresql.cutover.mongo-disabled", "false");
@@ -151,6 +167,15 @@ class ProductionConfigValidationTest {
                 .withProperty("spring.data.redis.port", "6379")
                 .withProperty("spring.data.redis.password", "redis-password")
                 .withProperty("spring.data.redis.ssl.enabled", "true")
+                .withProperty("spring.data.redis.lettuce.pool.max-active", "8")
+                .withProperty("spring.data.redis.lettuce.pool.max-idle", "8")
+                .withProperty("spring.data.redis.lettuce.pool.min-idle", "0")
+                .withProperty("spring.data.redis.lettuce.pool.max-wait", "3s")
+                .withProperty("spring.data.redis.connect-timeout", "3s")
+                .withProperty("spring.data.redis.timeout", "3s")
+                .withProperty("spring.r2dbc.pool.max-size", "10")
+                .withProperty("spring.r2dbc.pool.max-acquire-time", "5s")
+                .withProperty("spring.r2dbc.pool.max-create-connection-time", "5s")
                 .withProperty("jwt.signing.algorithm", "RS256")
                 .withProperty("jwt.signing.key-id", "active")
                 .withProperty("jwt.signing.private-key", "test-key-material")

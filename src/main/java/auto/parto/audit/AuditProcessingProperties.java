@@ -18,6 +18,9 @@ public class AuditProcessingProperties {
     private Duration leaseDuration = Duration.ofSeconds(30);
     private int maxAttempts = 3;
     private int maxConcurrency = 4;
+    private int maxConnections = 4;
+    private Duration maxAcquireTime = Duration.ofSeconds(5);
+    private Duration maxCreateConnectionTime = Duration.ofSeconds(5);
     private Duration baseRetryDelay = Duration.ofSeconds(2);
     private Duration maxRetryDelay = Duration.ofMinutes(1);
     private Duration reconciliationInterval = Duration.ofMinutes(5);
@@ -45,6 +48,12 @@ public class AuditProcessingProperties {
     public void setMaxAttempts(int maxAttempts) { this.maxAttempts = maxAttempts; }
     public int getMaxConcurrency() { return maxConcurrency; }
     public void setMaxConcurrency(int maxConcurrency) { this.maxConcurrency = maxConcurrency; }
+    public int getMaxConnections() { return maxConnections; }
+    public void setMaxConnections(int maxConnections) { this.maxConnections = maxConnections; }
+    public Duration getMaxAcquireTime() { return maxAcquireTime; }
+    public void setMaxAcquireTime(Duration maxAcquireTime) { this.maxAcquireTime = maxAcquireTime; }
+    public Duration getMaxCreateConnectionTime() { return maxCreateConnectionTime; }
+    public void setMaxCreateConnectionTime(Duration maxCreateConnectionTime) { this.maxCreateConnectionTime = maxCreateConnectionTime; }
     public Duration getBaseRetryDelay() { return baseRetryDelay; }
     public void setBaseRetryDelay(Duration baseRetryDelay) { this.baseRetryDelay = baseRetryDelay; }
     public Duration getMaxRetryDelay() { return maxRetryDelay; }
@@ -79,6 +88,14 @@ public class AuditProcessingProperties {
         AuditPersistenceLimits.requireBatchSize(batchSize);
         requireRange(maxAttempts, 1, 20, "max-attempts");
         requireRange(maxConcurrency, 1, 32, "max-concurrency");
+        requireRange(maxConnections, 1, 8, "max-connections");
+        if (maxConcurrency > maxConnections) {
+            throw new IllegalStateException("auto.parto.audit.max-concurrency must not exceed max-connections");
+        }
+        requirePositive(maxAcquireTime, "max-acquire-time");
+        requirePositive(maxCreateConnectionTime, "max-create-connection-time");
+        requireAtMost(maxAcquireTime, Duration.ofSeconds(10), "max-acquire-time");
+        requireAtMost(maxCreateConnectionTime, Duration.ofSeconds(10), "max-create-connection-time");
         requirePositive(pollInterval, "poll-interval");
         requirePositive(leaseDuration, "lease-duration");
         requirePositive(baseRetryDelay, "base-retry-delay");
@@ -105,6 +122,12 @@ public class AuditProcessingProperties {
     private static void requirePositive(Duration value, String field) {
         if (value == null || value.isZero() || value.isNegative()) {
             throw new IllegalStateException("auto.parto.audit." + field + " must be positive");
+        }
+    }
+
+    private static void requireAtMost(Duration value, Duration maximum, String field) {
+        if (value.compareTo(maximum) > 0) {
+            throw new IllegalStateException("auto.parto.audit." + field + " must not exceed " + maximum);
         }
     }
 

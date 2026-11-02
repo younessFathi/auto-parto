@@ -25,6 +25,7 @@ public class ProductionConfigValidation implements InitializingBean {
         validatePostgresql(errors);
         validatePostgresqlCutover(errors);
         validateRedis(errors);
+        validateConnectionBudgets(errors);
         validateJwt(errors);
         validateStorage(errors);
         validateConditionalProviders(errors);
@@ -56,6 +57,59 @@ public class ProductionConfigValidation implements InitializingBean {
             errors.add("spring.data.redis.ssl.enabled=true");
         }
         if (isLoopbackHost(value("spring.data.redis.host"))) errors.add("spring.data.redis.host must not be a loopback host");
+    }
+
+    private void validateConnectionBudgets(List<String> errors) {
+        validateIntegerRange("spring.r2dbc.pool.max-size", 1, 20, errors);
+        validateIntegerRange("spring.data.redis.lettuce.pool.max-active", 1, 32, errors);
+        validateIntegerRange("spring.data.redis.lettuce.pool.max-idle", 0, 32, errors);
+        validateIntegerRange("spring.data.redis.lettuce.pool.min-idle", 0, 32, errors);
+        validateTimeout("spring.r2dbc.pool.max-acquire-time", errors);
+        validateTimeout("spring.r2dbc.pool.max-create-connection-time", errors);
+        validateTimeout("spring.data.redis.connect-timeout", errors);
+        validateTimeout("spring.data.redis.timeout", errors);
+        validateTimeout("spring.data.redis.lettuce.pool.max-wait", errors);
+        try {
+            int maxIdle = Integer.parseInt(value("spring.data.redis.lettuce.pool.max-idle"));
+            int minIdle = Integer.parseInt(value("spring.data.redis.lettuce.pool.min-idle"));
+            int maxActive = Integer.parseInt(value("spring.data.redis.lettuce.pool.max-active"));
+            if (minIdle > maxIdle || maxIdle > maxActive) {
+                errors.add("spring.data.redis.lettuce.pool min-idle <= max-idle <= max-active");
+            }
+        } catch (RuntimeException ignored) {
+            // Range validation above reports missing or malformed pool settings.
+        }
+    }
+
+    private void validateIntegerRange(String propertyName, int minimum, int maximum, List<String> errors) {
+        try {
+            int configured = Integer.parseInt(value(propertyName));
+            if (configured < minimum || configured > maximum) {
+                errors.add(propertyName + " must be between " + minimum + " and " + maximum);
+            }
+        } catch (RuntimeException exception) {
+            errors.add(propertyName + " must be an integer between " + minimum + " and " + maximum);
+        }
+    }
+
+    private void validateTimeout(String propertyName, List<String> errors) {
+        String configured = value(propertyName);
+        if (configured == null || !configured.matches("(?i)[1-9][0-9]*(ms|s)?")) {
+            errors.add(propertyName + " must be a finite positive timeout no greater than 10s");
+            return;
+        }
+        try {
+            String normalized = configured.toLowerCase();
+            long number = Long.parseLong(normalized.replaceAll("(ms|s)$", ""));
+            long millis = normalized.endsWith("s") && !normalized.endsWith("ms")
+                    ? Math.multiplyExact(number, 1_000L)
+                    : number;
+            if (millis > 10_000) {
+                errors.add(propertyName + " must be a finite positive timeout no greater than 10s");
+            }
+        } catch (ArithmeticException | NumberFormatException exception) {
+            errors.add(propertyName + " must be a finite positive timeout no greater than 10s");
+        }
     }
 
     private void validateVerifiedPostgresqlTls(String propertyName, String url, List<String> errors) {

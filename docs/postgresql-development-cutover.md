@@ -24,8 +24,10 @@ Supply these variables through a local ignored `.env` file or the shell. Use dis
 - `APP_POSTGRES_MIGRATION_USER`
 - `APP_POSTGRES_MIGRATION_PASSWORD`
 - `APP_POSTGRES_RUNTIME_USER` (optional; defaults to `auto_parto_runtime`)
+- `APP_POSTGRES_RUNTIME_CONNECTION_LIMIT` (optional; defaults to `40`, validated from 1 through 100)
+- `APP_POSTGRES_MIGRATION_CONNECTION_LIMIT` (optional; defaults to `5`, validated from 1 through 10)
 
-The bootstrap account is used only during first initialization. The initialization SQL creates non-superuser runtime and migration roles. Runtime receives DML and sequence access on migration-created objects; the migration role receives schema creation privileges. Flyway connects only with the migration role.
+The bootstrap account is used only during first initialization. The initialization SQL creates non-superuser runtime and migration roles with finite connection limits. Runtime receives DML and sequence access on migration-created objects; the migration role receives schema creation privileges. Flyway connects only with the migration role. The production pool and role budgets must be sized together; see the [PostgreSQL and Redis Operations Runbook](postgresql-redis-operations-runbook.md).
 
 The PostgreSQL image runs initialization scripts only when `PGDATA` is empty. On an existing `app-postgres-data` volume, changing these variables or mounting the init script does not provision the new roles. Do not delete the volume to force initialization. Have an authorized database operator provision the runtime and migration roles and grants on that existing database, then verify them before running Flyway; the migration job should fail closed if the migration role is absent.
 
@@ -65,7 +67,7 @@ For an existing PostgreSQL volume, an authorized operator must provision and ver
 ./deploy/postgres/operations/provision-existing-volume.sh
 ```
 
-The procedure creates or updates only the restricted runtime and migration roles, repairs runtime DML grants on existing tables and `USAGE`/`SELECT` grants on existing sequences in the approved `public` application schema, and grants the migration role DML access to the existing Flyway history table. It prints role attributes, per-object ownership, runtime privileges, default privileges, and Flyway-history access for review. It does not drop or delete roles, tables, schemas, sequences, volumes, or Flyway history. It never performs global ownership reassignment.
+The procedure creates or updates only the restricted runtime and migration roles, applies and verifies their finite connection limits, repairs runtime DML grants on existing tables and `USAGE`/`SELECT` grants on existing sequences in the approved `public` application schema, and grants the migration role DML access to the existing Flyway history table. It prints role attributes, per-object ownership, runtime privileges, default privileges, and Flyway-history access for review. It does not drop or delete roles, tables, schemas, sequences, volumes, or Flyway history. It never performs global ownership reassignment.
 
 The procedure has two possible outcomes:
 

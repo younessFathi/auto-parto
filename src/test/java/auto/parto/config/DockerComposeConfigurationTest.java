@@ -56,6 +56,8 @@ class DockerComposeConfigurationTest {
         String auditCompose = Files.readString(Path.of("docker-compose.audit.yml"));
         assertThat(auditCompose).contains("audit-postgresql:");
         assertThat(compose).contains("APP_POSTGRES_MIGRATION_PASSWORD");
+        assertThat(compose).contains("APP_POSTGRES_RUNTIME_CONNECTION_LIMIT: ${APP_POSTGRES_RUNTIME_CONNECTION_LIMIT:-40}")
+                .contains("APP_POSTGRES_MIGRATION_CONNECTION_LIMIT: ${APP_POSTGRES_MIGRATION_CONNECTION_LIMIT:-5}");
         assertThat(compose).contains("app-postgresql-migrate:");
         assertThat(compose).contains("app-postgresql-fixtures:");
         assertThat(compose).contains("flyway/flyway:10.20.1");

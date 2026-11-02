@@ -10,7 +10,7 @@ Deploy stateless application instances behind TLS with isolated configuration an
 - [AP-0044](../tickets/AP-0044-openbao-vps-go-live.md): Cancelled/superseded by ADR-0001. No OpenBao production service will deliver initial credentials.
 - [AP-0045](../tickets/AP-0045-ansible-vault-vps-secrets.md): In Progress implementing the ADR-0001 decision: operator-controlled Ansible Vault deploy-time injection. Initial file-import and playbook changes are in the repository; staging, rotation/rejection, password recovery, and host-recovery evidence remain outstanding.
 - [AP-0046](../tickets/AP-0046-provision-vps-topology-with-opentofu-ansible.md): Proposed Contabo OpenTofu/Ansible four-VPS topology. Secret-model choice is resolved; region/account/cost, private-network/provider validation, and external state-changing runner remain blockers.
-- [AP-0026](../tickets/AP-0026-data-infrastructure.md): In Progress. Local client and Compose hardening started; private VPS networking, capacity sizing, off-host backup/PITR, Redis HA, and recovery evidence remain open.
+- [AP-0026](../tickets/AP-0026-data-infrastructure.md): In Progress. TLS enforcement, bounded app/audit pools, role connection ceilings, and local Redis memory/network limits are implemented; private VPS networking, measured sizing, encrypted off-host backup/PITR, Redis HA, and recovery evidence remain open.
 - [AP-0028](../tickets/AP-0028-provider-isolation.md): Isolate blocking external provider clients.
 
 ## Completion Tracking

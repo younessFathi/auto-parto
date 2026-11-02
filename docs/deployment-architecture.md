@@ -57,6 +57,7 @@ Production requirements:
 - Back up automatically and test restoration regularly.
 - Monitor connections, replication lag, locks, slow queries, storage, and transaction failures.
 - Use connection pooling appropriate for R2DBC and the database size.
+- Start with a bounded application R2DBC pool of 10 per instance (maximum configurable value 20), a 5-second acquisition/creation timeout, and a 40-connection runtime-role cap. Keep app replicas within the aggregate role budget; adjust limits together only after VPS load testing.
 - Do not expose PostgreSQL directly to the public Internet.
 - Allow access only through a private network or a firewall allowlist of application hosts.
 - Configure off-VPS encrypted backups so loss of the VPS does not lose the database.
@@ -72,6 +73,7 @@ Audit PostgreSQL stores high-volume historical audit events exported from the ap
 Production requirements:
 
 - Use a separate PostgreSQL instance or managed database resource; a separate schema on the application instance is not sufficient for production isolation.
+- Give audit PostgreSQL its own bounded R2DBC pool and connection budget; the initial application-side pool is four connections per app instance and audit worker concurrency cannot exceed it.
 - Require `sslMode=VERIFY_FULL` for the audit PostgreSQL R2DBC connection and verify the issuing CA through the approved runtime trust configuration.
 - Allow network access only from the bounded audit publisher and authorized audit-reader services.
 - Use separate publisher and read-only credentials. The application runtime must not have delete or update privileges on audit history.
@@ -179,6 +181,8 @@ For production, prefer a managed Redis service or a Redis HA deployment with:
 - Monitoring and backup policy
 
 Redis persistence improves recovery, but it does not replace PostgreSQL transactions or an outbox pattern.
+
+The current four-VPS topology has one app/Redis host and no cross-host Redis failover. Until AP-0046 selects and verifies managed Redis or a replica/Sentinel arrangement, treat Redis host loss as a bounded outage followed by projection rebuild from PostgreSQL. The initial client uses eight pooled connections per app instance (maximum 32), bounded three-second connection/command/acquisition timeouts, and production TLS. See the [PostgreSQL and Redis Operations Runbook](postgresql-redis-operations-runbook.md) for connection-budget calculations, recovery checks, and staging evidence requirements.
 
 ## File Storage: SeaweedFS S3 Gateway
 
