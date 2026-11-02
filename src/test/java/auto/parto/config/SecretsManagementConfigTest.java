@@ -72,21 +72,78 @@ class SecretsManagementConfigTest {
         assertThat(content)
                 .contains("url: ${APP_POSTGRES_R2DBC_URL}")
                 .contains("file:/run/auto-parto/secrets/secrets.properties")
-                .contains("provider: ${APP_SECRET_PROVIDER}")
-                .contains("address: ${OPENBAO_ADDR}")
                 .contains("provider: ${APP_FILE_STORAGE_PROVIDER}")
                 .contains("MongoReactiveAutoConfiguration")
                 .contains("mongo-disabled: true")
                 .doesNotContain("localhost")
                 .doesNotContain("root")
+                .doesNotContain("openbao")
+                .doesNotContain("APP_SECRET_PROVIDER")
                 .doesNotContain("JWT_SECRET");
+    }
+
+    @Test
+    void productionComposeUsesOnlyReadOnlyRoleScopedFileMounts() throws IOException {
+        String compose = Files.readString(Path.of("docker-compose.prod.yml"));
+        assertThat(compose)
+                .contains("source: /run/auto-parto/active")
+                .contains("create_host_path: false")
+                .contains("read_only: true")
+                .contains("user: \"10001:10001\"")
+                .doesNotContain("OPENBAO_ADDR")
+                .doesNotContain("OPENBAO_ROLE")
+                .doesNotContain("APP_SECRET_PROVIDER");
+    }
+
+    @Test
+    void ansibleVaultPlaybookValidatesEncryptedInputsAndSuppressesSecretOutput() throws IOException {
+        String playbook = Files.readString(Path.of("deploy/ansible/deploy-secret-bundles.yml"));
+        Object parsedPlaybook = new org.yaml.snakeyaml.Yaml().load(playbook);
+        assertThat(parsedPlaybook).isInstanceOf(List.class);
+        String activation = Files.readString(Path.of("deploy/ansible/activate-secret-generation.sh"));
+        assertThat(playbook)
+                .contains("hosts: secret_bundle_targets")
+                .contains("head -c 15")
+                .contains("$ANSIBLE_VAULT;")
+                .contains("decrypt: true")
+                .contains("mode: \"0440\"")
+                .contains("secret_target_role")
+                .contains("application_database")
+                .contains("migration_runner")
+                .contains("audit-runtime")
+                .contains("item.gid is match('^[0-9]+$')")
+                .contains("item.gid | string == '10001'")
+                .contains("item.generation_path == secret_bundle_paths[item.role]")
+                .contains("selectattr('role', 'equalto', 'application-runtime')")
+                .contains("secret_lock_path")
+                .contains("Acquire exclusive host and secret-root lock")
+                .contains("failed_active_secret_generation.stat.lnk_source")
+                .contains("secret_role_root ~ '/generations/' ~ secret_generation_id")
+                .contains("generations/{{ secret_generation_id }}")
+                .contains("Secret bundle staging failed")
+                .contains("activate-secret-generation.sh")
+                .contains("no_log: true")
+                .contains("diff: false")
+                .doesNotContain("vault_password_file")
+                .doesNotContain("debug:");
+        assertThat(activation)
+                .contains("test -f \"$generation_root/$relative_path\"")
+                .contains("mv -Tf")
+                .contains("/run/auto-parto:secrets/secrets.properties")
+                .doesNotContain("eval ");
+
+        String migrationCleanup = Files.readString(Path.of("deploy/ansible/remove-migration-bundle.yml"));
+        assertThat(migrationCleanup)
+                .contains("hosts: secret_bundle_targets")
+                .contains("when: secret_target_role == 'migration_runner'")
+                .contains("auto-parto-secret-delivery-migration_runner");
     }
 
     @Test
     void openBaoDeliveryDoesNotPlaceAgentTokenInApplicationCompose() throws IOException {
         String compose = Files.readString(Path.of("docker-compose.prod.yml"));
         String agent = Files.readString(Path.of("deploy/openbao/agent.hcl.example"));
-        assertThat(compose).contains("/run/auto-parto/secrets:/run/auto-parto/secrets:ro")
+        assertThat(compose).contains("source: /run/auto-parto/active")
                 .doesNotContain("OPENBAO_TOKEN")
                 .doesNotContain("BAO_TOKEN");
         assertThat(agent).contains("secret_id_response_wrapping_path")

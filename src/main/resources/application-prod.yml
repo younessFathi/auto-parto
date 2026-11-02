@@ -42,12 +42,6 @@ auto:
           mongo-disabled: true
           storage-reconciliation:
             enabled: true
-    secrets:
-      provider: ${APP_SECRET_PROVIDER}
-      openbao:
-        address: ${OPENBAO_ADDR}
-        role: ${OPENBAO_ROLE}
-        auth-method: ${OPENBAO_AUTH_METHOD}
     storage:
       provider: ${APP_FILE_STORAGE_PROVIDER}
       s3:

@@ -22,7 +22,6 @@ class ProductionConfigValidationTest {
 
         assertThatThrownBy(() -> new ProductionConfigValidation(environment).afterPropertiesSet())
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("auto.parto.secrets.provider")
                 .hasMessageContaining("spring.r2dbc.url")
                 .hasMessageContaining("spring.data.redis.password")
                 .hasMessageContaining("jwt.signing.private-key")
@@ -49,7 +48,6 @@ class ProductionConfigValidationTest {
     void rejectsIpv4LoopbackInfrastructureEndpoints() {
         assertRejectsLoopback("spring.r2dbc.url", "r2dbc:postgresql://127.0.0.1:5432/app", "spring.r2dbc.url");
         assertRejectsLoopback("spring.data.redis.host", "127.0.0.1", "spring.data.redis.host");
-        assertRejectsLoopback("auto.parto.secrets.openbao.address", "https://127.0.0.1", "auto.parto.secrets.openbao.address");
         assertRejectsLoopback("auto.parto.storage.s3.endpoint", "https://127.0.0.1", "auto.parto.storage.s3.endpoint");
     }
 
@@ -57,7 +55,6 @@ class ProductionConfigValidationTest {
     void rejectsIpv6LoopbackInfrastructureEndpoints() {
         assertRejectsLoopback("spring.r2dbc.url", "r2dbc:postgresql://[::1]:5432/app", "spring.r2dbc.url");
         assertRejectsLoopback("spring.data.redis.host", "[::1]", "spring.data.redis.host");
-        assertRejectsLoopback("auto.parto.secrets.openbao.address", "https://[::1]", "auto.parto.secrets.openbao.address");
         assertRejectsLoopback("auto.parto.storage.s3.endpoint", "https://[::1]", "auto.parto.storage.s3.endpoint");
     }
 
@@ -122,10 +119,6 @@ class ProductionConfigValidationTest {
 
     private static MockEnvironment validProductionEnvironment() {
         MockEnvironment environment = new MockEnvironment()
-                .withProperty("auto.parto.secrets.provider", "openbao")
-                .withProperty("auto.parto.secrets.openbao.address", "https://openbao.internal")
-                .withProperty("auto.parto.secrets.openbao.role", "auto-parto")
-                .withProperty("auto.parto.secrets.openbao.auth-method", "kubernetes")
                 .withProperty("spring.r2dbc.url", "r2dbc:postgresql://postgres.internal:5432/app")
                 .withProperty("spring.r2dbc.username", "runtime")
                 .withProperty("spring.r2dbc.password", "runtime-password")

@@ -1,0 +1,46 @@
+---
+- name: Remove temporary migration secret generations
+  hosts: secret_bundle_targets
+  gather_facts: false
+  become: true
+
+  pre_tasks:
+    - name: Require a declared target role
+      ansible.builtin.assert:
+        that:
+          - secret_target_role is defined
+          - secret_target_role in ['application', 'application_database', 'audit_database', 'object_storage', 'migration_runner']
+        quiet: true
+      no_log: true
+
+  tasks:
+    - name: Serialize migration bundle cleanup with deployment on this host and root
+      block:
+        - name: Acquire the same exclusive lock used by secret deployment
+          ansible.builtin.command:
+            argv:
+              - mkdir
+              - --
+              - /run/lock/auto-parto-secret-delivery-migration_runner
+          register: migration_lock_result
+          changed_when: true
+          no_log: true
+
+        - name: Remove all temporary migration secret generations
+          ansible.builtin.file:
+            path: /run/auto-parto-migration
+            state: absent
+          no_log: true
+
+      always:
+        - name: Release migration secret-root lock
+          ansible.builtin.command:
+            argv:
+              - rmdir
+              - --
+              - /run/lock/auto-parto-secret-delivery-migration_runner
+          when: migration_lock_result is defined and migration_lock_result is succeeded
+          changed_when: true
+          no_log: true
+
+      when: secret_target_role == 'migration_runner'

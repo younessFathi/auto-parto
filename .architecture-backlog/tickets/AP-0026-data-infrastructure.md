@@ -3,7 +3,7 @@
 - **Status:** Proposed
 - **Type:** Technical Enhancement
 - **Feature:** [Deployment and Secrets](../features/F07-deployment-and-secrets.md)
-- **Linked Tickets:** [AP-0002](AP-0002-reactive-persistence.md), [AP-0016](AP-0016-redis-projections.md), [AP-0022](AP-0022-openbao-secrets.md)
+- **Linked Tickets:** [AP-0002](AP-0002-reactive-persistence.md), [AP-0016](AP-0016-redis-projections.md), [AP-0022](AP-0022-openbao-secrets.md), [AP-0046 VPS Infrastructure Automation](AP-0046-provision-vps-topology-with-opentofu-ansible.md)
 - **Source:** `deployment-architecture.md` PostgreSQL and Redis Persistence
 
 ## Description

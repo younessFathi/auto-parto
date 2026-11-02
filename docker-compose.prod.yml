@@ -11,10 +11,6 @@ services:
       APP_POSTGRES_R2DBC_URL: ${APP_POSTGRES_R2DBC_URL:?set protected application PostgreSQL URL}
       REDIS_HOST: ${REDIS_HOST:?set private Redis host}
       REDIS_PORT: ${REDIS_PORT:-6379}
-      APP_SECRET_PROVIDER: openbao
-      OPENBAO_ADDR: ${OPENBAO_ADDR:?set private TLS OpenBao URL}
-      OPENBAO_ROLE: ${OPENBAO_ROLE:?set environment-scoped OpenBao role}
-      OPENBAO_AUTH_METHOD: approle-agent
       APP_FILE_STORAGE_PROVIDER: s3
       APP_FILE_STORAGE_S3_ENDPOINT: ${APP_FILE_STORAGE_S3_ENDPOINT:?set TLS object-storage endpoint}
       APP_FILE_STORAGE_S3_BUCKET: ${APP_FILE_STORAGE_S3_BUCKET:?set bucket}
@@ -22,8 +18,12 @@ services:
       FIREBASE_ENABLED: ${FIREBASE_ENABLED:-false}
       RESEND_ENABLED: ${RESEND_ENABLED:-false}
     volumes:
-      - /run/auto-parto/secrets:/run/auto-parto/secrets:ro
-      - /run/auto-parto/audit:/run/auto-parto/audit:ro
+      - type: bind
+        source: /run/auto-parto/active
+        target: /run/auto-parto
+        read_only: true
+        bind:
+          create_host_path: false
     read_only: true
     tmpfs: [/tmp]
     user: "10001:10001"
