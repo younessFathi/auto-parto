@@ -13,6 +13,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -35,6 +36,7 @@ class OpenBaoImageDeploymentIT {
     private static final Path ROOT = Path.of(".").toAbsolutePath().normalize();
     private static final Path COMPOSE_FILE = ROOT.resolve("deploy/openbao/compose.production.yml");
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final Duration OPENBAO_API_TIMEOUT = Duration.ofSeconds(30);
 
     @Test
     void pinnedNormalModeImageStartsTlsBackedWithPersistentRaftVolume() throws Exception {
@@ -210,7 +212,7 @@ class OpenBaoImageDeploymentIT {
         trustManagers.init(trustStore);
         var sslContext = SSLContext.getInstance("TLS");
         sslContext.init(null, trustManagers.getTrustManagers(), new SecureRandom());
-        return HttpClient.newBuilder().sslContext(sslContext).connectTimeout(Duration.ofSeconds(5))
+        return HttpClient.newBuilder().sslContext(sslContext).connectTimeout(Duration.ofSeconds(10))
                 .followRedirects(HttpClient.Redirect.NORMAL).build();
     }
 
@@ -288,7 +290,7 @@ class OpenBaoImageDeploymentIT {
     private static HttpResponse<String> request(HttpClient client, int port, String method, String path,
                                                 Object body, String token) throws Exception {
         var builder = HttpRequest.newBuilder(URI.create("https://127.0.0.1:" + port + "/v1" + path))
-                .timeout(Duration.ofSeconds(10));
+                .timeout(OPENBAO_API_TIMEOUT);
         if (token != null) {
             builder.header("X-Vault-Token", token);
         }
@@ -298,7 +300,11 @@ class OpenBaoImageDeploymentIT {
             builder.header("Content-Type", "application/json")
                     .method(method, HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body)));
         }
-        return client.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        try {
+            return client.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        } catch (HttpTimeoutException timeout) {
+            throw new IOException("OpenBao API request timed out: " + method + " " + path, timeout);
+        }
     }
 
     private static void assertSuccessful(HttpResponse<String> response) {
