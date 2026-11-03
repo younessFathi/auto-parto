@@ -314,9 +314,7 @@ The PostgreSQL migration job, identity/profile fixture job, reconciliation proce
 
 Applications must fail safely when required production secrets are missing. They must not silently use development credentials.
 
-### OpenBao prototype disposition
-
-OpenBao's normal-mode image, policies, Agent templates, and integration tests are retained as prototype/development artifacts. They are not the selected initial production delivery path and must not deliver initial production credentials. `docker-compose.openbao-dev.yml` remains an isolated disposable local sandbox. AP-0022 is cancelled/superseded for its OpenBao production acceptance path, while AP-0045 tracks implementing the accepted Ansible Vault model. Do not claim production secret readiness from the prototype or image tests.
+The superseded OpenBao deployment prototype, local Compose sandbox, and associated tests have been removed under AP-0045. AP-0022 and AP-0044 remain cancelled historical tickets; the accepted initial delivery model is operator-controlled Ansible Vault under ADR-0001. This repository cleanup does not establish staging or production readiness.
 
 The application supports RS256 JWT signing with a `kid`, a published `/.well-known/jwks.json` key set, overlapping verification keys, and removal-based revocation. Keep private signing keys in the encrypted role-scoped Vault inputs and publish only public keys. Tests cover overlap and removal; staging rollout/revocation remains required.
 

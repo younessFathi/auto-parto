@@ -100,6 +100,16 @@ class ArchitectureCatalogTest {
                 .contains("AP-0022's OpenBao production scope is cancelled");
     }
 
+    @Test
+    void supersededOpenBaoDeploymentArtifactsAreRemoved() {
+        assertThat(Files.exists(Path.of("deploy/openbao"))).isFalse();
+        assertThat(Files.exists(Path.of("docker-compose.openbao-dev.yml"))).isFalse();
+        assertThat(Files.exists(Path.of("src/test/java/auto/parto/config/OpenBaoImageDeploymentIT.java")))
+                .isFalse();
+        assertThat(Files.exists(Path.of("src/test/java/auto/parto/config/OpenBaoSecretReadinessScriptTest.java")))
+                .isFalse();
+    }
+
     private void assertLinksResolve(Path markdown) {
         try {
             String content = Files.readString(markdown);

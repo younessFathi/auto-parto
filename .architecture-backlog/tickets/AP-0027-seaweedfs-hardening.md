@@ -3,7 +3,7 @@
 - **Status:** Done
 - **Type:** Technical Enhancement
 - **Feature:** [File Storage](../features/F06-file-storage.md)
-- **Linked Tickets:** [AP-0017](AP-0017-storage-boundary.md), [AP-0019](AP-0019-storage-reconciliation.md), [AP-0022](AP-0022-openbao-secrets.md)
+- **Linked Tickets:** [AP-0017](AP-0017-storage-boundary.md), [AP-0019](AP-0019-storage-reconciliation.md), [AP-0045](AP-0045-ansible-vault-vps-secrets.md)
 - **Source:** `deployment-architecture.md` SeaweedFS
 
 ## Description

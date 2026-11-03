@@ -72,7 +72,7 @@ Atomic consumption is already covered and should not be reported as missing.
 Valid focused refinements include:
 
 - Add provisional RPO of 15 minutes or better and RTO of 2 hours or better to `AP-0024`.
-- Explicitly include OpenBao recovery in `AP-0024`.
+- Explicitly include Ansible Vault input and password-custody recovery in `AP-0024`.
 - Add PostgreSQL lock, slow-query, and replication monitoring where not already explicit.
 - Define the initial Redis Streams consumer/fan-out semantics and retention sizing.
 - Clarify that PostgreSQL owns durable exhausted-event state while Redis dead-letter data is reconstructible.
@@ -183,7 +183,7 @@ A dependency-safe sequence for the currently declared links is:
 8. `AP-0017`, `AP-0018`, `AP-0019`: storage boundary, lifecycle, and reconciliation.
 9. `AP-0003`: development cutover after its persistence and storage dependencies.
 10. `AP-0020`: stateless application deployment after reactive persistence and Redis projections.
-11. `AP-0021`, `AP-0022`, `AP-0023`: TLS entry point, OpenBao, and telemetry after application deployment and their other dependencies.
+11. `AP-0021`, `AP-0023`, `AP-0045`: TLS entry point, telemetry, and selected Ansible Vault secret delivery after application deployment and their other dependencies.
 12. `AP-0026`, `AP-0027`, `AP-0028`: data infrastructure, SeaweedFS hardening, and provider isolation.
 13. `AP-0024`: alerts and recovery after infrastructure, secrets, telemetry, and storage dependencies.
 14. `AP-0029`: CloudEvents only after a real external interoperability requirement exists.
@@ -206,7 +206,7 @@ The address ticket should be inserted after authentication and ownership foundat
 Its status should not be broadly `Partial` for missing these requirements. Remaining refinements are narrow:
 
 - Add the provisional numeric RPO/RTO targets.
-- Name OpenBao recovery explicitly.
+- Name encrypted Vault input and independent password-custody recovery explicitly.
 - Ensure restore order and incident communication are included in drills.
 
 ## Required Changes to the Alignment Report

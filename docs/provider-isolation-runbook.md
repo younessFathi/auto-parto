@@ -7,7 +7,6 @@
 | Firebase FCM | Background notification delivery | Firebase Admin async `ApiFuture` | Per-instance in-flight cap and batch concurrency; finite timeout and bounded retry/circuit-breaker behavior; failures are returned to the durable PostgreSQL notification retry flow. |
 | Resend | OTP request | Synchronous SDK on `resend-provider` scheduler | Fixed thread pool and bounded queue; full queue rejects immediately. Timeout/cancellation interrupts the scheduled task. The caller receives a generic email-delivery error. |
 | S3-compatible storage | File upload/download and metadata | AWS async client | Bounded HTTP concurrency and pending acquisition; request timeout/cancellation returns a storage failure to existing service error handling. |
-| OpenBao | Host/deployment | Host Agent, outside application JVM | The agent handles renewable scoped leases and renders credential files; the app never receives its token. |
 
 ## Configuration
 

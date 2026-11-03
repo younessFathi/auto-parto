@@ -32,6 +32,6 @@ Keep separate production and non-production Vault passwords and files. Back up o
 
 - AP-0045 is the implementation ticket for the selected Ansible Vault path.
 - AP-0044's initial OpenBao VPS delivery is cancelled. Do not provision OpenBao to deliver the initial production credentials.
-- AP-0022's OpenBao production acceptance path is cancelled/superseded; its repository implementation remains prototype/development material until AP-0045 removes OpenBao production requirements and establishes the selected fail-closed delivery path. AP-0022 is not Done.
+- AP-0022's OpenBao production acceptance path is cancelled/superseded. AP-0045 has removed its prototype deployment and tests from the active repository; AP-0022 remains Cancelled, not Done.
 - AP-0046 retains the four VPS roles and stays Proposed until its provider, account, cost, private-network, API/provider validation, and separate runner prerequisites are evidenced.
 - F07 and F09 remain incomplete; this ADR is an architecture decision, not deployment or recovery evidence.

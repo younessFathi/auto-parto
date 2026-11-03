@@ -29,7 +29,7 @@ Generic FCM and SSE dispatch endpoints, including broadcast and seller-response 
 
 The non-production profiles retain HS256 compatibility and require `JWT_SECRET` to be a Base64-encoded key of at least 256 bits. Keep that value in local/test secret configuration; never commit it.
 
-The `prod` profile requires RS256 signing material from the OpenBao Agent rendered secret bundle: an active `kid`, a PKCS#8 RSA private key, and a JSON verification-key set containing the active and any overlap keys. Production does not use `JWT_SECRET`. The application publishes only RSA public verification keys at `/.well-known/jwks.json`, which is unauthenticated so clients can verify tokens. During rotation, publish the next public key before changing the active signer, retain the previous public key for the maximum token lifetime plus clock skew, then remove it to revoke those tokens. See the [production secrets runbook](production-secrets-runbook.md) for the deployment sequence.
+The `prod` profile requires RS256 signing material from the operator-controlled Ansible Vault mounted secret bundle: an active `kid`, a PKCS#8 RSA private key, and a JSON verification-key set containing the active and any overlap keys. Production does not use `JWT_SECRET`. The application publishes only RSA public verification keys at `/.well-known/jwks.json`, which is unauthenticated so clients can verify tokens. During rotation, publish the next public key before changing the active signer, retain the previous public key for the maximum token lifetime plus clock skew, then remove it to revoke those tokens. See the [production secrets runbook](production-secrets-runbook.md) for the deployment sequence.
 
 ## OTP verification
 

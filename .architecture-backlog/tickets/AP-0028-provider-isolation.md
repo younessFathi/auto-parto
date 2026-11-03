@@ -3,11 +3,11 @@
 - **Status:** Done
 - **Type:** Technical Enhancement
 - **Feature:** [Deployment and Secrets](../features/F07-deployment-and-secrets.md)
-- **Linked Tickets:** [AP-0020](AP-0020-stateless-deployment.md), [AP-0017](AP-0017-storage-boundary.md), [AP-0022](AP-0022-openbao-secrets.md)
+- **Linked Tickets:** [AP-0020](AP-0020-stateless-deployment.md), [AP-0017](AP-0017-storage-boundary.md)
 - **Source:** `deployment-architecture.md` Secrets and Configuration
 
 ## Description
-Keep Firebase, email, OpenBao, and object-storage calls from blocking WebFlux event-loop threads or consuming unbounded resources.
+Keep Firebase, email, and object-storage calls from blocking WebFlux event-loop threads or consuming unbounded resources.
 
 ## Provider Operation Inventory
 
@@ -16,7 +16,6 @@ Keep Firebase, email, OpenBao, and object-storage calls from blocking WebFlux ev
 | Firebase Admin send | `FirebaseMessaging.sendAsync(ApiFuture)` adapted to Reactor; no blocking scheduler | Background notification delivery | In-flight semaphore and batch concurrency, finite timeout, future cancellation, bounded retry policy, circuit breaker; safe result maps to PostgreSQL delivery retry |
 | Resend email send | Synchronous Resend Java SDK on `resend-provider` bounded scheduler | OTP request path | Fixed threads, bounded queue, rejection, timeout/cancellation, graceful shutdown; safe `EmailSendException` |
 | S3/SeaweedFS object operations | AWS `S3AsyncClient` | Upload/download and storage service paths | Finite HTTP concurrency and pending acquisition bound, connection/acquisition/API timeouts, cancellation, graceful client close |
-| OpenBao | No application HTTP client; host Agent renders scoped credential files | Host/deployment lifecycle | Outside JVM provider execution; renewal/revocation and policy isolation tracked by AP-0022/AP-0044 |
 | Firebase health | Local initialized-app presence check only | Readiness indicator | No network call |
 
 ## Acceptance Criteria
