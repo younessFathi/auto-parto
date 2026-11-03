@@ -6,7 +6,6 @@
 
 This is the approved target procedure, not a claim that production delivery is ready for staging or production. AP-0045 has removed OpenBao-specific runtime requirements, made production depend on role-scoped mounted files, and added an initial Ansible playbook. The playbook runs in disposable Docker integration tests, but it has not been run against a provider staging host. AP-0045 remains In Progress; AP-0046 remains Proposed pending Contabo region, owner, cost, private-network/provider validation, and the separately controlled deployment path. Keep F07 In Progress and do not enable production traffic.
 
-For local development only, `docker-compose.openbao-dev.yml` remains a loopback-only disposable sandbox with non-production values. Do not connect production workloads or credentials to it.
 
 ## Custody and access
 

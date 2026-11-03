@@ -1,5 +1,7 @@
 # Architecture Backlog Alignment Review
 
+> Historical assessment. Its OpenBao recommendations were superseded by [ADR-0001](architecture-decisions/ADR-0001-production-secret-delivery.md); the selected Ansible Vault path and current backlog are authoritative.
+
 ## Scope
 
 This review compares all Markdown files under `.architecture-backlog/` with:
@@ -72,9 +74,9 @@ The separate `architecture-backlog-alignment-assessment.md` was reviewed against
 | AP-0019 Storage reconciliation | Partial | Add a state/action matrix, dry-run mode, retention windows, destructive-action authorization, metrics, and ownership split with AP-0027. |
 | AP-0020 Stateless deployment | Partial | Add liveness/readiness, pool sizing, SSE multi-instance behavior, worker lease recovery, and bounded shutdown requirements. |
 | AP-0021 TLS entrypoint | Aligned | Trusted proxies, TLS, health checks, SSE timeouts, and private database boundaries are already covered. Add only concrete initial Caddy configuration and buffering details if implementation needs them. |
-| AP-0022 OpenBao secrets | Aligned | JWT rotation and non-root workload identity are already covered. Add dynamic PostgreSQL credential policy, Transit/KMS decision, and unseal/recovery-key handling where not already explicit. |
+| AP-0022 OpenBao secrets | Cancelled by ADR-0001 | Its production model was superseded by operator-controlled Ansible Vault delivery. Do not implement the earlier workload identity, dynamic credential, or unseal recommendations for the initial deployment. |
 | AP-0023 Telemetry/health | Aligned | Add exact backend decision, oldest pending age, retry/DLQ age, PostgreSQL locks/replication, Redis evictions, SeaweedFS drift, and recovery-drill metrics. |
-| AP-0024 Alerts/recovery | Partial | RPO/RTO, PITR, wallet reconciliation, Redis rebuild, SeaweedFS recovery, rollback, and runbooks are already covered. Add provisional numeric RPO <= 15 minutes and RTO <= 2 hours, name OpenBao recovery explicitly, and require restore-order drill evidence. |
+| AP-0024 Alerts/recovery | Partial | RPO/RTO, PITR, wallet reconciliation, Redis rebuild, SeaweedFS recovery, rollback, and runbooks are already covered. Add provisional numeric RPO <= 15 minutes and RTO <= 2 hours, Ansible Vault input/password custody recovery, and restore-order drill evidence. |
 | AP-0025 API error contract | Aligned / Partial | Safe errors, stable behavior, and status codes are covered. Add response schema, validation field errors, and the resource-existence disclosure policy if not already explicit. |
 | AP-0026 Data infrastructure | Partial | Add WAL/PITR, lock/slow-query/replication monitoring, Redis TLS/authentication, and links to AP-0024. |
 | AP-0027 SeaweedFS hardening | Aligned | Clarify replication is not backup, object version/deletion policy, and private/admin-only routing. |
@@ -102,7 +104,7 @@ Aligned directionally. Keep the canonical identifier strategy and R2DBC/JDBC sep
 
 ### F02 Identity and Security
 
-Aligned directionally. Add OpenBao/JWT key rotation, issuer/audience validation, rate-limit failure policy, and protected operator diagnostics where those requirements are not already present in AP-0004, AP-0006, AP-0022, or AP-0023.
+Aligned directionally. Add JWT key rotation, issuer/audience validation, rate-limit failure policy, and protected operator diagnostics where those requirements are not already present in AP-0004, AP-0006, or AP-0023.
 
 ### F03 Marketplace
 
@@ -122,11 +124,11 @@ Strongly aligned. Make the dependency between SeaweedFS provider recovery and ap
 
 ### F07 Deployment and Secrets
 
-Strongly aligned. Clarify ownership with F08 for PostgreSQL backups, Redis recovery, OpenBao recovery, and operational drills.
+Strongly aligned. Clarify ownership with F08 for PostgreSQL backups, Redis recovery, Ansible Vault/password recovery, and operational drills.
 
 ### F08 Observability and Recovery
 
-Aligned but incomplete. Explicitly own RPO/RTO approval, WAL/PITR, OpenBao recovery, and restoration acceptance tests. AP-0024 already covers most of these and should receive narrow refinements rather than a duplicate recovery ticket.
+Aligned but incomplete. Explicitly own RPO/RTO approval, WAL/PITR, encrypted Ansible Vault input/password recovery, and restoration acceptance tests. AP-0024 already covers most of these and should receive narrow refinements rather than a duplicate recovery ticket.
 
 ## Cross-Cutting Gaps
 
@@ -183,7 +185,7 @@ AP-0029 is correctly blocked. The internal versioned DTO plus PostgreSQL outbox 
 8. AP-0017/AP-0018/AP-0019: storage boundary, lifecycle, and reconciliation.
 9. AP-0003: development cutover after persistence and storage dependencies.
 10. AP-0020: stateless application deployment.
-11. AP-0021/AP-0022/AP-0023: TLS, OpenBao, and telemetry.
+11. AP-0021/AP-0023/AP-0045: TLS, telemetry, and the selected Ansible Vault delivery.
 12. AP-0026/AP-0027/AP-0028: data infrastructure, SeaweedFS hardening, and provider isolation.
 13. AP-0024: alerts and recovery after infrastructure, secrets, telemetry, and storage dependencies.
 14. AP-0029: only after an external interoperability requirement exists.

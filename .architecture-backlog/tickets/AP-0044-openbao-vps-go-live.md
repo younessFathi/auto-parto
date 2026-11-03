@@ -8,7 +8,7 @@
 
 ## Description
 
-ADR-0001 selects operator-controlled Ansible Vault deploy-time injection for initial production. This OpenBao VPS delivery ticket is cancelled and superseded; no OpenBao service will deliver the initial production credentials. Retain any OpenBao image artifacts only as non-production prototypes until their disposition is handled under AP-0045. This cancellation is an architecture choice, not evidence of deployment or secret-management completion.
+ADR-0001 selects operator-controlled Ansible Vault deploy-time injection for initial production. This OpenBao VPS delivery ticket is cancelled and superseded; no OpenBao service will deliver the initial production credentials. AP-0045 removed the prototype deployment artifacts and tests from the active repository. This cancellation is an architecture choice, not evidence of deployment or secret-management completion.
 
 ## Historical Acceptance Criteria (Superseded by ADR-0001)
 

@@ -24,8 +24,10 @@ Supply these variables through a local ignored `.env` file or the shell. Use dis
 - `APP_POSTGRES_MIGRATION_USER`
 - `APP_POSTGRES_MIGRATION_PASSWORD`
 - `APP_POSTGRES_RUNTIME_USER` (optional; defaults to `auto_parto_runtime`)
+- `APP_POSTGRES_RUNTIME_CONNECTION_LIMIT` (optional; defaults to `40`, validated from 1 through 100)
+- `APP_POSTGRES_MIGRATION_CONNECTION_LIMIT` (optional; defaults to `5`, validated from 1 through 10)
 
-The bootstrap account is used only during first initialization. The initialization SQL creates non-superuser runtime and migration roles. Runtime receives DML and sequence access on migration-created objects; the migration role receives schema creation privileges. Flyway connects only with the migration role.
+The bootstrap account is used only during first initialization. The initialization SQL creates non-superuser runtime and migration roles with finite connection limits. Runtime receives DML and sequence access on migration-created objects; the migration role receives schema creation privileges. Flyway connects only with the migration role. The production pool and role budgets must be sized together; see the [PostgreSQL and Redis Operations Runbook](postgresql-redis-operations-runbook.md).
 
 The PostgreSQL image runs initialization scripts only when `PGDATA` is empty. On an existing `app-postgres-data` volume, changing these variables or mounting the init script does not provision the new roles. Do not delete the volume to force initialization. Have an authorized database operator provision the runtime and migration roles and grants on that existing database, then verify them before running Flyway; the migration job should fail closed if the migration role is absent.
 
@@ -55,7 +57,7 @@ Run the application with the completed PostgreSQL development profile. It enable
 docker compose -f docker-compose.yml -f docker-compose.local.yml --profile postgres up -d springboot-postgresql-app
 ```
 
-The application service uses PostgreSQL and Redis only. The production deployment should place a TLS entry point on the shared Compose network and scale the application service without publishing an instance-specific host port.
+The application service uses PostgreSQL and Redis only. The base Compose file does not publish PostgreSQL or Redis ports. The local override publishes the application and Redis only on loopback for workstation access; omit that override outside local development. The production deployment should place a TLS entry point on the private application network and scale the application service without publishing an instance-specific host port. Production PostgreSQL URLs must use `sslMode=VERIFY_FULL`; the production Redis client enables TLS and verifies its server certificate.
 
 The fixture service is structurally ordered after the Flyway service and connects with the restricted runtime role, not the bootstrap or migration role. It creates deterministic development buyer and seller identities, profiles, marketplace records, a wallet/ledger pair, and one active device token. The script is transactional and idempotent: rerunning it does not duplicate users, profiles, marketplace records, wallet entries, or device tokens. If a deterministic fixture conflicts with existing data, the script exits nonzero and rolls back the run. It intentionally does not seed OTP challenges, files, notifications, or outbox state because those records are transient or require a separate validated object-storage/notification fixture manifest.
 
@@ -65,7 +67,7 @@ For an existing PostgreSQL volume, an authorized operator must provision and ver
 ./deploy/postgres/operations/provision-existing-volume.sh
 ```
 
-The procedure creates or updates only the restricted runtime and migration roles, repairs runtime DML grants on existing tables and `USAGE`/`SELECT` grants on existing sequences in the approved `public` application schema, and grants the migration role DML access to the existing Flyway history table. It prints role attributes, per-object ownership, runtime privileges, default privileges, and Flyway-history access for review. It does not drop or delete roles, tables, schemas, sequences, volumes, or Flyway history. It never performs global ownership reassignment.
+The procedure creates or updates only the restricted runtime and migration roles, applies and verifies their finite connection limits, repairs runtime DML grants on existing tables and `USAGE`/`SELECT` grants on existing sequences in the approved `public` application schema, and grants the migration role DML access to the existing Flyway history table. It prints role attributes, per-object ownership, runtime privileges, default privileges, and Flyway-history access for review. It does not drop or delete roles, tables, schemas, sequences, volumes, or Flyway history. It never performs global ownership reassignment.
 
 The procedure has two possible outcomes:
 

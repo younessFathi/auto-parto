@@ -88,7 +88,7 @@ class ArchitectureCatalogTest {
         assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0045-ansible-vault-vps-secrets.md")))
                 .contains("**Status:** In Progress");
         assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0026-data-infrastructure.md")))
-                .contains("**Status:** Proposed");
+                .contains("**Status:** In Progress");
         assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0033-github-actions-migration.md")))
                 .contains("## Status\n\nIn Progress");
         assertThat(Files.readString(BACKLOG.resolve("features/F07-deployment-and-secrets.md")))
@@ -98,6 +98,16 @@ class ArchitectureCatalogTest {
         assertThat(Files.readString(BACKLOG.resolve("tickets/AP-0024-alerts-recovery.md")))
                 .contains("AP-0045 (selected Ansible Vault delivery")
                 .contains("AP-0022's OpenBao production scope is cancelled");
+    }
+
+    @Test
+    void supersededOpenBaoDeploymentArtifactsAreRemoved() {
+        assertThat(Files.exists(Path.of("deploy/openbao"))).isFalse();
+        assertThat(Files.exists(Path.of("docker-compose.openbao-dev.yml"))).isFalse();
+        assertThat(Files.exists(Path.of("src/test/java/auto/parto/config/OpenBaoImageDeploymentIT.java")))
+                .isFalse();
+        assertThat(Files.exists(Path.of("src/test/java/auto/parto/config/OpenBaoSecretReadinessScriptTest.java")))
+                .isFalse();
     }
 
     private void assertLinksResolve(Path markdown) {

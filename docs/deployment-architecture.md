@@ -52,10 +52,12 @@ Production requirements:
 - Initially run PostgreSQL on a dedicated VPS, isolated from the public Internet and from application containers.
 - Later, move to a managed PostgreSQL service or highly available PostgreSQL cluster when availability requirements justify it.
 - Enable encrypted connections and restrict network access to application instances.
+- Require PostgreSQL R2DBC `sslMode=VERIFY_FULL`. Redis uses a Commons Pool-backed Lettuce factory for synchronous and reactive calls, with shared native connections disabled so the configured pool ceiling and acquire timeout apply. Enable TLS with a named PEM trust bundle and full peer/hostname verification; supply the issuing CA through the protected runtime mount and never accept an unverified server certificate.
 - Run versioned schema migrations during deployment.
 - Back up automatically and test restoration regularly.
 - Monitor connections, replication lag, locks, slow queries, storage, and transaction failures.
 - Use connection pooling appropriate for R2DBC and the database size.
+- Start with a bounded application R2DBC pool of 10 per instance (maximum configurable value 20), a 5-second acquisition/creation timeout, and a 40-connection runtime-role cap. Keep app replicas within the aggregate role budget; adjust limits together only after VPS load testing.
 - Do not expose PostgreSQL directly to the public Internet.
 - Allow access only through a private network or a firewall allowlist of application hosts.
 - Configure off-VPS encrypted backups so loss of the VPS does not lose the database.
@@ -71,6 +73,8 @@ Audit PostgreSQL stores high-volume historical audit events exported from the ap
 Production requirements:
 
 - Use a separate PostgreSQL instance or managed database resource; a separate schema on the application instance is not sufficient for production isolation.
+- Give audit PostgreSQL its own bounded R2DBC pool and connection budget; the initial application-side pool is four connections per app instance and audit worker concurrency cannot exceed it.
+- Require `sslMode=VERIFY_FULL` for the audit PostgreSQL R2DBC connection and verify the issuing CA through the approved runtime trust configuration.
 - Allow network access only from the bounded audit publisher and authorized audit-reader services.
 - Use separate publisher and read-only credentials. The application runtime must not have delete or update privileges on audit history.
 - Enforce a unique constraint on stable audit `event_id` values for idempotent retries.
@@ -177,6 +181,8 @@ For production, prefer a managed Redis service or a Redis HA deployment with:
 - Monitoring and backup policy
 
 Redis persistence improves recovery, but it does not replace PostgreSQL transactions or an outbox pattern.
+
+The current four-VPS topology has one app/Redis host and no cross-host Redis failover. Until AP-0046 selects and verifies managed Redis or a replica/Sentinel arrangement, treat Redis host loss as a bounded outage followed by projection rebuild from PostgreSQL. Spring Data Redis maintains distinct synchronous and reactive connection pools. Each uses eight active connections per app instance by default (maximum 32), so standard command traffic can open 16 connections per instance by default (maximum 64); synchronous acquisition waits up to three seconds, while reactive acquisition rejects immediately when saturated. Both use bounded three-second connect/command timeouts, a mounted issuing CA, and full certificate/hostname verification. Include both pools and each app replica in Redis `maxclients` sizing. See the [PostgreSQL and Redis Operations Runbook](postgresql-redis-operations-runbook.md) for connection-budget calculations, recovery checks, and staging evidence requirements.
 
 ## File Storage: SeaweedFS S3 Gateway
 
@@ -308,9 +314,7 @@ The PostgreSQL migration job, identity/profile fixture job, reconciliation proce
 
 Applications must fail safely when required production secrets are missing. They must not silently use development credentials.
 
-### OpenBao prototype disposition
-
-OpenBao's normal-mode image, policies, Agent templates, and integration tests are retained as prototype/development artifacts. They are not the selected initial production delivery path and must not deliver initial production credentials. `docker-compose.openbao-dev.yml` remains an isolated disposable local sandbox. AP-0022 is cancelled/superseded for its OpenBao production acceptance path, while AP-0045 tracks implementing the accepted Ansible Vault model. Do not claim production secret readiness from the prototype or image tests.
+The superseded OpenBao deployment prototype, local Compose sandbox, and associated tests have been removed under AP-0045. AP-0022 and AP-0044 remain cancelled historical tickets; the accepted initial delivery model is operator-controlled Ansible Vault under ADR-0001. This repository cleanup does not establish staging or production readiness.
 
 The application supports RS256 JWT signing with a `kid`, a published `/.well-known/jwks.json` key set, overlapping verification keys, and removal-based revocation. Keep private signing keys in the encrypted role-scoped Vault inputs and publish only public keys. Tests cover overlap and removal; staging rollout/revocation remains required.
 
