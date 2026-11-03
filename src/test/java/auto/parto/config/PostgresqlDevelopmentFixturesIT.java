@@ -38,6 +38,8 @@ class PostgresqlDevelopmentFixturesIT {
             .withEnv("APP_POSTGRES_RUNTIME_PASSWORD", RUNTIME_PASSWORD)
             .withEnv("APP_POSTGRES_MIGRATION_USER", MIGRATION_USER)
             .withEnv("APP_POSTGRES_MIGRATION_PASSWORD", MIGRATION_PASSWORD)
+            .withEnv("APP_POSTGRES_RUNTIME_CONNECTION_LIMIT", "40")
+            .withEnv("APP_POSTGRES_MIGRATION_CONNECTION_LIMIT", "5")
             .withCopyFileToContainer(
                     MountableFile.forHostPath(Path.of(
                             "deploy/postgres/init/01-create-application-roles.sql").toAbsolutePath()),
