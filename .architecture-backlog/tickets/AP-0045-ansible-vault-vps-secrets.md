@@ -3,13 +3,15 @@
 - **Status:** In Progress
 - **Type:** Technical Enhancement
 - **Feature:** [Deployment and Secrets](../features/F07-deployment-and-secrets.md)
-- **Linked Tickets:** [AP-0022 OpenBao Secret Management](AP-0022-openbao-secrets.md), [AP-0044 OpenBao VPS Go-Live](AP-0044-openbao-vps-go-live.md), [AP-0046 OpenTofu and Ansible VPS Topology](AP-0046-provision-vps-topology-with-opentofu-ansible.md)
+- **Linked Tickets:** [AP-0022 OpenBao Secret Management](AP-0022-openbao-secrets.md), [AP-0044 OpenBao VPS Go-Live](AP-0044-openbao-vps-go-live.md), [AP-0046 OpenTofu and Ansible VPS Topology](AP-0046-provision-vps-topology-with-opentofu-ansible.md), [AP-0047 Automated GitHub Deployments](AP-0047-github-automated-deployments-with-infisical.md)
 - **Decision:** [ADR-0001 Initial production secret delivery](../../docs/architecture-decisions/ADR-0001-production-secret-delivery.md)
 - **Source:** `docs/deployment-architecture.md` Secrets and Configuration
 
 ## Description
 
 ADR-0001 records the product owner's selection of operator-controlled Ansible Vault deploy-time injection for the initial four-VPS Contabo deployment. AP-0045 implements that model. The OpenBao production delivery path is superseded; no system may deliver the same production credentials in parallel. Ansible Vault protects encrypted source values at rest but does not provide runtime identity, dynamic credentials, leases, renewal, or immediate centralized revocation.
+
+AP-0047 proposes a future automated deployment path and evaluates Infisical-based delivery. It does not amend ADR-0001 or authorize another production credential source. Until a product-owner-approved ADR explicitly supersedes or amends ADR-0001, AP-0045 remains the selected model and AP-0047 remains a decision gate. If Infisical is selected, update this ticket and linked feature tracking before implementing delivery; never run both systems as sources for the same production credentials.
 
 ## Acceptance Criteria
 

@@ -24,6 +24,10 @@ Move repository CI from GitLab CI to GitHub Actions while preserving build, unit
 4. GitHub Actions workflow configuration has focused automated coverage.
 5. GitHub Actions is validated and available as the preferred CI path, while the operational GitLab pipeline remains active until deliberate retirement is completed.
 
+## Related Deployment Automation
+
+- [AP-0047](AP-0047-github-automated-deployments-with-infisical.md) proposes automated development deployment and protected production promotion through a separately controlled deployment plane. AP-0047 is Proposed and does not change this ticket's current runner isolation boundary or authorize production secret access.
+
 ## Implementation Tracking
 
 - Added `.github/workflows/ci.yml` with Maven compile, unit, integration/container, and package stages.

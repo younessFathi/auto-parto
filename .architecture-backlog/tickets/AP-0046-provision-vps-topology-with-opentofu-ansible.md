@@ -3,7 +3,7 @@
 - **Status:** Proposed
 - **Type:** Technical Enhancement
 - **Feature:** [Deployment and Secrets](../features/F07-deployment-and-secrets.md)
-- **Linked Tickets:** [AP-0021 TLS Entry Point](AP-0021-tls-entrypoint.md), [AP-0022 OpenBao prototype disposition](AP-0022-openbao-secrets.md), [AP-0026 Data Infrastructure](AP-0026-data-infrastructure.md), [AP-0033 GitHub Actions Migration](AP-0033-github-actions-migration.md), [AP-0044 Cancelled OpenBao VPS Go-Live](AP-0044-openbao-vps-go-live.md), [AP-0045 Ansible Vault Delivery](AP-0045-ansible-vault-vps-secrets.md)
+- **Linked Tickets:** [AP-0021 TLS Entry Point](AP-0021-tls-entrypoint.md), [AP-0022 OpenBao prototype disposition](AP-0022-openbao-secrets.md), [AP-0026 Data Infrastructure](AP-0026-data-infrastructure.md), [AP-0033 GitHub Actions Migration](AP-0033-github-actions-migration.md), [AP-0044 Cancelled OpenBao VPS Go-Live](AP-0044-openbao-vps-go-live.md), [AP-0045 Ansible Vault Delivery](AP-0045-ansible-vault-vps-secrets.md), [AP-0047 Automated GitHub Deployments](AP-0047-github-automated-deployments-with-infisical.md)
 - **Source:** `docs/deployment-architecture.md` Deployment, PostgreSQL, Redis, Object Storage, Secrets, and Recovery
 
 ## Description
@@ -26,6 +26,8 @@ Contabo documents Cloud VPS/VDS private networks and API-managed compute, firewa
 Before AP-0046 can move to Ready, record the selected Contabo region/location, account owner, cost estimate for all servers/add-ons/backups, private-network capability, firewall/API support, and successful validation of a maintained OpenTofu provider for the required resources. Resolve any provider API limitations and verify private routing and allowlist behavior in a disposable environment.
 
 The state-changing migration/deployment runner is a separate control boundary from ordinary application-repository workflows, as required by AP-0033/F09. Its workflow and runner must be controlled outside application PR-editable YAML, and the runner must reach PostgreSQL over private/allowlisted networking. Never expose PostgreSQL publicly to make migrations work. Keep GitLab CI active until the protected migration/deployment path has successful end-to-end staging evidence.
+
+AP-0047 proposes automated deployment and an Infisical OIDC integration, but remains Proposed and does not change the selected secret model or provision a runner. Resolve its ADR gate and runner ownership/isolation before using this topology for automatic deployments. If a self-hosted Infisical service is selected, revisit the four-VPS topology because that service and its data stores need an approved failure boundary; the current four-role plan assumes operator-controlled Ansible Vault under ADR-0001.
 
 ### Ready Criteria
 

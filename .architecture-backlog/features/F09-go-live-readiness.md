@@ -27,6 +27,7 @@ This feature is a release gate, not a replacement for the implementation tickets
 - [AP-0044](../tickets/AP-0044-openbao-vps-go-live.md): Cancelled by ADR-0001; do not provision OpenBao for initial production credentials.
 - [AP-0045](../tickets/AP-0045-ansible-vault-vps-secrets.md): In Progress implementing the accepted operator-controlled Ansible Vault model.
 - [AP-0046](../tickets/AP-0046-provision-vps-topology-with-opentofu-ansible.md): Proposed Contabo OpenTofu/Ansible four-VPS provisioning; provider-specific, network, cost, and separately controlled private-database runner checks block Ready.
+- [AP-0047](../tickets/AP-0047-github-automated-deployments-with-infisical.md): Proposed decision gate for automatic development deployment and protected production promotion through an isolated deployment control plane; does not supersede ADR-0001 until an approved ADR selects the secret model.
 - [AP-0023](../tickets/AP-0023-telemetry-health.md): Provide production telemetry and health groups.
 - [AP-0024](../tickets/AP-0024-alerts-recovery.md): Establish alerts, backups, restoration, and recovery drills.
 - [AP-0026](../tickets/AP-0026-data-infrastructure.md): Harden PostgreSQL, Redis, and VPS database infrastructure.
@@ -57,13 +58,15 @@ This feature is a release gate, not a replacement for the implementation tickets
 
 ### Secrets and database access
 
-- [ ] Implement the accepted AP-0045 Ansible Vault design; keep encrypted Vault inputs and their unlock password separate and use only operator-controlled deploy-time injection.
+- [ ] Deliver secrets using exactly the model selected by an approved ADR: AP-0045 operator-controlled Ansible Vault, or AP-0047's separately controlled OIDC-based secret delivery. Do not let both systems deliver the same production credentials.
 - [ ] Keep bootstrap/DBA, migration, runtime, and audit credentials separate.
 - [ ] Rotate credentials and verify that old credentials are rejected.
 - [ ] Provision existing PostgreSQL volumes through the AP-0003 recovery procedure; never delete a volume to force initialization.
 - [ ] Verify runtime grants, migration ownership, Flyway history access, and audit-database isolation before rollout.
 - [ ] Confirm no secrets appear in GitHub Actions logs, Compose files, images, traces, or process arguments.
-- [ ] Verify operator-controlled deploy-time injection, password recovery controls, role-scoped files, rotation/rejection, host rebuild, and the accepted no-lease/plaintext-on-host limitations.
+- [ ] If ADR-0001 remains selected, verify operator-controlled deploy-time injection, password recovery controls, role-scoped files, rotation/rejection, host rebuild, and the accepted no-lease/plaintext-on-host limitations. If an ADR selects AP-0047's model, verify its approved identity, access, rotation, and recovery controls instead.
+
+Automated development and production deployment is tracked by AP-0047 and remains Proposed. ADR-0001 currently selects Ansible Vault; neither Infisical nor GitHub Actions has authority to deliver production credentials until an approved ADR changes that selection. The separate deployment control plane and runner must remain inaccessible to application pull-request workflows.
 
 ### Data cutover and rollback
 
