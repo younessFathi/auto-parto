@@ -236,7 +236,8 @@ class OpenBaoImageDeploymentIT {
     }
 
     private static void configureDisposableAppRole(HttpClient client, int port, String rootToken) throws Exception {
-        assertSuccessful(request(client, port, "PUT", "/sys/auth/approle", Map.of("type", "approle"), rootToken));
+        assertSuccessful("POST /sys/auth/approle",
+                request(client, port, "POST", "/sys/auth/approle", Map.of("type", "approle"), rootToken));
         assertSuccessful(request(client, port, "POST", "/sys/mounts/kv", Map.of("type", "kv-v2"), rootToken));
         String policy = "path \"kv/data/staging/application/*\" { capabilities = [\"read\"] }";
         assertSuccessful(request(client, port, "PUT", "/sys/policies/acl/it-staging-app",
@@ -308,7 +309,13 @@ class OpenBaoImageDeploymentIT {
     }
 
     private static void assertSuccessful(HttpResponse<String> response) {
-        assertThat(response.statusCode()).isBetween(200, 299);
+        assertSuccessful("OpenBao API request", response);
+    }
+
+    private static void assertSuccessful(String operation, HttpResponse<String> response) {
+        assertThat(response.statusCode())
+                .as("%s returned HTTP %s: %s", operation, response.statusCode(), response.body())
+                .isBetween(200, 299);
     }
 
     private static String firstNonEmpty(JsonNode first, JsonNode second) {

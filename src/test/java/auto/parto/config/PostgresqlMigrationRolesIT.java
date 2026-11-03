@@ -91,9 +91,11 @@ class PostgresqlMigrationRolesIT {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), BOOTSTRAP_USER, BOOTSTRAP_PASSWORD);
              PreparedStatement statement = connection.prepareStatement(
-                     "SELECT rolname, rolconnlimit FROM pg_roles WHERE rolname IN (?, ?) ORDER BY rolname")) {
+                     "SELECT rolname, rolconnlimit FROM pg_roles WHERE rolname IN (?, ?) "
+                             + "ORDER BY CASE rolname WHEN ? THEN 0 ELSE 1 END")) {
             statement.setString(1, MIGRATION_USER);
             statement.setString(2, RUNTIME_USER);
+            statement.setString(3, MIGRATION_USER);
             try (ResultSet resultSet = statement.executeQuery()) {
                 assertThat(resultSet.next()).isTrue();
                 assertThat(resultSet.getString("rolname")).isEqualTo(MIGRATION_USER);
