@@ -1,10 +1,11 @@
 # AP-0049 Design Domain-Separated OpenAPI YAML Specifications
 
-- **Status:** Proposed
+- **Status:** In Progress
 - **Type:** Technical Enhancement
 - **Feature:** [Platform and Data](../features/F01-platform-and-data.md)
 - **Linked Tickets:** [AP-0048 Admin-Protected Swagger](AP-0048-admin-protected-api-documentation.md), [AP-0030 Application Boundaries](AP-0030-application-boundaries.md)
 - **Source:** `docs/api-boundaries.md`; `docs/architecture.md` Authentication and Authorization
+- **Design Draft:** [Domain-Separated OpenAPI Design](../../docs/api-openapi-domain-design.md)
 
 ## Description
 
@@ -16,7 +17,7 @@ The design must resolve the relationship between domain YAML files and AP-0048's
 
 1. A reviewed design note that assigns each canonical route in `docs/api-boundaries.md` to one domain group, including shared concepts such as authentication, safe errors, file references, wallets, and notifications/SSE.
 2. A proposed repository layout and naming/versioning convention for domain YAML files, shared schemas/responses/parameters/security definitions, and cross-file `$ref` relationships. Cover marketplace requests/listings/offers, profiles and identities, files, wallets, and notifications.
-3. An explicit source-of-truth decision: either authored domain YAML with generated/validated UI aggregation, or generated per-domain YAML from the Java API contract interfaces. If another approach is chosen, document why it avoids duplicate contracts and how implementation drift is caught.
+3. An explicit source-of-truth decision: either authored domain YAML with generated/validated UI aggregation, or generated per-domain YAML from the Java API contract interfaces. If another approach is chosen, document why it avoids duplicate contracts and how implementation drift is caught. The current design draft recommends interface annotations as the source and per-domain YAML as generated build outputs; this remains subject to owner review.
 4. A Swagger UI grouping/aggregation design that lets an authorized administrator select each domain specification while keeping all UI, YAML, JSON, and supporting resource endpoints protected as required by AP-0048.
 5. A repeatable validation plan for YAML syntax, `$ref` resolution, OpenAPI version/schema validity, duplicate operation IDs, duplicate/conflicting paths, canonical route coverage, DTO/error/security consistency, and legacy-route sunset handling. Identify the Maven/CI checks needed before merge.
 6. A migration plan from current scattered Swagger annotations to the selected design. Preserve AP-0048's requirement to keep documentation out of controller method bodies and its interface-implementation preference unless the approved design demonstrates that generated YAML better satisfies it without duplicated contracts.
