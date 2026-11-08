@@ -29,6 +29,23 @@ Every readiness message, verdict and handoff includes task/ticket, branch, base/
 
 The coordinator persists each review using the existing `.architecture-backlog/reviews/REVIEW-TEMPLATE.md` (locate the actual template first) and records sanitized traces under `.agent-trace/`. Never overwrite an immutable prior review/trace. Local ignored reports do not replace the PR description and GitHub CI evidence.
 
+## Discovery and improvement proposals
+
+Coder has a discovery phase for evidence-based product features, technical enhancements and workflow improvements. Technical discovery includes architecture, performance, reliability, security, testing, CI/CD, observability and developer experience. Normally suggest at most one strong proposal per delivered feature when a clear opportunity exists; no proposal is a valid outcome. Explicit user discovery requests may cover more. Do not invent problems or measurements to meet a quota.
+
+Keep optional discovery separate from the current approved scope. A proposal must not authorize implementation or block delivery of the current feature. Defects that violate its acceptance criteria still belong in the normal blocking review and repair loop, even if a broader improvement could also be proposed.
+
+1. Check existing proposals and `.architecture-backlog/` to avoid duplicates. Coder drafts `docs/feature-proposals/<slug>.md` from [the proposal template](feature-proposals/TEMPLATE.md), without allocating an AP ticket number to an unapproved idea.
+2. Record the observed problem and evidence separately from assumptions, who benefits, concrete before/after behavior, measurable success and validation, alternatives including no change, tradeoffs/cost/security, effort/dependencies, acceptance criteria and relevant rollout/rollback. Unknown baselines remain unknown until measured.
+3. Coder moves the draft to Under Review and explicitly transfers proposal write ownership to the coordinator. Reviewer assesses value, evidence, design and simplicity; DevOps assesses feasibility, security, operational cost and maintainability. They return independent assessments for the coordinator to persist; no concurrent proposal edits.
+4. The coordinator records peer recommendations as Recommend, Revise or Do not recommend, with evidence. These are proposal assessments, separate from commit-delivery verdicts and from the user's decision. Resolve requests for revision by explicitly returning write ownership to Coder, then repeat assessment if the proposal changes materially.
+5. Set the proposal to Awaiting User Decision once it is ready to present. The coordinator presents benefits, tradeoffs and peer assessments to the user. Only their explicit approval sets Approved, with date, decision reference and approved scope. Otherwise retain Awaiting User Decision or record their Deferred/Rejected decision; silence is never approval. Substantial scope changes require renewed user approval.
+6. Only approved scope is converted into `.architecture-backlog/` tickets and enters the normal planning, implementation, commit review and publication workflow. Proposal approval does not bypass implementation checks, approve a future commit, or authorize merge/deployment.
+
+Proposal lifecycle: Draft -> Under Review -> Awaiting User Decision -> Approved / Deferred / Rejected. Revise returns to Draft or Under Review as appropriate. A reconsidered Deferred/Rejected proposal returns to Draft with the reason recorded. Unapproved ideas remain proposals, not active implementation tickets.
+
+Coder finishes optional proposal edits before freezing the implementation candidate, or records the discovery in local handover.md and uses a separate proposal branch later. Coordinator updates to assessments/user decisions must likewise happen outside a frozen delivery candidate: use a separate proposal branch or wait until that delivery cycle is finished. Any changed delivery candidate invalidates its existing approvals under the normal rules. Track pending proposal paths, status, owner and required human decisions in handover.md so discovery survives context transfer.
+
 ## Context recovery and handover
 
 The coordinator maintains root `handover.md` using `docs/agent-handover-template.md`. It is local and Git-ignored so checkpoints do not mutate an approved commit. It persists across context compaction and sessions in this checkout. It is not automatically copied to another clone, worktree or machine; transfer a sanitized copy explicitly when changing checkouts. There is no guaranteed context-limit callback.

@@ -42,6 +42,8 @@ For feature implementation, bug fixes and technical enhancements, use coder, rev
 
 The coordinator updates local `handover.md` at milestones and before context pressure, interruption or transfer, using [docs/agent-handover-template.md](docs/agent-handover-template.md). Coder is the sole implementation writer. Reviewer and DevOps return reports/traces to the coordinator for persistence. Never merge or deploy as part of automatic feature delivery.
 
+Coder may propose evidence-based product features, technical enhancements and workflow improvements under [docs/feature-proposals/](docs/feature-proposals/README.md). Follow the discovery protocol in the agent workflow: independent peer assessments, explicit user approval before ticket creation/implementation, and no expansion of current scope or changes to frozen candidates for optional proposal bookkeeping.
+
 ## Project Layout
 
 - `src/main/java/auto/parto/api/`: HTTP and SSE controllers.

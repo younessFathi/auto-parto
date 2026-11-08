@@ -36,6 +36,14 @@ State: <workflow state or BLOCKED>
 - Blocking findings and dispositions:
 - Optional suggestions / residual risks:
 
+## Pending improvement proposals
+- Proposal paths / category / lifecycle status:
+- Current write owner and explicit ownership transfer:
+- Reviewer / DevOps assessments and unresolved questions:
+- User decision, date/reference and approved scope (or awaiting decision):
+- Approved proposal ticket links / next action:
+- Frozen-candidate boundary or separate proposal branch:
+
 ## GitHub and CI
 - Published branch/SHA:
 - PR URL/base/head:
