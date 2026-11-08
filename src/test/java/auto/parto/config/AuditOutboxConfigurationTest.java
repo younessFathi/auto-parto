@@ -1,6 +1,10 @@
 package auto.parto.config;
 
 import io.r2dbc.spi.ConnectionFactory;
+import io.r2dbc.pool.ConnectionPool;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.core.instrument.binder.MeterBinder;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
@@ -37,7 +41,14 @@ class AuditOutboxConfigurationTest {
                     assertThat(context).hasSingleBean(auto.parto.audit.AuditPublisher.class);
                     assertThat(context).hasSingleBean(auto.parto.audit.AuditOutboxWorker.class);
                     assertThat(context).hasBean("auditConnectionFactory");
+                    assertThat(context.getBean("auditConnectionFactory")).isInstanceOf(ConnectionPool.class);
+                    assertThat(context).hasSingleBean(io.micrometer.core.instrument.binder.MeterBinder.class);
                     assertThat(context).hasBean("auditDatabaseClient");
+                    MeterRegistry registry = new SimpleMeterRegistry();
+                    context.getBean(MeterBinder.class).bindTo(registry);
+                    assertThat(registry.find("auto.parto.postgresql.pool.connections")
+                            .tag("pool", "audit-postgresql")
+                            .gauges()).hasSize(4);
                 });
     }
 
@@ -62,6 +73,20 @@ class AuditOutboxConfigurationTest {
                         "auto.parto.audit.poll-interval=0s")
                 .run(context -> assertThat(context.getStartupFailure())
                         .hasMessageContaining("poll-interval must be positive"));
+    }
+
+    @Test
+    void auditWorkerConcurrencyCannotExceedItsBoundedConnectionPool() {
+        contextRunner
+                .withPropertyValues(
+                        "auto.parto.audit.enabled=true",
+                        "auto.parto.audit.r2dbc-url=r2dbc:postgresql://audit.example.test/audit",
+                        "auto.parto.audit.username=audit_writer",
+                        "auto.parto.audit.password=test-only",
+                        "auto.parto.audit.max-connections=3",
+                        "auto.parto.audit.max-concurrency=4")
+                .run(context -> assertThat(context.getStartupFailure())
+                        .hasMessageContaining("max-concurrency must not exceed max-connections"));
     }
 
     @Configuration(proxyBeanMethods = false)

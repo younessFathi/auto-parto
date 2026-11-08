@@ -1,16 +1,39 @@
 \set ON_ERROR_STOP on
 \getenv runtime_user APP_POSTGRES_RUNTIME_USER
 \getenv migration_user APP_POSTGRES_MIGRATION_USER
+\getenv runtime_connection_limit APP_POSTGRES_RUNTIME_CONNECTION_LIMIT
+\getenv migration_connection_limit APP_POSTGRES_MIGRATION_CONNECTION_LIMIT
 SELECT set_config('app.runtime_user', :'runtime_user', false);
+SELECT set_config('app.runtime_connection_limit', :'runtime_connection_limit', false);
+SELECT set_config('app.migration_user', :'migration_user', false);
+SELECT set_config('app.migration_connection_limit', :'migration_connection_limit', false);
 
 SELECT
     rolname,
     rolsuper = false AS not_superuser,
     rolcreatedb = false AS cannot_create_database,
-    rolcreaterole = false AS cannot_create_roles
+    rolcreaterole = false AS cannot_create_roles,
+    rolconnlimit AS connection_limit,
+    CASE rolname
+        WHEN current_setting('app.runtime_user') THEN rolconnlimit = current_setting('app.runtime_connection_limit')::integer
+        WHEN current_setting('app.migration_user') THEN rolconnlimit = current_setting('app.migration_connection_limit')::integer
+    END AS connection_limit_matches_config
 FROM pg_roles
 WHERE rolname IN (:'runtime_user', :'migration_user')
 ORDER BY rolname;
+
+DO $$
+BEGIN
+    IF (SELECT rolconnlimit FROM pg_roles WHERE rolname = current_setting('app.runtime_user'))
+            <> current_setting('app.runtime_connection_limit')::integer THEN
+        RAISE EXCEPTION 'Runtime role connection limit does not match the configured bound';
+    END IF;
+    IF (SELECT rolconnlimit FROM pg_roles WHERE rolname = current_setting('app.migration_user'))
+            <> current_setting('app.migration_connection_limit')::integer THEN
+        RAISE EXCEPTION 'Migration role connection limit does not match the configured bound';
+    END IF;
+END;
+$$;
 
 SELECT :'runtime_user' AS runtime_user,
        has_schema_privilege(:'runtime_user', 'public', 'USAGE') AS runtime_schema_usage,

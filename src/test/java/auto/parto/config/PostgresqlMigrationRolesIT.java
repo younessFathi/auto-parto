@@ -41,6 +41,8 @@ class PostgresqlMigrationRolesIT {
             .withEnv("APP_POSTGRES_RUNTIME_PASSWORD", RUNTIME_PASSWORD)
             .withEnv("APP_POSTGRES_MIGRATION_USER", MIGRATION_USER)
             .withEnv("APP_POSTGRES_MIGRATION_PASSWORD", MIGRATION_PASSWORD)
+            .withEnv("APP_POSTGRES_RUNTIME_CONNECTION_LIMIT", "40")
+            .withEnv("APP_POSTGRES_MIGRATION_CONNECTION_LIMIT", "5")
             .withCopyFileToContainer(
                     MountableFile.forHostPath(Path.of(
                             "deploy/postgres/init/01-create-application-roles.sql").toAbsolutePath()),
@@ -81,6 +83,28 @@ class PostgresqlMigrationRolesIT {
                 }
             }).isInstanceOf(SQLException.class)
                     .hasMessageContaining("permission denied");
+        }
+    }
+
+    @Test
+    void runtimeAndMigrationRolesHaveFiniteConnectionBudgets() throws SQLException {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), BOOTSTRAP_USER, BOOTSTRAP_PASSWORD);
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT rolname, rolconnlimit FROM pg_roles WHERE rolname IN (?, ?) "
+                             + "ORDER BY CASE rolname WHEN ? THEN 0 ELSE 1 END")) {
+            statement.setString(1, MIGRATION_USER);
+            statement.setString(2, RUNTIME_USER);
+            statement.setString(3, MIGRATION_USER);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertThat(resultSet.next()).isTrue();
+                assertThat(resultSet.getString("rolname")).isEqualTo(MIGRATION_USER);
+                assertThat(resultSet.getInt("rolconnlimit")).isEqualTo(5);
+                assertThat(resultSet.next()).isTrue();
+                assertThat(resultSet.getString("rolname")).isEqualTo(RUNTIME_USER);
+                assertThat(resultSet.getInt("rolconnlimit")).isEqualTo(40);
+                assertThat(resultSet.next()).isFalse();
+            }
         }
     }
 }

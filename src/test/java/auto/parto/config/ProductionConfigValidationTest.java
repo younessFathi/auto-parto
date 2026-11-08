@@ -69,6 +69,46 @@ class ProductionConfigValidationTest {
     }
 
     @Test
+    void rejectsPostgresqlAndRedisConnectionsWithoutVerifiedTls() {
+        MockEnvironment environment = validProductionEnvironment()
+                .withProperty("spring.r2dbc.url", "r2dbc:postgresql://postgres.internal:5432/app")
+                .withProperty("spring.data.redis.ssl.enabled", "false");
+
+        assertThatThrownBy(() -> new ProductionConfigValidation(environment).afterPropertiesSet())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("spring.r2dbc.url must require sslMode=VERIFY_FULL")
+                .hasMessageContaining("spring.data.redis.ssl.enabled=true");
+    }
+
+    @Test
+    void rejectsUnboundedOrOversizedDatabaseAndRedisPools() {
+        MockEnvironment environment = validProductionEnvironment()
+                .withProperty("spring.r2dbc.pool.max-size", "21")
+                .withProperty("spring.r2dbc.pool.max-acquire-time", "-1s")
+                .withProperty("spring.data.redis.lettuce.pool.max-active", "-1")
+                .withProperty("spring.data.redis.lettuce.pool.max-wait", "30s");
+
+        assertThatThrownBy(() -> new ProductionConfigValidation(environment).afterPropertiesSet())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("spring.r2dbc.pool.max-size must be between 1 and 20")
+                .hasMessageContaining("spring.r2dbc.pool.max-acquire-time must be a finite positive timeout")
+                .hasMessageContaining("spring.data.redis.lettuce.pool.max-active must be between 1 and 32")
+                .hasMessageContaining("spring.data.redis.lettuce.pool.max-wait must be a finite positive timeout");
+    }
+
+    @Test
+    void rejectsRedisTlsWithoutExplicitTrustedCaBundle() {
+        MockEnvironment environment = validProductionEnvironment()
+                .withProperty("spring.data.redis.ssl.bundle", "")
+                .withProperty("spring.ssl.bundle.pem.redis.truststore.certificate", "");
+
+        assertThatThrownBy(() -> new ProductionConfigValidation(environment).afterPropertiesSet())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("spring.data.redis.ssl.bundle=redis")
+                .hasMessageContaining("spring.ssl.bundle.pem.redis.truststore.certificate");
+    }
+
+    @Test
     void rejectsAProductionProfileThatLeavesMongoOrCutoverRuntimeEnabled() {
         MockEnvironment environment = validProductionEnvironment();
         environment.setProperty("auto.parto.persistence.postgresql.cutover.mongo-disabled", "false");
@@ -110,21 +150,46 @@ class ProductionConfigValidationTest {
                 .withProperty("firebase.enabled", "true")
                 .withProperty("firebase.credentials.json", "credential-document")
                 .withProperty("auto.parto.audit.enabled", "true")
-                .withProperty("auto.parto.audit.r2dbc-url", "r2dbc:postgresql://audit.internal:5432/audit")
+                .withProperty("auto.parto.audit.r2dbc-url", "r2dbc:postgresql://audit.internal:5432/audit?sslMode=VERIFY_FULL")
                 .withProperty("auto.parto.audit.username", "audit-runtime")
                 .withProperty("auto.parto.audit.password", "audit-password");
 
         assertThatCode(() -> new ProductionConfigValidation(environment).afterPropertiesSet()).doesNotThrowAnyException();
     }
 
+    @Test
+    void rejectsEnabledAuditDatabaseWithoutVerifiedTls() {
+        MockEnvironment environment = validProductionEnvironment()
+                .withProperty("auto.parto.audit.enabled", "true")
+                .withProperty("auto.parto.audit.r2dbc-url", "r2dbc:postgresql://audit.internal:5432/audit")
+                .withProperty("auto.parto.audit.username", "audit-runtime")
+                .withProperty("auto.parto.audit.password", "audit-password");
+
+        assertThatThrownBy(() -> new ProductionConfigValidation(environment).afterPropertiesSet())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("auto.parto.audit.r2dbc-url must require sslMode=VERIFY_FULL");
+    }
+
     private static MockEnvironment validProductionEnvironment() {
         MockEnvironment environment = new MockEnvironment()
-                .withProperty("spring.r2dbc.url", "r2dbc:postgresql://postgres.internal:5432/app")
+                .withProperty("spring.r2dbc.url", "r2dbc:postgresql://postgres.internal:5432/app?sslMode=VERIFY_FULL")
                 .withProperty("spring.r2dbc.username", "runtime")
                 .withProperty("spring.r2dbc.password", "runtime-password")
                 .withProperty("spring.data.redis.host", "redis.internal")
                 .withProperty("spring.data.redis.port", "6379")
                 .withProperty("spring.data.redis.password", "redis-password")
+                .withProperty("spring.data.redis.ssl.enabled", "true")
+                .withProperty("spring.data.redis.ssl.bundle", "redis")
+                .withProperty("spring.ssl.bundle.pem.redis.truststore.certificate", "/run/auto-parto/certs/redis-ca.pem")
+                .withProperty("spring.data.redis.lettuce.pool.max-active", "8")
+                .withProperty("spring.data.redis.lettuce.pool.max-idle", "8")
+                .withProperty("spring.data.redis.lettuce.pool.min-idle", "0")
+                .withProperty("spring.data.redis.lettuce.pool.max-wait", "3s")
+                .withProperty("spring.data.redis.connect-timeout", "3s")
+                .withProperty("spring.data.redis.timeout", "3s")
+                .withProperty("spring.r2dbc.pool.max-size", "10")
+                .withProperty("spring.r2dbc.pool.max-acquire-time", "5s")
+                .withProperty("spring.r2dbc.pool.max-create-connection-time", "5s")
                 .withProperty("jwt.signing.algorithm", "RS256")
                 .withProperty("jwt.signing.key-id", "active")
                 .withProperty("jwt.signing.private-key", "test-key-material")

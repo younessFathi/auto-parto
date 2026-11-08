@@ -11,6 +11,7 @@ services:
       APP_POSTGRES_R2DBC_URL: ${APP_POSTGRES_R2DBC_URL:?set protected application PostgreSQL URL}
       REDIS_HOST: ${REDIS_HOST:?set private Redis host}
       REDIS_PORT: ${REDIS_PORT:-6379}
+      APP_REDIS_TLS_CA_FILE: /run/auto-parto/redis-ca.pem
       APP_FILE_STORAGE_PROVIDER: s3
       APP_FILE_STORAGE_S3_ENDPOINT: ${APP_FILE_STORAGE_S3_ENDPOINT:?set TLS object-storage endpoint}
       APP_FILE_STORAGE_S3_BUCKET: ${APP_FILE_STORAGE_S3_BUCKET:?set bucket}
@@ -21,6 +22,12 @@ services:
       - type: bind
         source: /run/auto-parto/active
         target: /run/auto-parto
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${REDIS_TLS_CA_HOST_PATH:?set the host path for the Redis issuing CA certificate}
+        target: /run/auto-parto/redis-ca.pem
         read_only: true
         bind:
           create_host_path: false

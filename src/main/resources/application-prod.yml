@@ -12,8 +12,34 @@ spring:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
+      connect-timeout: ${APP_REDIS_CONNECT_TIMEOUT:3s}
+      timeout: ${APP_REDIS_COMMAND_TIMEOUT:3s}
+      ssl:
+        enabled: true
+        bundle: redis
+      lettuce:
+        pool:
+          max-active: ${APP_REDIS_POOL_MAX_ACTIVE:8}
+          max-idle: ${APP_REDIS_POOL_MAX_IDLE:8}
+          min-idle: ${APP_REDIS_POOL_MIN_IDLE:0}
+          max-wait: ${APP_REDIS_POOL_MAX_WAIT:3s}
   r2dbc:
     url: ${APP_POSTGRES_R2DBC_URL}
+    pool:
+      enabled: true
+      initial-size: 0
+      max-size: ${APP_POSTGRES_R2DBC_POOL_MAX_SIZE:10}
+      max-acquire-time: ${APP_POSTGRES_R2DBC_POOL_MAX_ACQUIRE_TIME:5s}
+      max-create-connection-time: ${APP_POSTGRES_R2DBC_POOL_CONNECT_TIMEOUT:5s}
+      max-idle-time: 30m
+      max-life-time: 30m
+
+  ssl:
+    bundle:
+      pem:
+        redis:
+          truststore:
+            certificate: ${APP_REDIS_TLS_CA_FILE}
 
 auto:
   parto:
@@ -50,6 +76,9 @@ auto:
     audit:
       enabled: ${APP_AUDIT_OUTBOX_ENABLED:false}
       r2dbc-url: ${AUDIT_POSTGRES_R2DBC_URL:}
+      max-connections: ${AUDIT_POSTGRES_POOL_MAX_SIZE:4}
+      max-acquire-time: ${AUDIT_POSTGRES_POOL_MAX_ACQUIRE_TIME:5s}
+      max-create-connection-time: ${AUDIT_POSTGRES_POOL_CONNECT_TIMEOUT:5s}
 
 jwt:
   secretKey: ""

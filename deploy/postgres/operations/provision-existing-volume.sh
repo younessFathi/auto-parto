@@ -9,6 +9,8 @@ set -eu
 : "${APP_POSTGRES_RUNTIME_PASSWORD:?set the runtime role password through a protected shell/session}"
 : "${APP_POSTGRES_MIGRATION_USER:?set the intended migration role name}"
 : "${APP_POSTGRES_MIGRATION_PASSWORD:?set the migration role password through a protected shell/session}"
+: "${APP_POSTGRES_RUNTIME_CONNECTION_LIMIT:?set the bounded runtime role connection limit}"
+: "${APP_POSTGRES_MIGRATION_CONNECTION_LIMIT:?set the bounded migration role connection limit}"
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 psql --set=ON_ERROR_STOP=1 -f "$script_dir/provision-existing-volume.sql"

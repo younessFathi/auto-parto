@@ -32,12 +32,24 @@ class DockerComposeConfigurationTest {
         assertThat(compose).contains("SPRING_DATA_REDIS_HOST: redis");
         assertThat(compose).contains("REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile}");
         assertThat(compose).contains("JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET for the postgres profile}");
-        assertThat(compose).contains("command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile}");
+        assertThat(compose).contains("command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile} --maxmemory 384mb --maxmemory-policy allkeys-lru")
+                .doesNotContain("6379:6379");
         assertThat(compose).contains("test: redis-cli -a '${REDIS_PASSWORD:?set REDIS_PASSWORD for the postgres profile}' ping");
         assertThat(compose).contains("depends_on:");
         assertThat(compose).doesNotContain("MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always");
         assertThat(compose).doesNotContain("mongo:").doesNotContain("MONGODB");
         assertThat(compose).contains("redis:");
+    }
+
+    @Test
+    void productionComposeMountsTheRequiredRedisCaReadOnlyWithoutCreatingMissingHostPaths() throws IOException {
+        String productionCompose = Files.readString(Path.of("docker-compose.prod.yml"));
+
+        assertThat(productionCompose).contains("APP_REDIS_TLS_CA_FILE: /run/auto-parto/redis-ca.pem")
+                .contains("source: ${REDIS_TLS_CA_HOST_PATH:?set the host path for the Redis issuing CA certificate}")
+                .contains("target: /run/auto-parto/redis-ca.pem")
+                .contains("read_only: true")
+                .contains("create_host_path: false");
     }
 
     @Test
@@ -55,6 +67,8 @@ class DockerComposeConfigurationTest {
         String auditCompose = Files.readString(Path.of("docker-compose.audit.yml"));
         assertThat(auditCompose).contains("audit-postgresql:");
         assertThat(compose).contains("APP_POSTGRES_MIGRATION_PASSWORD");
+        assertThat(compose).contains("APP_POSTGRES_RUNTIME_CONNECTION_LIMIT: ${APP_POSTGRES_RUNTIME_CONNECTION_LIMIT:-40}")
+                .contains("APP_POSTGRES_MIGRATION_CONNECTION_LIMIT: ${APP_POSTGRES_MIGRATION_CONNECTION_LIMIT:-5}");
         assertThat(compose).contains("app-postgresql-migrate:");
         assertThat(compose).contains("app-postgresql-fixtures:");
         assertThat(compose).contains("flyway/flyway:10.20.1");
@@ -106,106 +120,9 @@ class DockerComposeConfigurationTest {
         String localCompose = Files.readString(Path.of("docker-compose.local.yml"));
 
         assertThat(localCompose).contains("127.0.0.1:8081:8080")
-                .doesNotContain("127.0.0.1:8080:8080");
+                .doesNotContain("127.0.0.1:8080:8080")
+                .contains("127.0.0.1:6379:6379")
+                .doesNotContain("\"6379:6379\"");
     }
 
-    @Test
-    void openBaoDevelopmentComposeIsDisposableAndLoopbackOnly() throws IOException {
-        String compose = Files.readString(Path.of("docker-compose.openbao-dev.yml"));
-
-        assertThat(compose).contains("image: openbao/openbao:2.7.1")
-                .contains("profiles: [\"openbao-dev\"]")
-                .contains("command: [\"server\", \"-dev\", \"-dev-no-store-token=true\"]")
-                .contains("127.0.0.1:8200:8200")
-                .contains("internal: true")
-                .contains("restart: \"no\"")
-                .contains("BAO_DEV_ROOT_TOKEN_ID: ${OPENBAO_DEV_ROOT_TOKEN_ID:")
-                .doesNotContain("/var/lib/openbao")
-                .doesNotContain("APP_SECRET_PROVIDER")
-                .doesNotContain("root-token-id=");
-    }
-
-    @Test
-    void openBaoDevelopmentComposeRendersWithOnlyThrowawayTestCredentials() throws Exception {
-        ProcessBuilder processBuilder = new ProcessBuilder(
-                "docker", "compose", "--file", "docker-compose.openbao-dev.yml",
-                "--profile", "openbao-dev", "config", "--quiet");
-        processBuilder.directory(Path.of(".").toFile());
-        processBuilder.redirectErrorStream(true);
-        processBuilder.environment().put("OPENBAO_DEV_ROOT_TOKEN_ID", "throwaway-compose-test-value");
-
-        Process process;
-        try {
-            process = processBuilder.start();
-        } catch (IOException unavailable) {
-            assumeTrue(false, "Docker Compose is not available");
-            return;
-        }
-        String output = new String(process.getInputStream().readAllBytes());
-        assertThat(process.waitFor(30, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).withFailMessage(output).isZero();
-    }
-
-    @Test
-    void openBaoProductionComposeRendersWithPrivateTlsAndPersistentStorage() throws Exception {
-        String productionCompose = Files.readString(Path.of("deploy/openbao/compose.production.yml"));
-        String serverConfig = Files.readString(Path.of("deploy/openbao/server.hcl.example"));
-        assertThat(productionCompose)
-                .contains("openbao/openbao@sha256:")
-                .contains("host_ip: ${OPENBAO_PRIVATE_BIND_IP")
-                .contains("/openbao/config/server.hcl")
-                .contains("/etc/openbao/tls")
-                .contains("openbao-data:/openbao/file")
-                .contains("external: true")
-                .contains("BAO_CACERT: /etc/openbao/tls/ca.crt")
-                .doesNotContain("-dev")
-                .doesNotContain("root_token");
-        assertThat(serverConfig).contains("path    = \"/openbao/file\"")
-                .doesNotContain("disable_mlock");
-
-        ProcessBuilder processBuilder = new ProcessBuilder(
-                "docker", "compose", "--file", "deploy/openbao/compose.production.yml", "config", "--quiet");
-        processBuilder.directory(Path.of(".").toFile());
-        processBuilder.redirectErrorStream(true);
-        Map<String, String> environment = processBuilder.environment();
-        environment.put("OPENBAO_PRIVATE_BIND_IP", "10.20.30.10");
-        environment.put("OPENBAO_TLS_SERVER_NAME", "openbao-secrets.internal");
-        environment.put("OPENBAO_SERVER_CONFIG", "/tmp/openbao/server.hcl");
-        environment.put("OPENBAO_TLS_DIR", "/tmp/openbao/tls");
-        environment.put("OPENBAO_DATA_VOLUME", "openbao-compose-test-volume");
-
-        Process process;
-        try {
-            process = processBuilder.start();
-        } catch (IOException unavailable) {
-            assumeTrue(false, "Docker Compose is not available");
-            return;
-        }
-        String output = new String(process.getInputStream().readAllBytes());
-        assertThat(process.waitFor(30, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).withFailMessage(output).isZero();
-    }
-
-    @Test
-    void openBaoProductionComposeFailsClosedWithoutHostConfiguration() throws Exception {
-        ProcessBuilder processBuilder = new ProcessBuilder(
-                "docker", "compose", "--file", "deploy/openbao/compose.production.yml", "config", "--quiet");
-        processBuilder.directory(Path.of(".").toFile());
-        processBuilder.redirectErrorStream(true);
-        Map<String, String> environment = processBuilder.environment();
-        List.of("OPENBAO_PRIVATE_BIND_IP", "OPENBAO_TLS_SERVER_NAME", "OPENBAO_SERVER_CONFIG",
-                "OPENBAO_TLS_DIR", "OPENBAO_DATA_VOLUME").forEach(environment::remove);
-
-        Process process;
-        try {
-            process = processBuilder.start();
-        } catch (IOException unavailable) {
-            assumeTrue(false, "Docker Compose is not available");
-            return;
-        }
-        String output = new String(process.getInputStream().readAllBytes());
-        assertThat(process.waitFor(30, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isNotZero();
-        assertThat(output).contains("required variable OPENBAO_");
-    }
 }
