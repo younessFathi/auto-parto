@@ -1,11 +1,11 @@
 # AP-0049 Design Domain-Separated OpenAPI YAML Specifications
 
-- **Status:** In Progress
+- **Status:** Proposed
 - **Type:** Technical Enhancement
 - **Feature:** [Platform and Data](../features/F01-platform-and-data.md)
 - **Linked Tickets:** [AP-0048 Admin-Protected Swagger](AP-0048-admin-protected-api-documentation.md), [AP-0030 Application Boundaries](AP-0030-application-boundaries.md)
 - **Source:** `docs/api-boundaries.md`; `docs/architecture.md` Authentication and Authorization
-- **Design Draft:** [Domain-Separated OpenAPI Design](../../docs/api-openapi-domain-design.md)
+- **Design Proposal:** [Domain-Separated OpenAPI Design](../../docs/api-openapi-domain-design.md)
 
 ## Description
 
@@ -16,11 +16,11 @@ The design must resolve the relationship between domain YAML files and AP-0048's
 ## Design Deliverables
 
 1. A reviewed design note that assigns each canonical route in `docs/api-boundaries.md` to one domain group, including shared concepts such as authentication, safe errors, file references, wallets, and notifications/SSE.
-2. A proposed repository layout and naming/versioning convention for domain YAML files, shared schemas/responses/parameters/security definitions, and cross-file `$ref` relationships. Cover marketplace requests/listings/offers, profiles and identities, files, wallets, and notifications.
-3. An explicit source-of-truth decision: either authored domain YAML with generated/validated UI aggregation, or generated per-domain YAML from the Java API contract interfaces. If another approach is chosen, document why it avoids duplicate contracts and how implementation drift is caught. The current design draft recommends interface annotations as the source and per-domain YAML as generated build outputs; this remains subject to owner review.
+2. A proposed repository layout and naming/versioning convention for domain YAML outputs, shared schemas/responses/parameters/security definitions, and `$ref` behavior. Cover marketplace requests/listings/offers, profiles and identities, files, wallets, and notifications, and state whether cross-file references are used.
+3. Select one source of truth and explain its tradeoffs. The completed proposal selects Java controller/API contract sources as authoritative and generates per-domain YAML outputs; it prohibits separately hand-maintained duplicate contracts and defines route/spec drift checks.
 4. A Swagger UI grouping/aggregation design that lets an authorized administrator select each domain specification while keeping all UI, YAML, JSON, and supporting resource endpoints protected as required by AP-0048.
 5. A repeatable validation plan for YAML syntax, `$ref` resolution, OpenAPI version/schema validity, duplicate operation IDs, duplicate/conflicting paths, canonical route coverage, DTO/error/security consistency, and legacy-route sunset handling. Identify the Maven/CI checks needed before merge.
-6. A migration plan from current scattered Swagger annotations to the selected design. Preserve AP-0048's requirement to keep documentation out of controller method bodies and its interface-implementation preference unless the approved design demonstrates that generated YAML better satisfies it without duplicated contracts.
+6. A migration plan from current scattered Swagger annotations to the selected design. Preserve AP-0048's requirement to keep documentation out of controller method bodies by moving OpenAPI documentation to small contract interfaces implemented by controllers.
 7. A short usage guide for adding or changing a domain endpoint, generating or validating its YAML, and seeing it in the protected Swagger UI. Use examples with no real credentials or personal data.
 
 ## Acceptance Criteria
@@ -35,11 +35,11 @@ The design must resolve the relationship between domain YAML files and AP-0048's
 
 ## Test Scenarios
 
-1. **Given** the canonical API route catalog, **when** the design is reviewed, **then** every route has one documented owner domain and every legacy/retired route has an explicit disposition.
-2. **Given** two domains reference a shared DTO or error schema, **when** the YAML is assembled or generated, **then** references resolve to one consistent shared contract with no conflicting duplicate definitions.
-3. **Given** an endpoint changes its path, DTO, or role policy, **when** the proposed validation suite runs, **then** it detects contract drift or missing domain-spec coverage before merge.
-4. **Given** an unauthenticated or non-admin caller, **when** any grouped spec is requested through the proposed Swagger UI, **then** AP-0048's authentication and authorization rules still deny access.
+1. **Given** the canonical API route catalog and controller mappings, **when** the design inventory is reviewed, **then** every active method/path has one owner domain and every compatibility/retired path has an explicit disposition.
+2. **Given** shared DTOs or error schemas appear in multiple domain groups, **when** the design is reviewed, **then** each standalone YAML has consistent generated local components and resolvable local references, with no hand-maintained cross-file duplication.
+3. **Given** a controller path, DTO, or role policy changes, **when** AP-0048's specified validation suite is implemented, **then** it will detect contract drift or missing domain-spec coverage before merge.
+4. **Given** an unauthenticated or non-admin caller, **when** the design is checked against AP-0048, **then** it specifies denial for every grouped YAML/JSON spec and Swagger asset; AP-0048 remains responsible for runtime verification.
 
 ## Definition of Done
 
-The domain ownership map, repository layout, single-source-of-truth decision, UI aggregation, validation strategy, migration plan, and usage guide are documented and reviewed. Every current canonical route and legacy disposition is accounted for, and AP-0048 is updated to implement the accepted design. No runtime or security behavior is changed by this design ticket.
+The domain ownership map, repository layout, source-of-truth decision, UI aggregation, validation strategy, migration plan, and usage guide are documented and self-reviewed. Every current controller route and legacy disposition is accounted for in `docs/api-boundaries.md`; AP-0048 is updated with the concrete implementation approach. The proposal is ready for owner acceptance. No runtime or security behavior is changed by this design ticket.
