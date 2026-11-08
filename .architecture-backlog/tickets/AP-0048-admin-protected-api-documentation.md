@@ -3,7 +3,7 @@
 - **Status:** Proposed
 - **Type:** Technical Enhancement
 - **Feature:** [Platform and Data](../features/F01-platform-and-data.md)
-- **Linked Tickets:** [AP-0025 Safe API Error Contract](AP-0025-api-error-contract.md), [AP-0030 Application Boundaries](AP-0030-application-boundaries.md), [AP-0021 TLS Entry Point](AP-0021-tls-entrypoint.md)
+- **Linked Tickets:** [AP-0025 Safe API Error Contract](AP-0025-api-error-contract.md), [AP-0030 Application Boundaries](AP-0030-application-boundaries.md), [AP-0049 Domain OpenAPI YAML Design](AP-0049-design-domain-openapi-yaml.md), [AP-0021 TLS Entry Point](AP-0021-tls-entrypoint.md)
 - **Source:** `docs/architecture.md` Authentication and Authorization; `docs/api-boundaries.md`
 
 ## Description
@@ -12,7 +12,7 @@ Provide an accurate Swagger UI and OpenAPI specification so administrators can i
 
 Swagger/OpenAPI is already on the classpath, but its paths are currently permitted anonymously and excluded from JWT processing. This ticket closes that access gap, documents the canonical `/api/v1` API accurately, and establishes Swagger as a prerequisite to AP-0021 edge configuration. Admin access to documentation does not grant access to the underlying business endpoints: every API request must continue to enforce its own role and ownership rules.
 
-Keep OpenAPI documentation separate from controller implementation code. Define small API contract interfaces by controller/resource, place Swagger/OpenAPI annotations on their method signatures, and have the corresponding controllers implement those interfaces. Do not add a large block of documentation annotations to controller methods or create a single catch-all documentation interface. Keep runtime authorization and business behavior in the existing security/controller layers; avoid duplicating route or security declarations. The project currently uses springdoc 2.8.4, and its WebFlux-compatible v2 documentation confirms support for annotations on interfaces.
+Keep OpenAPI documentation separate from controller implementation code. AP-0049 must first design the domain-separated YAML layout and choose one source of truth for operation contracts. Preserve the preference for small API contract interfaces implemented by controllers if the accepted design uses Java annotations; if domain YAML is authoritative, avoid maintaining duplicate operation metadata on the interfaces. Do not add a large block of documentation annotations to controller methods or create a single catch-all documentation interface. Keep runtime authorization and business behavior in the existing security/controller layers.
 
 ## Acceptance Criteria
 
@@ -20,9 +20,9 @@ Keep OpenAPI documentation separate from controller implementation code. Define 
 2. Ensure Swagger requests are not bypassed by the JWT authentication filter or permitted by an earlier security matcher. Derive the role only from validated canonical authentication; never trust a request parameter, header, or OpenAPI UI input as an authorization claim.
 3. Configure the UI to use the existing bearer JWT scheme for API calls. Do not persist bearer credentials in browser local storage or other durable browser storage. Swagger authorization must not alter or bypass per-endpoint authorization and ownership checks.
 4. Document canonical `/api/v1` routes and their actual DTOs, validation constraints, response/error contracts, and authentication requirements. Reconcile legacy aliases with `docs/api-boundaries.md`: mark supported aliases deprecated with their sunset, or exclude retired routes. Do not advertise removed routes or imply that documentation grants broader access.
-5. Put Swagger/OpenAPI operation annotations in small resource/controller API interfaces implemented by the corresponding controllers. Verify that the current springdoc version picks up interface method and type documentation. Keep implementation methods focused; do not duplicate OpenAPI annotations across interface and controller or duplicate route/security metadata unnecessarily.
+5. Implement the accepted AP-0049 domain YAML design and its single source of truth. Keep Swagger/OpenAPI documentation out of controller method bodies. If the design selects Java interface annotations, use small resource/controller API interfaces implemented by corresponding controllers and verify springdoc generates their documentation. If authored YAML is selected, serve/group the domain files and test them against actual controller route behavior without duplicating undocumented contracts.
 6. Keep the OpenAPI specification free of secrets, internal credentials, private deployment details, and sensitive example data. Avoid exposing actuator, migration, or internal-only operations as public API documentation; if intentionally documented for administrators, label their operational scope clearly.
-7. Add focused security/controller integration coverage for anonymous, malformed/expired-token, authenticated non-admin, and administrator access to both the UI and JSON specification. Add contract coverage that confirms the documented route set and bearer scheme remain aligned with the canonical API catalog and that annotations on the separate interfaces appear in generated OpenAPI.
+7. Add focused security/controller integration coverage for anonymous, malformed/expired-token, authenticated non-admin, and administrator access to both the UI and every domain specification. Add contract coverage that confirms route groups and the bearer scheme remain aligned with the canonical API catalog and that the accepted source of truth appears correctly in each domain spec.
 8. Document the local administrator workflow without including real credentials. Keep the endpoints admin-protected in every enabled profile, or explicitly disable Swagger/OpenAPI in a profile through tested configuration; never fall back to anonymous access.
 9. Complete AP-0048 and verify the chosen Cloudflare/origin deployment can pass authorized Swagger requests without widening public origin access before AP-0021 proceeds to deployment.
 
@@ -37,4 +37,4 @@ Keep OpenAPI documentation separate from controller implementation code. Define 
 
 ## Definition of Done
 
-Swagger/OpenAPI accurately describes the active API and is administrator-only wherever enabled. The existing JWT, canonical-principal role checks, safe error behavior, and per-endpoint authorization remain intact. Security and route-catalog tests pass; local usage and profile behavior are documented; AP-0021 records the dependency; and the applicable test and verification suites pass.
+AP-0049's design is accepted and Swagger/OpenAPI accurately describes the active API in domain groups, administrator-only wherever enabled. The existing JWT, canonical-principal role checks, safe error behavior, and per-endpoint authorization remain intact. Security, YAML/reference, and route-catalog tests pass; local usage and profile behavior are documented; AP-0021 records the dependency; and the applicable test and verification suites pass.
