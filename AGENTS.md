@@ -36,6 +36,12 @@ Use a feature-first, ticket-by-ticket workflow:
 3. After each ticket, run the applicable tests, update documentation and `.architecture-backlog` tracking, and reconcile the review findings.
 4. Consider the feature complete only when all of its tickets and acceptance criteria are satisfied and the relevant verification suites pass.
 
+## Multi-Agent Delivery and Context Recovery
+
+For feature implementation, bug fixes and technical enhancements, use coder, reviewer and devops specialists with the main chat as coordinator. This explicitly requests delegation for these tasks. Read [docs/agent-workflow.md](docs/agent-workflow.md) and local `handover.md` first. Follow independent approval of the exact candidate, GitHub publication/CI gates and the human final-review handoff. Preserve all ticket, testing and review requirements below.
+
+The coordinator updates local `handover.md` at milestones and before context pressure, interruption or transfer, using [docs/agent-handover-template.md](docs/agent-handover-template.md). Coder is the sole implementation writer. Reviewer and DevOps return reports/traces to the coordinator for persistence. Never merge or deploy as part of automatic feature delivery.
+
 ## Project Layout
 
 - `src/main/java/auto/parto/api/`: HTTP and SSE controllers.
