@@ -121,12 +121,6 @@ docker compose --project-name auto-parto -f docker-compose.yml -f docker-compose
 - **Docker daemon does not respond:** check Docker Desktop/Engine before retrying Compose.
 - **Port already allocated:** another local instance may already be using `8081` or `6379`; inspect `docker ps` before starting another checkout.
 
-### What was `start_autoparto_local.py`?
-
-That file was a temporary, machine-specific recovery helper outside this repository. It inspected the existing application/database containers, recovered their configured credentials into process memory, validated Compose, and started a prebuilt startup-fix image with `--no-build`. It used hardcoded container names, a separate worktree and a local uploads/image override, and wrote Compose output to a scratch log.
-
-It did not build source, create credentials, or provide a fresh-clone setup. The versioned Compose files and complete `.env` setup above are the reproducible project workflow; Python and that recovery helper are not required.
-
 ## Run tests on the host
 
 With Java 21 installed and Docker running for integration tests:
