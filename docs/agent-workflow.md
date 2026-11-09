@@ -17,11 +17,28 @@ The coordinator owns planning, handover.md, review records, immutable local trac
 5. Each returns APPROVED, CHANGES_REQUESTED or BLOCKED for the same candidate. Missing required verification is BLOCKED. Findings include severity, path:line evidence, impact and requested correction. Distinguish blocking defects from optional suggestions and record dispositions. Coder cannot approve its own work.
 6. Coder fixes findings and creates a new candidate; every new candidate invalidates both approvals. Re-run affected checks and obtain both verdicts again. After three unsuccessful repair rounds, checkpoint and escalate unresolved findings to the user. Never auto-approve to escape the loop.
 7. Publish only when both approvals match current HEAD, required local checks pass, and no relevant uncommitted/untracked changes were omitted. Coordinator records approvals in local handover.md and local review records. Do not create a bookkeeping commit after approval. If tracked reports or other edits change the candidate, review that new candidate too.
-8. Coder verifies remote URL and pushes the feature branch explicitly to `github` (currently `git@github.com:younessFathi/auto-parto.git`), then opens/updates a GitHub PR with explicit repository and intended base. `origin` is GitLab; do not use it accidentally. Never push main, force-push, merge or deploy in this workflow. Prefer connected GitHub tools; otherwise use authenticated GitHub CLI/API. Missing credentials/tools means publication BLOCKED; preserve the approved local state.
+8. Coder enumerates checkout-local names with `git remote` and inspects every remote with `git remote get-url --push --all NAME`. Select a remote only when every effective push URL identifies exactly `github.com/younessFathi/auto-parto`; verify destinations, never infer them from names or fetch URLs. Apply the publication remote validation rules below, record the selected name/destination, and push only the approved candidate using that actual remote name and an explicit `<candidate-sha>:refs/heads/<feature-branch>` refspec. Then open/update the GitHub PR with explicit repository and intended base. Never push main, force-push, merge or deploy in this workflow. Prefer connected GitHub tools; otherwise use authenticated GitHub CLI/API. Missing a safe matching remote or required credentials/tools means publication BLOCKED; preserve the approved local state and explain the required setup. Do not add, rename or overwrite remotes automatically.
 9. DevOps follows required GitHub CI checks for the exact PR head SHA until success or a blocker. Pending, missing or skipped required checks are not passing. Failed CI returns to Coder; any new commit needs both reviews again. Check the PR head/base before handoff; a moved base requires reassessment and renewed checks/reviews when the integration result changes.
 10. Once required CI passes, notify the user in the main chat with PR link, final commit, feature summary, both verdicts, CI evidence and residual risks. Their final GitHub review is next. Merge and production deployment require a separate user instruction.
 
 States: IMPLEMENTING -> LOCAL_CHECKS -> IN_REVIEW -> APPROVED_LOCAL -> PUBLISHED -> CI_PASSED -> AWAITING_HUMAN_REVIEW. CHANGES_REQUESTED returns to IMPLEMENTING. BLOCKED explains the missing evidence/decision and pauses that transition. These instructions are not an executable CI state machine.
+
+## Publication remote validation
+
+Remote names belong to each checkout: neither `github` nor `origin` implies a hosting service. Before publication enumerate `git remote`, then inspect each name with `git remote get-url --push --all NAME`; this resolves the effective push destinations rather than merely the fetch URL. A remote is eligible only when the returned list is nonempty and every URL identifies the exact target repository `github.com/younessFathi/auto-parto` in SSH/scp-style or HTTPS form. For comparison allow an optional `.git` suffix and trailing slash. Check the actual host and complete owner/repository path, not a substring or name; unrelated hosts, owners, repositories, URL forms, or ambiguous destinations are ineligible. Do not print embedded credentials into logs or handovers.
+
+Git can push to every configured push URL for a remote. Reject a remote that mixes the expected GitHub repository with GitLab or any other destination, even when its fetch URL or first push URL looks correct. Multiple URLs are acceptable only when every one resolves to the same target repository under these rules. If several safe remote aliases qualify, choose one and record the name and sanitized target. If none qualifies, return BLOCKED for missing publication setup, explain that a remote with an appropriate push URL is required, and leave existing remotes unchanged; never add, rename or overwrite them automatically.
+
+Use the selected actual remote name and an explicit `<candidate-sha>:refs/heads/<feature-branch>` push refspec after verifying that the candidate and feature branch satisfy the existing approval gate. Repository discovery changes neither approvals nor the frozen candidate, and does not authorize unrelated pushes, merge or deployment.
+
+Validate these checkout layouts before accepting a publication-rule change:
+
+| Checkout push destinations | Expected result |
+| --- | --- |
+| Only `origin` pushes to `git@github.com:younessFathi/auto-parto.git` | Select `origin`; a remote named `github` is unnecessary. |
+| `origin` pushes to GitLab; `github` pushes to `https://github.com/younessFathi/auto-parto.git` | Select `github`; do not push to the GitLab destination. |
+| No remote pushes to the target GitHub repository | BLOCKED with missing-setup guidance; do not alter remotes. |
+| One remote has both the target GitHub push URL and an unrelated push URL | Reject that remote; select another safe matching alias or return BLOCKED. |
 
 ## Communication and records
 
