@@ -6,7 +6,7 @@ Explore [the functional journeys](docs/workflows.md) from the buyer and seller p
 
 - [Join or sign in](docs/workflows.md#join-or-sign-in) and [manage your profile](docs/workflows.md#manage-a-profile-or-deactivate-an-account).
 - [Request a part](docs/workflows.md#request-a-car-part), [publish a listing](docs/workflows.md#publish-and-manage-a-listing) and [find matching parts](docs/workflows.md#find-parts-matching-a-request).
-- [Make and decide on offers](docs/workflows.md#make-and-decide-on-an-offer) and [manage a wallet](docs/workflows.md#view-or-change-a-wallet-balance).
+- [Make and decide on offers](docs/workflows.md#make-and-decide-on-an-offer) and [credit or debit a seller wallet](docs/workflows.md#credit-or-debit-a-seller-wallet).
 - [Attach photos](docs/workflows.md#attach-photos-to-a-request-or-listing) and [view images](docs/workflows.md#view-an-uploaded-image).
 - [Choose notification preferences](docs/workflows.md#choose-notification-preferences), [receive updates](docs/workflows.md#receive-account-notifications) and [enable device push](docs/workflows.md#enable-push-notifications-on-a-device).
 

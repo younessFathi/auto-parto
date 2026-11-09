@@ -12,7 +12,7 @@ Start with a journey below. Each diagram covers one user goal. The [technical wo
 - [Publish and manage a listing](#publish-and-manage-a-listing)
 - [Find parts matching a request](#find-parts-matching-a-request)
 - [Make and decide on an offer](#make-and-decide-on-an-offer)
-- [View or change a wallet balance](#view-or-change-a-wallet-balance)
+- [Credit or debit a seller wallet](#credit-or-debit-a-seller-wallet)
 - [Attach photos to a request or listing](#attach-photos-to-a-request-or-listing)
 - [View an uploaded image](#view-an-uploaded-image)
 - [Choose notification preferences](#choose-notification-preferences)
@@ -145,25 +145,27 @@ Current rules give acceptance and rejection to the seller participant, including
 
 Business rules and implementation reference: [supporting documentation](technical-workflows.md#offer-creation-and-decisions).
 
-## View or change a wallet balance
+## Credit or debit a seller wallet
 
-An authorized account holder views or requests a change to their wallet.
+A seller requests a credit or debit to their own wallet and receives the resulting balance.
 
 ```mermaid
 flowchart TD
-    A["Account holder opens their wallet"] --> B["View balance and transaction history"]
-    B --> C{"Requested action?"}
-    C -->|View only| D["Review account activity"]
-    C -->|Credit or debit| E["Provide amount and currency"]
-    E --> F{"Repeated request?"}
-    F -->|Same request already completed| G["Show previous result without charging again"]
-    F -->|Conflicting repeat| H["Ask caller to resolve the conflicting request"]
-    F -->|New request| I{"Valid amount and sufficient funds for a debit?"}
-    I -->|No| J["Decline change and keep balance"]
-    I -->|Yes| K["Update balance and record the transaction"]
+    A["Seller requests a wallet credit or debit"] --> B{"Signed in as the wallet's seller owner?"}
+    B -->|No| C["Deny the request"]
+    B -->|Yes| D["Provide amount, currency and request reference"]
+    D --> E{"Request reference already used for this operation?"}
+    E -->|Same request retained| F["Return the original result without applying it again"]
+    E -->|Different request retained| G["Report a conflicting request reference"]
+    E -->|New request| H{"Valid amount and sufficient funds for a debit?"}
+    H -->|No| I["Decline the change and keep the balance"]
+    H -->|Yes| J["Update the balance and record the transaction internally"]
+    J --> K["Return the mutation's resulting balance and currency"]
 ```
 
-Wallet credits and debits are account operations. A credit is not proof of an external payment, and offer acceptance does not automatically move money. Repeat protection applies while the request reference is retained.
+The request reference (`Idempotency-Key`) is required and scoped to the authenticated seller and operation. Replaying the same retained request returns its original result, which may differ from the wallet's current balance after later changes. Repeat protection applies while the reference is retained. The ledger is internal; there is no separate wallet balance or transaction-history browsing API.
+
+Credits and debits are account operations. A credit is not proof of an external payment, and offer acceptance does not automatically move money.
 
 Business rules and implementation reference: [supporting documentation](wallet-ledger.md).
 
