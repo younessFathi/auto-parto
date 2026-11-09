@@ -1,38 +1,16 @@
 # Auto-Parto
 
-## Local startup overview
+## Functional workflow diagrams
 
-See the [local PostgreSQL migration guide](docs/postgresql-development-cutover.md) for configuration and startup commands.
+Explore [the functional journeys](docs/workflows.md) from the buyer and seller perspective:
 
-```mermaid
-flowchart TD
-    CONFIG["Complete .env and validate Compose"] --> PG["PostgreSQL and initial roles"]
-    CONFIG --> REDIS["Redis"]
-    PG --> MIG["Flyway migrations"]
-    MIG --> FIX["Development fixtures"]
-    FIX --> JOIN{"Fixtures succeeded and Redis healthy?"}
-    REDIS --> JOIN
-    JOIN -->|No| HOLD["Stop rollout and inspect failure"]
-    JOIN -->|Yes| APP["Spring application"]
-    APP --> RECON["Storage reconciliation and health checks"]
-    RECON --> READY{"Readiness UP?"}
-    READY -->|No| WAIT["Keep instance unready"]
-    READY -->|Yes| SWAGGER["Swagger on localhost:8081"]
-```
+- [Join or sign in](docs/workflows.md#join-or-sign-in) and [manage your profile](docs/workflows.md#manage-a-profile-or-deactivate-an-account).
+- [Request a part](docs/workflows.md#request-a-car-part), [publish a listing](docs/workflows.md#publish-and-manage-a-listing) and [find matching parts](docs/workflows.md#find-parts-matching-a-request).
+- [Make and decide on offers](docs/workflows.md#make-and-decide-on-an-offer) and [manage a wallet](docs/workflows.md#view-or-change-a-wallet-balance).
+- [Attach photos](docs/workflows.md#attach-photos-to-a-request-or-listing) and [view images](docs/workflows.md#view-an-uploaded-image).
+- [Choose notification preferences](docs/workflows.md#choose-notification-preferences), [receive updates](docs/workflows.md#receive-account-notifications) and [enable device push](docs/workflows.md#enable-push-notifications-on-a-device).
 
-## Project workflow diagrams
-
-See the [complete Mermaid workflow catalogue](docs/workflows.md) for individual diagrams and implementation/runbook references.
-
-| Area | Workflows |
-| --- | --- |
-| Identity and access | [HTTP authorization/errors](docs/workflows.md#http-authentication-authorization-and-safe-errors), [OTP login](docs/workflows.md#otp-onboarding-and-login), [rate limiting](docs/workflows.md#redis-authentication-rate-limiting), [JWT rotation](docs/workflows.md#jwt-signing-and-key-rotation), [profiles/deactivation](docs/workflows.md#profile-updates-and-account-deactivation) |
-| Marketplace and money | [Part requests](docs/workflows.md#buyer-part-request-lifecycle), [listings](docs/workflows.md#seller-listing-lifecycle), [matching](docs/workflows.md#marketplace-matching), [offers](docs/workflows.md#offer-creation-and-decisions), [wallet ledger](docs/workflows.md#wallet-credit-debit-and-idempotency) |
-| Files and notifications | [Uploads](docs/workflows.md#file-upload-and-compensation), [downloads](docs/workflows.md#file-download), [reconciliation](docs/workflows.md#storage-reconciliation-and-recovery), [device tokens](docs/workflows.md#device-token-registration-invalidation-and-rebuild), [preferences](docs/workflows.md#notification-preferences), [durable notifications](docs/workflows.md#durable-notification-creation-and-sse-attempts), [SSE replay](docs/workflows.md#sse-connection-replay-and-cleanup), [FCM](docs/workflows.md#fcm-provider-delivery), [audit](docs/workflows.md#audit-outbox-delivery) |
-| Development and operations | [Startup](docs/workflows.md#local-startup-and-readiness), [Swagger](docs/workflows.md#current-swagger-generation-and-browsing), [provider isolation](docs/workflows.md#provider-isolation-and-cancellation), [observability](docs/workflows.md#observability-and-incident-diagnosis), [CI](docs/workflows.md#github-continuous-integration), [secrets](docs/workflows.md#production-secret-delivery-and-activation), [release gate](docs/workflows.md#protected-migration-and-release-gate), [edge validation](docs/workflows.md#production-edge-and-sse-release-validation), [recovery](docs/workflows.md#backup-restore-and-projection-recovery) |
-| Agent collaboration | [Delivery/review](docs/workflows.md#agent-feature-delivery-and-publication), [proposals](docs/workflows.md#creative-proposals-and-human-approval), [handover](docs/workflows.md#context-handover-and-task-recovery) |
-
-The catalogue separates implemented behavior from operator procedures and planned deployment gates. Durable SSE delivery and direct FCM provider calls have separate diagrams; they are not an implied automatic fallback chain.
+For development, infrastructure and agent collaboration, see the separate [technical workflows](docs/technical-workflows.md). Local startup configuration and commands remain in the [PostgreSQL development guide](docs/postgresql-development-cutover.md).
 
 ## PostgreSQL development migration
 
