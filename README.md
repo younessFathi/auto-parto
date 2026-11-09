@@ -1,82 +1,18 @@
-sequenceDiagram
-autonumber
-participant Client
-participant Controller as FcmNotificationController
-participant SellerSvc as SellerService
-participant FcmSvc as ResilientFcmService
-participant Queue as PushNotificationQueue
-participant Redis as Redis (Cache)
-participant Executor as RetryExecutor
+# Auto-Parto
 
-    Note over Client, Controller: 1. Initial Request
-    Client->>Controller: POST /notify/search (SearchNotificationRequest)
-    
-    Controller->>SellerSvc: findMatchingSellers()
-    SellerSvc->>Controller: Returns List<String> (Seller IDs)
-    
-    Controller->>FcmSvc: sendToUsers(sellerIds, notification)
-    
-    loop For each Seller ID
-        Note over FcmSvc, Queue: 2. Initial Send Failure
-        FcmSvc--xClient: Fcm Send Fails (Network/Error)
-        FcmSvc->>Queue: enqueueForRetry(userId, notification)
-        
-        activate Queue
-        Queue->>Redis: storeInQueue(retryCount=0)
-        Queue->>Executor: scheduleRetry(delay=5s)
-        deactivate Queue
-    end
-    
-    Controller-->>Client: 200 OK (Acknowledged)
+## Functional workflow diagrams
 
-    Note over Queue, Executor: 3. Retry Loop (Async)
-    
-    rect rgb(255, 240, 240)
-        Note right of Executor: Retry Attempt 1
-        Executor->>Queue: processRetry()
-        activate Queue
-        Queue->>Redis: removeFromQueue()
-        Queue->>Queue: attemptRedelivery()
-        Queue--xClient: Send Fails
-        Queue->>Queue: scheduleNextRetry(count=1)
-        Queue->>Redis: storeInQueue(retryCount=1)
-        Queue->>Executor: scheduleRetry(delay=30s)
-        deactivate Queue
-    end
+Explore [the functional journeys](docs/workflows.md) from the buyer and seller perspective:
 
-    rect rgb(255, 230, 230)
-        Note right of Executor: Retry Attempt 2
-        Executor->>Queue: processRetry()
-        activate Queue
-        Queue->>Redis: removeFromQueue()
-        Queue->>Queue: attemptRedelivery()
-        Queue--xClient: Send Fails
-        Queue->>Queue: scheduleNextRetry(count=2)
-        Queue->>Redis: storeInQueue(retryCount=2)
-        Queue->>Executor: scheduleRetry(delay=5m)
-        deactivate Queue
-    end
+- [Join or sign in](docs/workflows.md#join-or-sign-in) and [manage your profile](docs/workflows.md#manage-a-profile-or-deactivate-an-account).
+- [Request a part](docs/workflows.md#request-a-car-part), [publish a listing](docs/workflows.md#publish-and-manage-a-listing) and [find matching parts](docs/workflows.md#find-parts-matching-a-request).
+- [Make and decide on offers](docs/workflows.md#make-and-decide-on-an-offer) and [credit or debit a seller wallet](docs/workflows.md#credit-or-debit-a-seller-wallet).
+- [Attach photos](docs/workflows.md#attach-photos-to-a-request-or-listing) and [view images](docs/workflows.md#view-an-uploaded-image).
+- [Choose notification preferences](docs/workflows.md#choose-notification-preferences), [receive updates](docs/workflows.md#receive-account-notifications) and [enable device push](docs/workflows.md#enable-push-notifications-on-a-device).
 
-    rect rgb(255, 200, 200)
-        Note right of Executor: Retry Attempt 3 (Final)
-        Executor->>Queue: processRetry()
-        activate Queue
-        Queue->>Redis: removeFromQueue()
-        Queue->>Queue: attemptRedelivery()
-        Queue--xClient: Send Fails
-        
-        Note over Queue, Redis: 4. Dead Letter Logic
-        Queue->>Queue: scheduleNextRetry(count=3)
-        
-        alt retryCount >= 3
-            Queue->>Queue: moveToDeadLetter()
-            Queue->>Redis: LPUSH push:dead:{userId}
-            Note right of Redis: Notification Stored in DLQ
-        end
-        deactivate Queue
-    end
+For development, infrastructure and agent collaboration, see the separate [technical workflows](docs/technical-workflows.md). Local startup configuration and commands remain in the [PostgreSQL development guide](docs/postgresql-development-cutover.md).
 
-# PostgreSQL development migration
+## PostgreSQL development migration
 
 PostgreSQL is the application persistence boundary. To run the schema and fixtures locally, follow [`docs/postgresql-development-cutover.md`](docs/postgresql-development-cutover.md). The Compose profile provisions distinct runtime and migration roles, runs Flyway as a one-shot job, and provides idempotent development fixtures.
 
