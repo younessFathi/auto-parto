@@ -26,7 +26,7 @@ Use `GroupedOpenApi` path filters to create one runtime group for each domain. S
 | `marketplace` | Exact operations listed under `marketplace` in [`docs/api-boundaries.md`](api-boundaries.md) | Includes requests, matching, listings, offers, buyer deactivation, seller create/read/deactivation, and deprecated read-only `/pieces/**`; the catalog lists each method/path and alias. |
 | `profiles` | `PUT /api/v1/profiles/buyer`; `PUT /api/v1/profiles/seller` | Includes deprecated `/customers/profile` and `/seller/profile` aliases with the same sunset. |
 | `wallets` | `POST /api/v1/sellers/{id}/wallet/add`; `POST /api/v1/sellers/{id}/wallet/deduct` | Amount/currency, idempotency, authorization, and error behavior follow actual DTO/service contracts. `/seller/{id}/wallet/**` aliases sunset 2027-04-01. |
-| `files` | `POST /api/v1/files/requests/{requestId}`; `POST /api/v1/files/listings/{listingId}`; `GET /api/v1/files/{fileId}` | `/images` and local folder browsing are retired and absent. Upload ownership and UUID file-reference semantics remain explicit. |
+| `files` | `POST /api/v1/files/requests/{requestId}`; `POST /api/v1/files/listings/{listingId}`; `GET /api/v1/files/{fileId}` | Uploads require the corresponding buyer/seller role and resource ownership. Reads require authentication and return only ACTIVE files; current reads have no caller ownership or buyer/seller-role restriction. UUID file-reference semantics remain explicit; `/images` and folder browsing are retired. |
 | `notifications` | Exact operations listed under `notifications` in [`docs/api-boundaries.md`](api-boundaries.md) | Includes preferences, FCM, admin commands, and canonical SSE. Deprecated `/notifications/**` aliases are clearly marked through their sunset. Never include tokens or message payloads as examples. |
 | `admin-audit` | `POST /api/v1/admin/audit/{eventId}/replay` | Administrator-only operational action. The docs page is separately admin-only; the endpoint retains its independent `ROLE_ADMIN` guard. |
 
@@ -56,12 +56,25 @@ Generate one YAML output per group, named `target/generated-openapi/v1/<group>.y
 
 ## UI and Security
 
-- Swagger UI offers the seven named groups above; the YAML output for each group is separately retrievable for client tooling.
-- Swagger UI, group JSON/YAML endpoints, configuration, redirects, and static assets use the existing application JWT and require canonical `ROLE_ADMIN` as defined by AP-0048.
-- The UI uses the existing bearer JWT security scheme for “Try it out” and does not persist the bearer token in browser storage.
-- The spec describes each operation's own authentication requirement and expected role/ownership rules. Admin permission to view the documentation does not elevate calls made through the UI.
-- Do not expose actuator, migration, private deployment, provider credential, or other internal-only information in any group.
-- A disabled profile must make both UI and every grouped JSON/YAML endpoint unavailable; no endpoint may become anonymous as a fallback.
+- Swagger UI offers the seven named groups; each group has protected JSON/YAML and a safe YAML download.
+- HTML, Swagger configuration, assets, group specifications and configured documentation aliases require the existing validated application JWT and canonical `ROLE_ADMIN` under AP-0048. Direct address-bar navigation without the launcher intentionally receives 401; Swagger Authorize cannot bootstrap a page that has not loaded.
+- The application keeps its existing bearer authentication and endpoint role/ownership rules. Do not introduce an application auth cookie, Swagger password, anonymous asset exception or second authentication model.
+- “Try it out” uses a token explicitly entered into Swagger Authorize, held in page memory with `persistAuthorization: false`. It is separate from the launcher's documentation admin token; documentation access does not authorize business calls.
+- Do not expose actuator, migration, provider credentials, private deployment details or other internal-only information in any group. Disabled profiles make UI and all group/configuration endpoints unavailable, never anonymous.
+
+### Proposed protected-browser bootstrap (AP-0048 implementation)
+
+AP-0048 will supply a local operator launcher using headed Playwright and a new nonpersistent browser context with `serviceWorkers: 'block'`. This helper and the browser tests below are proposed deliverables, not implemented by AP-0049. The operator obtains an admin JWT through the existing application authentication flow and enters it into a no-echo terminal prompt. Keep it only in launcher memory: never put it in a URL, command-line argument, environment variable, file, browser storage, global extra HTTP headers, trace, HAR, video or log. Disable credential-bearing diagnostic capture. Closing the context discards its in-memory browser state.
+
+The launcher accepts only an operator-trusted exact application origin: HTTPS, except explicitly selected loopback HTTP for local development. Trust comes from operator configuration, not a target supplied by a page or redirect. Serve trusted packaged Swagger assets from that same origin; use no CDN or external resources. Reject every cross-origin browser request/resource, regardless of path. Install scoped interception before the first navigation to the canonical `/swagger-ui/index.html`.
+
+The documentation admin token is injected only for GET/HEAD on that exact origin and an explicit documentation-path allowlist: `/swagger-ui.html`, boundary-matched `/swagger-ui/**` and `/webjars/**`, the `/v3/api-docs` root, and the exact JSON/YAML, seven-group, configuration and configured-alias URLs verified against the actual springdoc configuration by AP-0048. Match parsed origin and pathname with segment boundaries; do not use arbitrary prefixes, lookalike paths or attacker-controlled targets. Non-allowlisted same-origin requests never receive the documentation token.
+
+For an allowlisted documentation request, the handler uses `route.fetch({ headers, maxRedirects: 0 })` with the scoped Authorization header. It fulfills only a nonredirect response. Abort every 3xx without following `Location` or forwarding that response to the browser, including same-origin redirects; fail closed and require a canonical nonredirecting URL. Never inject this token via `route.continue({ headers })` or automatically follow redirects: modified headers can otherwise be carried across redirect hops. AP-0048 must prove the complete canonical HTML, asset, configuration, group and download chain requires no redirect. [Playwright Route.fetch documents fetch/fulfill and `maxRedirects: 0`](https://playwright.dev/docs/api/class-route#route-fetch).
+
+Same-origin non-document API calls proceed normally without injected documentation credentials; preserve any Swagger Authorize token explicitly entered for that call. Do not proxy/buffer ordinary API or SSE traffic through `route.fetch`: streaming must retain normal behavior. Test protected API calls without an entered token as 401, with allowed buyer/seller tokens under their actual endpoint contracts, and with insufficient role/ownership as the normal denial. Block service workers so they cannot bypass interception; this complements scoped interception and explicit redirect refusal rather than replacing either control. [Playwright network guidance on service workers](https://playwright.dev/docs/network#missing-network-events-and-service-workers).
+
+On a documentation 401/403, stop injecting, close/discard the context and token references, and require relaunch with a newly validated admin JWT. Explicit launcher close or Ctrl+C is local logout with the same cleanup; it does not globally revoke a server JWT. No token is persisted to resume later. The operator may explicitly save only a chosen generated YAML output after validation that it contains no secrets or sensitive examples; do not save browser state or credential-bearing artifacts.
 
 ## Validation and CI
 
@@ -73,8 +86,11 @@ AP-0048 should add focused checks that:
 4. Assert operation IDs are globally unique; shared component names and schemas are stable; undocumented controller operations fail the route-catalog check.
 5. Compare paths, method, request DTO, response DTO, validation, authentication scheme, documented roles, public UUID semantics, error responses, and deprecation sunset against controller mappings, DTO validation, security tests, and `docs/api-boundaries.md`.
 6. Fail if retired routes (including local folder browsing) are advertised as active, or if active compatibility routes lack a deprecation marker/sunset.
-7. Verify anonymous and non-admin clients cannot fetch any Swagger configuration, group JSON/YAML, or UI assets, while a valid admin can.
-8. Run through the existing Maven test/verify and GitHub workflow checks; document the generated YAML path for local development without publishing credentials.
+7. Verify anonymous, malformed/expired-token and authenticated non-admin clients cannot fetch HTML, assets, configuration, every group JSON/YAML or configured alias. Disabled-profile requests remain unavailable. A plain fresh browser without the launcher intentionally receives 401.
+8. Exercise the proposed launcher in a fresh nonpersistent headed context: first canonical HTML navigation, all packaged assets/configuration, selection of all seven groups in JSON/YAML, and an explicitly chosen safe YAML download must succeed without redirects for a validated admin. Assert no credential persistence in URLs, arguments, environment, browser storage or diagnostics.
+9. Prove origin/path boundaries, cross-origin request/resource blocking, rejection of lookalike or unrelated documentation paths, refusal of every documentation 3xx without following/forwarding it, and no token leakage to redirect targets. Confirm same-origin non-document API calls never inherit the documentation admin token: protected API without Swagger authorization is 401, while entered buyer/seller tokens follow endpoint roles/ownership and SSE remains streaming.
+10. Exercise documentation-token expiry/invalidity and 401/403 cleanup, explicit close/Ctrl+C local logout, and successful relaunch with a new validated JWT; do not imply global token revocation.
+11. Run through existing Maven test/verify and GitHub checks. AP-0048 completes application/browser/group acceptance locally or in isolated staging without waiting for Cloudflare. AP-0021 subsequently establishes the edge and owns equivalent through-edge authorization/bootstrap regressions before public release. Document generated YAML retrieval without publishing credentials.
 
 The `target/generated-openapi` directory is disposable build output. It is not checked in and does not replace review of the interface/controller contract. If a future client needs a published static contract, publish the exact generated files from the verified build, keyed by application commit and API version.
 
@@ -84,15 +100,15 @@ The `target/generated-openapi` directory is disposable build output. It is not c
 2. Add or update the operation description, response codes, and schema annotations on the interface. Do not place a second copy of the OpenAPI annotations on the controller method.
 3. Update `docs/api-boundaries.md` with the canonical method/path, owner group, compatibility disposition, and sunset where relevant.
 4. Run `./mvnw -B test` and `./mvnw -B verify` in a Docker-enabled environment. The AP-0048 contract exporter/tests generate one YAML file per group under `target/generated-openapi/v1/` and fail on unmatched routes, invalid references, or incorrect UI/security behavior.
-5. Run the app locally and open the protected Swagger UI using a local administrator JWT. Select the domain group and download its YAML to inspect the generated contract. Do not store a real production token in browser storage or examples.
+5. Once AP-0048 implements the proposed launcher, run the app locally, select its trusted loopback origin, and obtain a local admin JWT through existing authentication. Start the headed launcher, enter the JWT only at its no-echo prompt, select groups and explicitly save only safe generated YAML. Enter a separate appropriate business token into Swagger Authorize for protected API calls. Close the launcher for local logout; direct address-bar navigation without it remains 401. No launcher or runtime security is implemented in AP-0049.
 
 ## Incremental Implementation Order
 
 1. Accept this design and preserve the operation inventory in `docs/api-boundaries.md` as the catalog against which controller mappings and authorization tests are checked.
 2. Add a small proof of concept for one WebFlux resource (part requests) with an interface implemented by the existing controller; verify inherited annotations, group generation, YAML export, shared schemas, and admin security.
 3. Add the remaining domain interfaces and route groups incrementally; preserve all existing paths and compatibility dispositions.
-4. Add the route/contract drift tests and admin-only Swagger security tests.
-5. Document local admin access and generated YAML retrieval; only then proceed to AP-0021 Cloudflare/origin deployment validation.
+4. Implement the AP-0048 local operator launcher and fresh-browser/bootstrap, token isolation/cleanup, redirect refusal, security and route/contract drift tests. Complete application/group/YAML acceptance locally or in isolated staging; Cloudflare is not an AP-0048 prerequisite.
+5. After accepted AP-0048 application proof, AP-0021 establishes Cloudflare/origin routing and performs through-edge browser, authorization, YAML and SSE regressions before public release. Record this later edge proof under AP-0021 rather than reopening a circular AP-0048 prerequisite.
 
 ## Design Decision Proposal
 
