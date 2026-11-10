@@ -90,15 +90,17 @@ The first image build downloads dependencies and can take several minutes. `--wa
 
 - [Swagger UI](http://localhost:8081/swagger-ui/index.html)
 - [OpenAPI JSON](http://localhost:8081/v3/api-docs)
-- [Liveness](http://localhost:8081/actuator/health/liveness)
-- [Readiness](http://localhost:8081/actuator/health/readiness)
+- [Aggregate health used by Compose](http://localhost:8081/actuator/health)
+- [Liveness probe](http://localhost:8081/actuator/health/liveness)
+- [Readiness probe](http://localhost:8081/actuator/health/readiness)
 
 ```bash
+curl --fail http://localhost:8081/actuator/health
 curl --fail http://localhost:8081/actuator/health/liveness
 curl --fail http://localhost:8081/actuator/health/readiness
 ```
 
-Both health checks should return `UP`. The existing Swagger implementation is currently accessible without an admin token; the proposed protected, domain-grouped version is future AP-0048 work.
+Aggregate health must return `UP` for Compose to consider the application healthy; it includes the enabled storage-reconciliation gate. The narrower readiness probe checks `readinessState`, PostgreSQL (`r2dbc`) and Redis, while liveness checks `livenessState`. Both probes should also return `UP`, but readiness alone does not prove storage reconciliation succeeded. The existing Swagger implementation is currently accessible without an admin token; the proposed protected, domain-grouped version is future AP-0048 work.
 
 ### 5. View logs or stop
 
@@ -116,7 +118,7 @@ docker compose --project-name auto-parto -f docker-compose.yml -f docker-compose
 
 - **Required environment variable is missing:** complete the Compose variables listed above; legacy `DB_USER`, `DB_PASSWORD` and `URI` values do not replace the PostgreSQL role settings.
 - **PostgreSQL authentication, grants or migration failure:** keep existing-volume credentials, inspect the failed migration service and use the [development migration guide](docs/postgresql-development-cutover.md). Do not continue application rollout after a failed migration.
-- **Application stays unhealthy:** inspect application logs and readiness. Storage reconciliation deliberately keeps readiness down for missing active objects or a timeout; do not disable the guard to make startup appear successful. Confirm the mounted uploads directory is writable by the container's `spring` user.
+- **Application stays unhealthy:** inspect application logs and aggregate `/actuator/health`, which Compose uses. Storage reconciliation keeps its aggregate-health contribution down for missing active objects or a timeout; the narrower readiness probe omits this gate. Do not disable the guard to make startup appear successful. Confirm the mounted uploads directory is writable by the container's `spring` user.
 - **Missing `Duration` bean in `StorageReconciliationStartupGate`:** use a version containing the timeout-binding fix. The gate must bind `auto.parto.persistence.postgresql.cutover.storage-reconciliation.timeout` (default `30s`); adding an unrelated global `Duration` bean is not required.
 - **Docker daemon does not respond:** check Docker Desktop/Engine before retrying Compose.
 - **Port already allocated:** another local instance may already be using `8081` or `6379`; inspect `docker ps` before starting another checkout.
