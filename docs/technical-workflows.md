@@ -47,9 +47,9 @@ This technical catalogue maps the main business operations, background processin
 
 **Status:** Implemented.
 
-**Current main limitation:** `StorageReconciliationStartupGate` still requires an unbound `Duration` constructor dependency. With reconciliation enabled, startup requires the separate timeout-binding fix before the successful path below can complete. That fix is outside this documentation branch.
+The startup gate binds `auto.parto.persistence.postgresql.cutover.storage-reconciliation.timeout` with a `30s` default and requires no standalone `Duration` bean. Its health contribution stays DOWN until reconciliation succeeds, keeping aggregate `/actuator/health` and the Compose application healthcheck unhealthy. The separate `/actuator/health/readiness` group includes only `readinessState`, `r2dbc` and `redis`; it does not include the storage gate.
 
-Docker Compose starts the PostgreSQL profile. Redis starts in parallel with database initialization. The application waits for successful fixtures and healthy Redis; storage reconciliation then gates readiness.
+Docker Compose starts the PostgreSQL profile. Redis starts in parallel with database initialization. The application waits for successful fixtures and healthy Redis; storage reconciliation then gates aggregate/Compose health.
 
 ```mermaid
 flowchart TD
@@ -65,8 +65,8 @@ flowchart TD
     READY -->|No| STOP
     READY -->|Yes| APP["Start local Spring application"]
     APP --> RECON["Bounded storage reconciliation"]
-    RECON --> HEALTH{"Required health checks UP?"}
-    HEALTH -->|No| DOWN["Keep instance unready"]
+    RECON --> HEALTH{"Aggregate health used by Compose UP?"}
+    HEALTH -->|No| DOWN["Keep Compose application health DOWN"]
     HEALTH -->|Yes| UI["Swagger and application on localhost:8081"]
 ```
 
@@ -358,7 +358,7 @@ Sources: [ImageController.java](../src/main/java/auto/parto/api/ImageController.
 
 **Status:** Implemented when enabled.
 
-The asynchronous startup gate stays unready until bounded reconciliation succeeds. Stale PENDING reservations are recovered with guarded state changes; active/missing/orphan checks remain bounded. Orphan cleanup is report-only unless explicitly enabled and is never performed on an incomplete scan. The current report retains orphan keys observed before deletion, so even successful cleanup needs a new clean reconciliation report; the startup listener itself runs once, not as an automatic recurring repair loop.
+The asynchronous storage gate contributes DOWN to aggregate `/actuator/health` until bounded reconciliation succeeds, so Compose continues to report the application unhealthy. The narrower readiness probe does not include this gate. Stale PENDING reservations are recovered with guarded state changes; active/missing/orphan checks remain bounded. Orphan cleanup is report-only unless explicitly enabled and is never performed on an incomplete scan. The current report retains orphan keys observed before deletion, so even successful cleanup needs a new clean reconciliation report; the startup listener itself runs once, not as an automatic recurring repair loop.
 
 ```mermaid
 flowchart TD
@@ -366,9 +366,9 @@ flowchart TD
     STALE --> GUARD["Tombstone only still-pending rows; delete abandoned objects idempotently"]
     GUARD --> SCAN["Bounded active metadata and provider-key scans with overflow sentinel"]
     SCAN --> FULL{"Complete within bound and timeout?"}
-    FULL -->|No| DOWN["Keep readiness DOWN; inspect bounded report"]
+    FULL -->|No| DOWN["Keep aggregate and Compose health DOWN; inspect report"]
     FULL -->|Yes| DRIFT{"Missing or orphan objects?"}
-    DRIFT -->|No| UP["Gate UP"]
+    DRIFT -->|No| UP["Storage health contribution UP"]
     DRIFT -->|Yes| POLICY{"Approved orphan cleanup enabled and complete scan?"}
     POLICY -->|Yes| DELETE["Bounded sequential orphan deletion; evaluate report"]
     POLICY -->|No| DOWN

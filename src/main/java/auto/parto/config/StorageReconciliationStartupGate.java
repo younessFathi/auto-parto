@@ -2,6 +2,7 @@ package auto.parto.config;
 
 import auto.parto.service.StorageReconciliationService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.ReactiveHealthIndicator;
 import org.springframework.boot.context.event.ApplicationStartedEvent;
@@ -28,7 +29,8 @@ public final class StorageReconciliationStartupGate
     private final AtomicReference<Health> state = new AtomicReference<>(
             Health.down().withDetail("reason", "storage reconciliation pending").build());
 
-    public StorageReconciliationStartupGate(StorageReconciliationService reconciliation, Duration timeout) {
+    public StorageReconciliationStartupGate(StorageReconciliationService reconciliation,
+            @Value("${auto.parto.persistence.postgresql.cutover.storage-reconciliation.timeout:30s}") Duration timeout) {
         this.reconciliation = reconciliation;
         this.timeout = timeout;
     }
