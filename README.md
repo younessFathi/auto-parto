@@ -61,7 +61,7 @@ openssl rand -base64 32
 
 Keep `.env` local and Git-ignored. If reusing an existing database or Redis volume, use its established credentials. Changing `.env` does not rotate an existing PostgreSQL role password or rerun first-volume initialization; follow the [existing-volume procedure](docs/postgresql-development-cutover.md#local-postgresql-schema-migration) when roles or grants need repair. Preserve existing uploads and database volumes.
 
-`RESEND_API_KEY` needs a valid key for OTP email delivery; the example placeholder is sufficient only for starting and browsing the local application. Firebase components are disabled by this Compose profile. Production secrets and object-storage examples in `.env.example` are separate settings, not prerequisites for this local Compose workflow.
+OTP email delivery is disabled by default (`resend.enable=false`). To enable it, supply a valid `RESEND_API_KEY` and explicitly add `RESEND_ENABLE: "true"` to the application service environment in a Compose override. Setting `RESEND_ENABLE` in `.env` alone does not pass it through the base Compose file. The example API-key placeholder supports startup and browsing only, not email delivery. Firebase components are disabled by this Compose profile. Production secrets and object-storage examples in `.env.example` are separate settings, not prerequisites for this local Compose workflow.
 
 ### 3. Validate and start
 

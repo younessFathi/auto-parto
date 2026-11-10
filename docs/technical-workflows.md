@@ -47,7 +47,7 @@ This technical catalogue maps the main business operations, background processin
 
 **Status:** Implemented.
 
-**Current main limitation:** `StorageReconciliationStartupGate` still requires an unbound `Duration` constructor dependency. With reconciliation enabled, startup requires the separate timeout-binding fix before the successful path below can complete. That fix is outside this documentation branch.
+The startup gate binds `auto.parto.persistence.postgresql.cutover.storage-reconciliation.timeout` with a `30s` default. It requires no standalone `Duration` bean; reconciliation must still complete successfully before readiness becomes healthy.
 
 Docker Compose starts the PostgreSQL profile. Redis starts in parallel with database initialization. The application waits for successful fixtures and healthy Redis; storage reconciliation then gates readiness.
 
