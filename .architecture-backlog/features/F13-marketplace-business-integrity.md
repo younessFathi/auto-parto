@@ -11,7 +11,7 @@ The owner initially authorized feature creation on 2026-11-18 and subsequently e
 - [AP-0050 Trusted wallet funding](../tickets/AP-0050-trusted-wallet-funding.md): Require an approved funding authority/evidence for credits, instead of treating seller ownership and a request reference as funding proof. **In Progress**
 - [AP-0051 Offer decision authority](../tickets/AP-0051-offer-decision-authority.md): Define and enforce decision rights for buyer-created and seller-created offers, including whether creators may accept their own offers. **In Progress (implemented; final gates pending)**
 - [AP-0052 Accepted-offer marketplace journey](../tickets/AP-0052-accepted-offer-marketplace-journey.md): Decide which reservation, money and notification effects acceptance requires, then make that exact journey recoverable and consistent. **Blocked (AP-0051/AP-0053 implementation dependencies)**
-- [AP-0053 Notification preference enforcement](../tickets/AP-0053-notification-preference-enforcement.md): Make recipient channel/type/default policy consistent and effective at actual delivery, including queued/retried sends. **Ready**
+- [AP-0053 Notification preference enforcement](../tickets/AP-0053-notification-preference-enforcement.md): Make recipient channel/type/default policy consistent and effective at actual delivery, including queued/retried sends. **In Progress (implemented; final gates pending)**
 
 ## Approved Scope and Dependency Gates
 

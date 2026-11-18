@@ -415,7 +415,7 @@ Sources: [DeviceTokenService.java](../src/main/java/auto/parto/service/notificat
 
 **Status:** Implemented PostgreSQL preference APIs and query helpers.
 
-Current reads and updates use the canonical public UUID directly; the compatibility email argument is ignored, and the current repository does not perform email-key migration. A missing full preference record returns DTO defaults (SMS and marketing disabled); the channel/type query helpers separately return `true` when no record exists. The filter helper is available but is not automatically enforced by every direct FCM/SSE delivery path.
+Current reads and updates use the canonical public UUID directly; the compatibility email argument is ignored, and the current repository does not perform email-key migration. Full reads, boolean helpers and dispatch share DTO defaults: email/push and transactional categories on; SMS/marketing off. Every direct/durable SSE attempt, replay and direct FCM attempt evaluates current channel AND type. Push governs SSE and FCM. Unknown identifiers reject; lookup errors never grant consent. Authentication OTP bypasses optional preferences through its existing protected producer only; heartbeats carry no notification content.
 
 ```mermaid
 flowchart TD
@@ -428,7 +428,7 @@ flowchart TD
     OP -->|Update| SAVE["Save owner-scoped preferences in PostgreSQL"]
     SAVE --> DTO
     OP -->|Channel or type query| FLAG["Read stored field if present"]
-    FLAG --> VALUE["Return stored flag or true when record is absent"]
+    FLAG --> VALUE["Use same defaults; reject unknown identifiers"]
 ```
 
 Sources: [NotificationPreferencesService.java](../src/main/java/auto/parto/service/NotificationPreferencesService.java), [R2dbcNotificationPreferencesRepository.java](../src/main/java/auto/parto/persistence/R2dbcNotificationPreferencesRepository.java), [NotificationPreferencesController.java](../src/main/java/auto/parto/api/NotificationPreferencesController.java), [NotificationPreferenceFilter.java](../src/main/java/auto/parto/service/notification/NotificationPreferenceFilter.java).
@@ -496,14 +496,16 @@ Sources: [VersionedNotificationController.java](../src/main/java/auto/parto/api/
 
 **Status:** Implemented only when Firebase components are enabled.
 
-Endpoint roles are checked by callers. Current direct FCM controller/service paths do not demonstrate universal preference enforcement; the preference API/filter is a separate workflow. Sends use bounded in-flight requests, batch concurrency, timeouts, retry filtering and a circuit breaker. Provider success is not device receipt; terminal failure is returned to the caller and does not by itself prove a durable FCM queue exists.
+Endpoint roles are checked by callers. Each token send and provider retry resolves its active PostgreSQL owner and checks current push AND type preferences. Unknown types reject; owner/lookup failures never send. Sends use bounded in-flight requests, batch concurrency, timeouts, retry filtering and a circuit breaker. Provider success is not device receipt; terminal failure is returned to the caller and does not by itself prove a durable FCM queue exists.
 
 ```mermaid
 flowchart TD
     CALL["Authorized direct FCM caller"] --> TOKENS["Resolve active owner tokens"]
     TOKENS --> ANY{"Active tokens?"}
     ANY -->|No| NONE["Return no-active-token result"]
-    ANY -->|Yes| LIMIT["Bound batch concurrency and in-flight sends"]
+    ANY -->|Yes| PREFS{"Current owner and push plus type allow?"}
+    PREFS -->|No| SUPPRESS["Return suppressed result without provider send"]
+    PREFS -->|Yes| LIMIT["Bound batch concurrency and in-flight sends"]
     LIMIT --> BREAKER{"Circuit permits call?"}
     BREAKER -->|No| FAILED["Return safe provider failure result"]
     BREAKER -->|Yes| SEND["Firebase async send with timeout and cancellation"]
@@ -514,7 +516,7 @@ flowchart TD
     MARK --> FAILED
     INVALID -->|No| RETRY{"Retryable and retries remain?"}
     RETRY -->|Yes| BACKOFF["Bounded retry backoff"]
-    BACKOFF --> SEND
+    BACKOFF --> PREFS
     RETRY -->|No| FAILED
 ```
 
@@ -826,3 +828,18 @@ Sources: [agent-workflow.md](agent-workflow.md), [agent-handover-template.md](ag
 ## Offer decision authority (AP-0051)
 
 Both `/api/v1/offers/{offerId}/status` and `/offers/{offerId}/status` derive actors from authentication. Request-origin offers are decided by their buyer recipient; listing-origin offers by their seller recipient. Either participant can cancel PENDING offers. Nonparticipants and self-decisions receive 403; no admin override exists. Terminal/repeated/stale decisions receive 409 and require a fresh GET. Responses expose `version` for `expectedVersion`. PostgreSQL independently guards PENDING, version, active participants and the actor/origin matrix. Acceptance effects are introduced separately by AP-0052.
+
+## Notification delivery consent and recovery (AP-0053)
+
+Preference reads are bounded by five seconds. Each attempt uses one current preference snapshot; a concurrent update after that decision cannot recall an in-flight transport send. Durable SSE opt-outs atomically mark SUPPRESSED and record a suppression attempt under an unexpired owner lease, clear the lease, and remove Redis projection best effort. SUPPRESSED never means delivered or acknowledged and cannot be claimed/replayed; pending statistics exclude it. Historical malformed/unknown or recipient-mismatched payloads terminate safely as INVALID_NOTIFICATION.
+
+Lookup failures keep the durable intent PENDING with bounded retry, then EXHAUSTED after three failed attempts, using safe failure codes. They never suppress or acknowledge it. Replay reads only previously DISPATCHED events and applies current preferences; a failed replay lookup returns no content without rewriting prior delivery history. Legacy ephemeral broadcast checks each canonical subscriber independently; it has no durable queue, and failure emits no content. FCM retains its existing bounded provider/lookup retries and safe failed result; no new durable FCM queue is implied. No transport guarantees exactly-once delivery: stable IDs, bounded replay and client deduplication still apply.
+
+| Input type or code | Preference category |
+| --- | --- |
+| SELLER_RESPONSE / seller.response / OFFER_CREATED | newOffer |
+| NEW_SEARCH_POSTED, NEW_SEARCH_MATCH, MULTIPLE_MATCHES, INVENTORY_MATCH, URGENT_SEARCH and corresponding enum codes | searchMatch |
+| SEARCH_EXPIRED, SEARCH_FULFILLED and corresponding enum codes | orderUpdate |
+| newOffer, priceAlert, searchMatch, orderUpdate, marketing | same named category |
+
+Only existing SSE/FCM delivery paths are active here. Email/SMS boolean queries share the policy; this change adds no optional email/SMS provider. OTP email stays outside optional notifications.

@@ -1,6 +1,6 @@
 # AP-0053 Enforce Notification Preferences in Delivery
 
-- **Status:** Ready
+- **Status:** In Progress
 - **Type:** Bug Fix
 - **Feature:** [F13 Marketplace Business Integrity](../features/F13-marketplace-business-integrity.md)
 - **Linked Tickets:** [AP-0052 Accepted-Offer Journey](AP-0052-accepted-offer-marketplace-journey.md), [AP-0042 Delivery Reliability](AP-0042-notification-delivery-reliability.md), [AP-0043 Versioned SSE](AP-0043-versioned-sse-delivery-contract.md)
@@ -46,3 +46,7 @@ The approved preference policy is consistent across reads/helpers and all applic
 ## Owner Policy Gate Resolved (2026-11-18)
 
 The owner explicitly approved the policy recorded in [F13](../features/F13-marketplace-business-integrity.md#approved-owner-policies-2026-11-18). This ticket's implementation has not started in the AP-0050 increment. It remains a separate reviewed implementation increment; policy approval alone is not completion.
+
+## Implementation evidence
+
+Shared explicit type/channel mapping and defaults now gate direct/durable/retried SSE, replay, legacy per-subscriber broadcast and every FCM token attempt/retry. Current snapshot semantics permit completion of already in-flight sends; no admin bypass. V15 adds lease-guarded atomic SUPPRESSED outcome plus attempt, excluded from claims/stats/replay. Lookup failures remain durable pending with existing bounded exhaustion; direct FCM retains bounded retries/result reporting, without a new queue. Authentication OTP and content-free heartbeats remain independent. Focused verification passed 71 tests across preferences, SSE, replay, broadcast, FCM, PostgreSQL leases/suppression/outages and schema. All 44 Mermaid diagrams parse. Additional stored-policy matrix is included in final verification. Final full suite and independent review remain pending.

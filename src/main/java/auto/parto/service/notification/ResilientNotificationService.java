@@ -23,7 +23,10 @@ public class ResilientNotificationService {
     private final HybridNotificationStore notificationStore;
     private final String directWorkerId = "notification-direct-" + UUID.randomUUID();
 
-    public record DirectDeliveryResult(UUID publicId, boolean persisted, boolean delivered) {
+    public record DirectDeliveryResult(UUID publicId, boolean persisted, boolean delivered, boolean suppressed) {
+        public DirectDeliveryResult(UUID publicId, boolean persisted, boolean delivered) {
+            this(publicId, persisted, delivered, false);
+        }
     }
 
     public Mono<Boolean> sendNotification(NotificationRequest notification) {
@@ -31,6 +34,7 @@ public class ResilientNotificationService {
     }
 
     public Mono<DirectDeliveryResult> deliverDirect(NotificationRequest notification) {
+        NotificationPolicy.category(notification.type() == null ? null : notification.type().name());
         String userId = notification.userId();
         return notificationStore.storePendingRecord(notification)
                 .flatMap(record -> notificationStore.claimNotification(record.publicId(), directWorkerId,
@@ -51,7 +55,10 @@ public class ResilientNotificationService {
 
     private Mono<DirectDeliveryResult> deliverClaimed(String userId, NotificationRequest notification,
                                                        NotificationRecord claimed) {
-        return Mono.defer(() -> {
+        return notificationStore.canDeliver(notification).flatMap(allowed -> {
+            if (!allowed) return notificationStore.suppressDelivery(claimed.publicId(), directWorkerId, notification)
+                    .map(suppressed -> new DirectDeliveryResult(claimed.publicId(), true, false, suppressed));
+            return Mono.defer(() -> {
             boolean delivered = sseNotificationService.sendViaSSE(userId, claimed.publicId(), notification);
             if (delivered) {
                 return notificationStore.recordAttempt(claimed.publicId(), "SSE", "WRITTEN", null, null)
@@ -61,6 +68,7 @@ public class ResilientNotificationService {
                                 : scheduleDirectRetry(claimed, "ACKNOWLEDGEMENT_FAILED"));
             }
             return scheduleDirectRetry(claimed, "DELIVERY_UNAVAILABLE");
+        });
         }).onErrorResume(error -> scheduleDirectRetry(claimed, "DELIVERY_ERROR"));
     }
 
@@ -71,6 +79,10 @@ public class ResilientNotificationService {
                         Instant.now().plusSeconds(30), failureCode, 3)
                         .onErrorResume(error -> Mono.just(false)))
                 .thenReturn(new DirectDeliveryResult(claimed.publicId(), true, false));
+    }
+
+    public Mono<Boolean> canDeliver(String recipientId, NotificationRequest notification) {
+        return notificationStore.canDeliver(recipientId, notification);
     }
 
     public Sinks.Many<SseNotificationEvent> registerConnection(String userId) {

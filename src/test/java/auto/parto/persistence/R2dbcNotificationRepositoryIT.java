@@ -31,6 +31,7 @@ class R2dbcNotificationRepositoryIT {
 
     private DatabaseClient databaseClient;
     private NotificationRepository repository;
+    private TransactionalOperator transactions;
 
     @BeforeAll
     void migrateAndCreateRepository() {
@@ -41,8 +42,8 @@ class R2dbcNotificationRepositoryIT {
                 .option(USER, POSTGRES.getUsername()).option(PASSWORD, POSTGRES.getPassword())
                 .option(DATABASE, POSTGRES.getDatabaseName()).build());
         databaseClient = DatabaseClient.create(connectionFactory);
-        repository = new R2dbcNotificationRepository(databaseClient,
-                TransactionalOperator.create(new R2dbcTransactionManager(connectionFactory)));
+        transactions = TransactionalOperator.create(new R2dbcTransactionManager(connectionFactory));
+        repository = new R2dbcNotificationRepository(databaseClient, transactions);
     }
 
     @Test
@@ -196,6 +197,7 @@ class R2dbcNotificationRepositoryIT {
                 .map((row, metadata) -> row.get("public_id", UUID.class))
                 .all().collectList().block();
 
+        repository.markPendingForRecipient(owner).block();
         var actual = repository.findForRecipientAfter(owner, orderedIds.getFirst(), 100)
                 .map(NotificationRecord::publicId).collectList().block();
         assertThat(actual).containsExactlyElementsOf(orderedIds.subList(1, orderedIds.size()));
@@ -344,6 +346,94 @@ class R2dbcNotificationRepositoryIT {
                 Duration.ofSeconds(1), 101))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("limit must be between 1 and 100");
+    }
+
+    @Test
+    void suppressionIsLeaseGuardedAtomicTerminalAndNeverReplayedOrAcknowledged() {
+        UUID owner = UUID.randomUUID();
+        insertUser(owner).block();
+        NotificationRecord cursor = repository.enqueue(owner, "SELLER_RESPONSE", "{}").block();
+        NotificationRecord target = repository.enqueue(owner, "SELLER_RESPONSE", "{}").block();
+        repository.claimNotification(target.publicId(), "worker", Instant.now(), Duration.ofSeconds(30)).block();
+        assertThat(repository.suppressDelivery(target.publicId(), "other", "PREFERENCE_DISABLED").block()).isFalse();
+        assertThat(repository.suppressDelivery(target.publicId(), "worker", "PREFERENCE_DISABLED").block()).isTrue();
+        assertThat(repository.acknowledgeDelivery(target.publicId(), "worker").block()).isFalse();
+        assertThat(repository.suppressDelivery(target.publicId(), "worker", "PREFERENCE_DISABLED").block()).isFalse();
+        assertThat(repository.findPendingForRecipient(owner, 100).collectList().block())
+                .extracting(NotificationRecord::publicId).containsExactly(cursor.publicId());
+        assertThat(repository.findForRecipientAfter(owner, cursor.publicId(), 100).collectList().block()).isEmpty();
+        assertThat(databaseClient.sql("SELECT count(*) AS n FROM notification_attempts a JOIN notifications n ON n.id = a.notification_id WHERE n.public_id = :id AND a.status = 'SUPPRESSED'")
+                .bind("id", target.publicId()).map((r,m) -> r.get("n", Long.class)).one().block()).isEqualTo(1);
+        repository.claimNotification(cursor.publicId(), "expired", Instant.now(), Duration.ofSeconds(30)).block();
+        databaseClient.sql("UPDATE notifications SET lease_expires_at = CURRENT_TIMESTAMP - INTERVAL '1 second' WHERE public_id = :id")
+                .bind("id", cursor.publicId()).fetch().rowsUpdated().block();
+        assertThat(repository.suppressDelivery(cursor.publicId(), "expired", "PREFERENCE_DISABLED").block()).isFalse();
+    }
+
+    @Test
+    void realPreferencesSuppressQueuedDirectAndReplayWhileLookupOutagesStayRetryable() {
+        UUID owner = UUID.randomUUID();
+        insertUser(owner).block();
+        var prefs = new R2dbcNotificationPreferencesRepository(databaseClient, transactions);
+        var filter = new auto.parto.service.notification.NotificationPreferenceFilter(
+                new auto.parto.service.NotificationPreferencesService(prefs));
+        var redis = org.mockito.Mockito.mock(auto.parto.service.notification.RedisNotificationStore.class);
+        org.mockito.Mockito.when(redis.storePending(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(reactor.core.publisher.Mono.just(true));
+        org.mockito.Mockito.when(redis.removeNotification(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(reactor.core.publisher.Mono.just(1L));
+        org.mockito.Mockito.when(redis.replacePendingNotifications(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(reactor.core.publisher.Mono.empty());
+        var provider = new org.springframework.beans.factory.ObjectProvider<NotificationRepository>() {
+            public NotificationRepository getObject(Object... args) { return repository; }
+            public NotificationRepository getIfAvailable() { return repository; }
+            public NotificationRepository getIfUnique() { return repository; }
+        };
+        var store = new auto.parto.service.notification.HybridNotificationStore(redis, provider,
+                new com.fasterxml.jackson.databind.ObjectMapper(), filter);
+        var sse = org.mockito.Mockito.mock(auto.parto.service.notification.SSENotificationService.class);
+        var breaker = org.mockito.Mockito.mock(auto.parto.service.BasicCircuitBreaker.class);
+        var direct = new auto.parto.service.notification.ResilientNotificationService(breaker, sse, store);
+        var request = new auto.parto.dto.NotificationRequest("safe-1", owner.toString(),
+                auto.parto.enums.NotificationType.SELLER_RESPONSE, "safe", 1L);
+        org.mockito.Mockito.when(sse.sendViaSSE(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
+        var first = direct.deliverDirect(request).block();
+        assertThat(first.delivered()).isTrue();
+        var replay = direct.deliverDirect(new auto.parto.dto.NotificationRequest("safe-2", owner.toString(), request.type(), "safe", 2L)).block();
+        assertThat(store.replayNotifications(owner.toString(), first.publicId(), 100).collectList().block()).hasSize(1);
+        // A queued intent was accepted under defaults; a later type opt-out controls actual delivery.
+        var queued = store.storePendingRecord(new auto.parto.dto.NotificationRequest("safe-3", owner.toString(), request.type(), "safe", 3L)).block();
+        prefs.save(owner, new NotificationPreferencesRecord(null, owner, true, true, false,
+                false, true, true, true, false, null, null)).block();
+        assertThat(store.replayNotifications(owner.toString(), first.publicId(), 100).collectList().block()).isEmpty();
+        var restartedWorker = new auto.parto.service.notification.ResilientPendingNotificationService(store, sse, breaker);
+        assertThat(restartedWorker.deliverPendingOnConnect(owner.toString()).block()).isZero();
+        assertThat(repository.findPendingForRecipient(owner, 100).collectList().block()).isEmpty();
+        var suppressed = direct.deliverDirect(new auto.parto.dto.NotificationRequest("safe-4", owner.toString(), request.type(), "safe", 4L)).block();
+        assertThat(suppressed.suppressed()).isTrue();
+        assertThat(suppressed.delivered()).isFalse();
+        org.mockito.Mockito.verify(sse, org.mockito.Mockito.times(2)).sendViaSSE(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        assertThat(repository.claimNotification(queued.publicId(), "new-worker", Instant.now(), Duration.ofSeconds(30)).block()).isNull();
+        // A failed lookup is neither consent nor suppression. The same durable record is retried boundedly.
+        var unavailable = org.mockito.Mockito.mock(auto.parto.service.notification.NotificationPreferenceFilter.class);
+        org.mockito.Mockito.when(unavailable.canSend(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(reactor.core.publisher.Mono.error(new IllegalStateException("unavailable")));
+        var failingStore = new auto.parto.service.notification.HybridNotificationStore(redis, provider, new com.fasterxml.jackson.databind.ObjectMapper(), unavailable);
+        var pending = new auto.parto.service.notification.ResilientNotificationService(breaker, sse, failingStore)
+                .deliverDirect(new auto.parto.dto.NotificationRequest("safe-5", owner.toString(), request.type(), "safe", 5L)).block();
+        assertThat(pending.persisted()).isTrue();
+        assertThat(pending.delivered()).isFalse();
+        assertThat(pending.suppressed()).isFalse();
+        assertThat(repository.findPendingForRecipient(owner, 100).collectList().block()).extracting(NotificationRecord::publicId).containsExactly(pending.publicId());
+        var retryWorker = new auto.parto.service.notification.ResilientPendingNotificationService(failingStore, sse, breaker);
+        for (int attempt = 0; attempt < 2; attempt++) {
+            databaseClient.sql("UPDATE notifications SET next_attempt_at = CURRENT_TIMESTAMP WHERE public_id = :id")
+                    .bind("id", pending.publicId()).fetch().rowsUpdated().block();
+            assertThat(retryWorker.deliverPendingOnConnect(owner.toString()).block()).isZero();
+        }
+        assertThat(databaseClient.sql("SELECT status FROM notifications WHERE public_id = :id")
+                .bind("id", pending.publicId()).map((r,m) -> r.get("status", String.class)).one().block()).isEqualTo("EXHAUSTED");
+        org.mockito.Mockito.verify(sse, org.mockito.Mockito.times(2)).sendViaSSE(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
     private reactor.core.publisher.Mono<Void> insertUser(UUID publicId) {

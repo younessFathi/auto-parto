@@ -28,6 +28,12 @@ class ResilientNotificationServiceTest {
     @Mock
     private HybridNotificationStore notificationStore;
 
+    @org.junit.jupiter.api.BeforeEach
+    void allowPreferences() {
+        org.mockito.Mockito.lenient().when(notificationStore.canDeliver(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Mono.just(true));
+    }
+
     @Test
     void sendsUsingThePostgresqlPublicIdAfterDurablePersistence() {
         UUID userId = UUID.randomUUID();

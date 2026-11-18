@@ -220,7 +220,7 @@ flowchart TD
     D --> E["View updated preferences"]
 ```
 
-Saving preferences is supported. Preference enforcement is incomplete across delivery paths, so these choices are not currently a universal guarantee that messages will be suppressed.
+Messages require both the current channel and message-category choices. Push controls SSE and device push. Disabled choices suppress future delivery attempts, including queued messages; a send already in progress may finish. SMS and marketing default off. Authentication OTP remains available independently.
 
 Business rules and implementation reference: [supporting documentation](technical-workflows.md#notification-preferences).
 

@@ -16,5 +16,7 @@ public interface DeviceTokenRepository {
 
     Flux<DeviceTokenRecord> findActiveAfter(Instant lastSeenAt, UUID publicId, int limit);
 
+    Mono<UUID> findActiveOwner(String providerToken);
+
     Mono<Boolean> invalidate(String providerToken);
 }

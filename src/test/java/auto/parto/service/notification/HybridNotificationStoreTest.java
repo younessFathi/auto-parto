@@ -28,6 +28,7 @@ class HybridNotificationStoreTest {
     private NotificationRepository repository;
     @Mock
     private ObjectProvider<NotificationRepository> repositories;
+    @Mock private NotificationPreferenceFilter preferences;
 
     @Test
     void reportsFalseWhenPostgresqlPersistenceFails() {
@@ -56,7 +57,7 @@ class HybridNotificationStoreTest {
 
     private HybridNotificationStore store() {
         when(repositories.getIfAvailable()).thenReturn(repository);
-        return new HybridNotificationStore(redisStore, repositories, new ObjectMapper());
+        return new HybridNotificationStore(redisStore, repositories, new ObjectMapper(), preferences);
     }
 
     private static NotificationRequest request() {

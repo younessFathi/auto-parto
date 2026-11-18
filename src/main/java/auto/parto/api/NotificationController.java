@@ -46,8 +46,12 @@ public class NotificationController {
     @GetMapping(value = "/notifications/subscribe", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Deprecated(forRemoval = false)
     @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
-    public Flux<ServerSentEvent<NotificationRequest>> subscribe() {
+    public Flux<ServerSentEvent<NotificationRequest>> subscribe(
+            org.springframework.security.core.Authentication authentication) {
+        String recipient = CanonicalSecurity.requirePrincipal(authentication).getId();
         return notificationSink.asFlux()
+                .filterWhen(notification -> resilientNotificationService.canDeliver(recipient, notification)
+                        .onErrorReturn(false))
                 .map(this::createServerSentEvent)
                 .mergeWith(heartbeatFlux())
                 .doOnSubscribe(sub -> log.info(NEW_SUBSCRIBER_CONNECTED))
@@ -127,6 +131,8 @@ public class NotificationController {
             @RequestBody NotificationRequest notificationRequest,
             org.springframework.security.core.Authentication authentication) {
         CanonicalSecurity.requireRole(authentication, "ROLE_ADMIN");
+        auto.parto.service.notification.NotificationPolicy.category(
+                notificationRequest.type() == null ? null : notificationRequest.type().name());
         return Mono.fromRunnable(() -> {
             notificationSink.tryEmitNext(notificationRequest);
             log.info("Broadcast notification accepted");
@@ -140,6 +146,8 @@ public class NotificationController {
             @RequestBody NotificationRequest notificationRequest,
             org.springframework.security.core.Authentication authentication) {
         CanonicalSecurity.requireRole(authentication, "ROLE_ADMIN");
+        auto.parto.service.notification.NotificationPolicy.category(
+                notificationRequest.type() == null ? null : notificationRequest.type().name());
         String userId = notificationRequest.userId();
         log.info(SENDING_NOTIFICATION_TO_USER_TYPE, userId, notificationRequest.type());
         return Mono.defer(() -> {
@@ -153,6 +161,10 @@ public class NotificationController {
                                     if (result.delivered()) {
                                         log.info(NOTIFICATION_SUCCESSFULLY_DELIVERED_TO_VIA_SSE, userId);
                                         return Mono.just(ResponseEntity.ok(createSuccessResponse(userId)));
+                                    }
+                                    if (result.suppressed()) {
+                                        return Mono.just(ResponseEntity.ok(Map.<String, Object>of(
+                                                STATUS, "SUPPRESSED", USER_ID, userId, METHOD, "PREFERENCES")));
                                     }
                                     if (result.persisted()) {
                                         log.warn(DIRECT_DELIVERY_FAILED_FOR_FALLING_BACK_TO_STORAGE, userId);

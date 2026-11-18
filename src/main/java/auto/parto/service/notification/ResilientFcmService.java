@@ -30,6 +30,7 @@ public class ResilientFcmService {
 
     private final FirebaseMessaging firebaseMessaging;
     private final DeviceTokenService deviceTokenService;
+    private final NotificationPreferenceFilter preferences;
     private final CircuitBreaker circuitBreaker;
     private final ProviderCallTelemetry telemetry;
     private final Duration fcmTimeout;
@@ -40,6 +41,7 @@ public class ResilientFcmService {
 
     public ResilientFcmService(FirebaseMessaging firebaseMessaging,
                                DeviceTokenService deviceTokenService,
+                               NotificationPreferenceFilter preferences,
                                CircuitBreaker circuitBreaker,
                                ProviderCallTelemetry telemetry,
                                @Value("${auto.parto.providers.firebase.timeout:${firebase.messaging.timeout:10s}}") Duration fcmTimeout,
@@ -60,6 +62,7 @@ public class ResilientFcmService {
         }
         this.firebaseMessaging = firebaseMessaging;
         this.deviceTokenService = deviceTokenService;
+        this.preferences = preferences;
         this.circuitBreaker = circuitBreaker;
         this.telemetry = telemetry;
         this.fcmTimeout = fcmTimeout;
@@ -73,6 +76,7 @@ public class ResilientFcmService {
      * Send notification to a single user
      */
     public Mono<FcmDeliveryResult> sendToUser(String userId, FcmNotification notification) {
+        NotificationPolicy.category(notification.getData().get("type"));
         return deviceTokenService.getActiveTokens(userId)
                 // 1. Filter ensures that if the list is empty, the Mono becomes empty
                 .filter(tokens -> !tokens.isEmpty())
@@ -106,7 +110,7 @@ public class ResilientFcmService {
      */
     private Mono<FcmDeliveryResult> sendToAllTokens(String userId, List<String> tokens, FcmNotification notification) {
         return Flux.fromIterable(tokens)
-                .flatMap(token -> sendToToken(token, notification), batchConcurrency)
+                .flatMap(token -> sendToToken(token, userId, notification), batchConcurrency)
                 .collectList()
                 .map(results -> buildDeliveryResult(userId, tokens.size(), results));
     }
@@ -118,10 +122,14 @@ public class ResilientFcmService {
         boolean anySuccess = results.stream().anyMatch(FcmDeliveryResult::isSuccess);
 
         long failedCount = results.stream().filter(result -> !result.isSuccess()).count();
+        if (!results.isEmpty() && results.stream().allMatch(result -> "SUPPRESSED".equals(result.getStatus()))) {
+            return FcmDeliveryResult.suppressed(userId);
+        }
 
         return FcmDeliveryResult.builder()
                 .userId(userId)
                 .success(anySuccess)
+                .status(anySuccess ? (failedCount == 0 ? "DELIVERED" : "PARTIAL") : "FAILED")
                 .failedTokens(List.of())
                 .totalTokens(totalTokens)
                 .successfulTokens(totalTokens - Math.toIntExact(failedCount))
@@ -159,7 +167,13 @@ public class ResilientFcmService {
      * Send to single token with circuit breaker and retry
      */
     Mono<FcmDeliveryResult> sendToToken(String token, FcmNotification notification) {
-        Mono<FcmDeliveryResult> sendTask = telemetry.observe("firebase", "send_message", Mono.defer(() -> {
+        return sendToToken(token, null, notification);
+    }
+
+    private Mono<FcmDeliveryResult> sendToToken(String token, String expectedOwner, FcmNotification notification) {
+        String type = notification.getData().get("type");
+        NotificationPolicy.category(type);
+        Mono<FcmDeliveryResult> providerTask = telemetry.observe("firebase", "send_message", Mono.defer(() -> {
                     Message message = Message.builder()
                             .setToken(token)
                             .setNotification(com.google.firebase.messaging.Notification.builder()
@@ -176,7 +190,14 @@ public class ResilientFcmService {
                     return sendAsync(message)
                             .map(messageId -> FcmDeliveryResult.success(token, messageId))
                             .doFinally(ignored -> inFlight.release());
-                }), fcmTimeout)
+                }), fcmTimeout);
+        Mono<FcmDeliveryResult> sendTask = Mono.defer(() -> deviceTokenService.activeOwner(token)
+                .filter(owner -> expectedOwner == null || expectedOwner.equals(owner))
+                .flatMap(owner -> preferences.canSend(owner, "push", type))
+                .onErrorMap(error -> new PreferenceLookupException())
+                .switchIfEmpty(Mono.error(new PreferenceLookupException()))
+                .flatMap(allowed -> allowed ? providerTask
+                        : Mono.just(FcmDeliveryResult.suppressed(expectedOwner))))
                 .retryWhen(Retry.backoff(maxRetries, retryBackoff)
                         .filter(this::isRetryableError)
                         .doBeforeRetry(retry -> log.warn("Retrying FCM provider request attempt={}", retry.totalRetries() + 1)));
@@ -221,9 +242,11 @@ public class ResilientFcmService {
     }
 
 
+    private static class PreferenceLookupException extends RuntimeException { }
+
     private boolean isRetryableError(Throwable throwable) {
         // Retry on network errors, timeouts, server errors
-        if (throwable instanceof TimeoutException) {
+        if (throwable instanceof TimeoutException || throwable instanceof PreferenceLookupException) {
             return true;
         }
         return throwable instanceof FirebaseMessagingException &&
