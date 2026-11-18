@@ -1,6 +1,6 @@
 # AP-0051 Define and Enforce Offer Decision Authority
 
-- **Status:** Proposed
+- **Status:** Ready
 - **Type:** User Story
 - **Feature:** [F13 Marketplace Business Integrity](../features/F13-marketplace-business-integrity.md)
 - **Linked Tickets:** [AP-0009 Offers and Matching](AP-0009-offers-and-matching.md), [AP-0052 Accepted-Offer Journey](AP-0052-accepted-offer-marketplace-journey.md)
@@ -39,3 +39,8 @@ Scope is the policy matrix and enforcement of existing offer decisions. Countero
 ## Definition of Done
 
 The approved policy matrix is implemented for both origins; every criterion/scenario is automated and passing; compatibility, authorization and user/API documentation are updated; and all applicable suites pass. No criterion or scenario may be deferred or weakened.
+
+
+## Owner Policy Gate Resolved (2026-11-18)
+
+The owner explicitly approved the policy recorded in [F13](../features/F13-marketplace-business-integrity.md#approved-owner-policies-2026-11-18). This ticket's implementation has not started in the AP-0050 increment. It remains a separate reviewed implementation increment; policy approval alone is not completion.

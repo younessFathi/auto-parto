@@ -1,6 +1,6 @@
 # AP-0053 Enforce Notification Preferences in Delivery
 
-- **Status:** Proposed
+- **Status:** Ready
 - **Type:** Bug Fix
 - **Feature:** [F13 Marketplace Business Integrity](../features/F13-marketplace-business-integrity.md)
 - **Linked Tickets:** [AP-0052 Accepted-Offer Journey](AP-0052-accepted-offer-marketplace-journey.md), [AP-0042 Delivery Reliability](AP-0042-notification-delivery-reliability.md), [AP-0043 Versioned SSE](AP-0043-versioned-sse-delivery-contract.md)
@@ -41,3 +41,8 @@ Scope is preference interpretation and enforcement across existing applicable di
 ## Definition of Done
 
 The approved preference policy is consistent across reads/helpers and all applicable existing delivery paths; every criterion/scenario is automated and passing; suppression/recovery reporting and user/API documentation are accurate; no new provider or transport scope is introduced; and all applicable test/verification suites pass. No criterion or scenario may be deferred or weakened.
+
+
+## Owner Policy Gate Resolved (2026-11-18)
+
+The owner explicitly approved the policy recorded in [F13](../features/F13-marketplace-business-integrity.md#approved-owner-policies-2026-11-18). This ticket's implementation has not started in the AP-0050 increment. It remains a separate reviewed implementation increment; policy approval alone is not completion.

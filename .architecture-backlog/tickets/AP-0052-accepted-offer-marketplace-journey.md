@@ -1,6 +1,6 @@
 # AP-0052 Complete the Accepted-Offer Marketplace Journey
 
-- **Status:** Proposed
+- **Status:** Blocked
 - **Type:** User Story
 - **Feature:** [F13 Marketplace Business Integrity](../features/F13-marketplace-business-integrity.md)
 - **Linked Tickets:** [AP-0051 Offer Authority](AP-0051-offer-decision-authority.md), [AP-0050 Trusted Funding](AP-0050-trusted-wallet-funding.md), [AP-0053 Preference Enforcement](AP-0053-notification-preference-enforcement.md), [AP-0008 Part Listings](AP-0008-part-listings.md), [AP-0012 Notification Outbox](AP-0012-notification-outbox.md)
@@ -44,3 +44,8 @@ Exclude checkout/provider selection, payouts/refunds, shipping execution and a n
 ## Definition of Done
 
 The owner-approved journey and its required/excluded effects are explicit and implemented; selected dependencies are satisfied; every applicable matrix case, criterion and failure/retry/concurrency scenario is automated and passing; recovery and business/API documentation are complete; and all applicable suites pass. Conditional scenarios are resolved against the approved matrix, not silently deferred. No unapproved payment/provider/order/shipping scope is added.
+
+
+## Owner Policy Gate Resolved (2026-11-18)
+
+The owner explicitly approved the policy recorded in [F13](../features/F13-marketplace-business-integrity.md#approved-owner-policies-2026-11-18). This ticket's implementation has not started in the AP-0050 increment. AP-0051 authority and AP-0053 preference implementation are outstanding dependencies; wallet movement is explicitly excluded.

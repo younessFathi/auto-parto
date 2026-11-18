@@ -295,22 +295,30 @@ Sources: [PostgresqlOfferService.java](../src/main/java/auto/parto/service/Postg
 
 **Status:** Implemented PostgreSQL transaction.
 
-Amounts use integer minor units plus currency. A live idempotency key is scoped to owner and operation and must match the request fingerprint. The ledger is immutable; replay does not append another entry. Retained keys expire after seven days under bounded cleanup.
+Amounts use integer minor units plus currency. Seller owners may debit but cannot self-credit, including through a negative debit amount. Confirmed manual credits require an active administrator and active seller beneficiary; a globally unique permanent funding reference binds details and the original audited result. Ordinary wallet request keys remain owner/operation scoped and expire after seven days; funding-reference replay survives their cleanup. Completed funding evidence and the ledger are immutable.
 
 ```mermaid
 flowchart TD
-    REQUEST["Authorized owner supplies amount, currency and Idempotency-Key"] --> VALIDATE["Validate request and derive fingerprint"]
-    VALIDATE --> TX["Begin PostgreSQL transaction"]
-    TX --> LOCK["Prepare wallet and lock owner-currency row"]
-    LOCK --> KEY{"Existing live idempotency record?"}
-    KEY -->|Same fingerprint| REPLAY["Return stored result; no second mutation"]
-    KEY -->|Different fingerprint| CONFLICT["409 conflict; rollback"]
-    KEY -->|No| RESERVE["Reserve key"]
+    REQUEST["Seller owner requests positive debit amount and key"] --> VALIDATE["Validate input, role and canonical identity"]
+    ADMIN["Administrator confirms manual funding"] --> VALIDATE
+    VALIDATE --> TX["Begin shared PostgreSQL transaction"]
+    TX --> KIND{"Confirmed funding?"}
+    KIND -->|Yes| IDENTITIES["Lock and verify active persisted ADMIN and seller"]
+    IDENTITIES --> REFERENCE{"Permanent funding reference?"}
+    REFERENCE -->|Same completed details| FUNDREPLAY["Return original funding snapshot"]
+    REFERENCE -->|Conflicting details| CONFLICT["409 conflict; rollback"]
+    REFERENCE -->|New| EVIDENCE["Reserve unique funding reference"]
+    EVIDENCE --> LOCK["Prepare wallet and lock only its balance row"]
+    KIND -->|No, debit| LOCK
+    LOCK --> KEY{"Existing live wallet request key?"}
+    KEY -->|Conflicting details| CONFLICT
+    KEY -->|Same details| REPLAY["Replay debit result; refuse reused key for new funding"]
+    KEY -->|No| RESERVE["Reserve wallet request key"]
     RESERVE --> FUNDS{"Arithmetic and balance checks pass?"}
-    FUNDS -->|No| FAIL["Safe insufficient-balance or validation error; rollback"]
-    FUNDS -->|Yes| APPLY["Append audit and ledger; update minor-unit balance"]
-    APPLY --> RESULT["Store idempotent result and commit"]
-    RESULT --> DTO["Return wallet result"]
+    FUNDS -->|No| FAIL["Safe error; rollback all writes"]
+    FUNDS -->|Yes| APPLY["Append ledger and audit; update balance and request result"]
+    APPLY --> RESULT["Complete new funding evidence and actual-admin audit if applicable"]
+    RESULT --> COMMIT["Commit all required writes together"]
 ```
 
 Sources: [R2dbcWalletRepository.java](../src/main/java/auto/parto/persistence/R2dbcWalletRepository.java), [wallet-ledger.md](wallet-ledger.md), [money.md](money.md).

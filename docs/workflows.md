@@ -147,25 +147,27 @@ Business rules and implementation reference: [supporting documentation](technica
 
 ## Credit or debit a seller wallet
 
-A seller requests a credit or debit to their own wallet and receives the resulting balance.
+A seller can request a debit from their own wallet. Credits require an active administrator to record confirmed manual funding for an active seller.
 
 ```mermaid
 flowchart TD
-    A["Seller requests a wallet credit or debit"] --> B{"Signed in as the wallet's seller owner?"}
-    B -->|No| C["Deny the request"]
-    B -->|Yes| D["Provide amount, currency and request reference"]
-    D --> E{"Request reference already used for this operation?"}
-    E -->|Same request retained| F["Return the original result without applying it again"]
-    E -->|Different request retained| G["Report a conflicting request reference"]
-    E -->|New request| H{"Valid amount and sufficient funds for a debit?"}
-    H -->|No| I["Decline the change and keep the balance"]
-    H -->|Yes| J["Update the balance and record the transaction internally"]
-    J --> K["Return the mutation's resulting balance and currency"]
+    A["Seller requests a debit"] --> B{"Authenticated seller owns the wallet?"}
+    B -->|No| DENY["Deny the request"]
+    B -->|Yes| D["Provide positive debit amount, currency and request key"]
+    D --> CHECK{"Valid debit and sufficient funds?"}
+    CHECK -->|No| FAIL["Decline; keep balance unchanged"]
+    CHECK -->|Yes| DEBIT["Apply debit once while its request key is retained"]
+    ADMIN["Active administrator confirms recorded manual funding"] --> REF["Provide unique funding reference, beneficiary, minor-unit amount and currency"]
+    REF --> TRUST{"Authority, active seller and evidence details valid?"}
+    TRUST -->|No| FAIL
+    TRUST -->|Yes| CREDIT["Credit once for this permanent funding reference"]
+    DEBIT --> RESULT["Return recorded balance result"]
+    CREDIT --> RESULT
 ```
 
-The request reference (`Idempotency-Key`) is required and scoped to the authenticated seller and operation. Replaying the same retained request returns its original result, which may differ from the wallet's current balance after later changes. Repeat protection applies while the reference is retained. The ledger is internal; there is no separate wallet balance or transaction-history browsing API.
+Seller self-credit routes return 403; a negative debit cannot become a credit. Debit request keys use the existing retention policy. Funding references are globally unique and permanent: identical reference/details returns the original result across request-key expiry or restart, while changed details conflict. Replays can return a historical balance. The ledger remains internal; no separate wallet balance/history browsing API is implied.
 
-Credits and debits are account operations. A credit is not proof of an external payment, and offer acceptance does not automatically move money.
+Manual funding records an authorized administrator's confirmation; it is not a new payment provider or proof of external settlement. Offer acceptance does not automatically move money.
 
 Business rules and implementation reference: [supporting documentation](wallet-ledger.md).
 

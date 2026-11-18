@@ -33,7 +33,7 @@ class PostgresqlSchemaIT {
                 .locations("classpath:db/migration")
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(13);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(14);
         assertThat(flyway.migrate().migrationsExecuted).isZero();
 
         try (Connection connection = POSTGRES.createConnection("")) {
@@ -47,6 +47,7 @@ class PostgresqlSchemaIT {
                     "offers",
                     "wallets",
                     "wallet_ledger",
+                    "wallet_funding_events",
                     "otp_challenges",
                     "files",
                     "device_tokens",
@@ -93,6 +94,7 @@ class PostgresqlSchemaIT {
             assertThat(constraintExists(connection, "part_listings", "part_listings_delivery_status_chk")).isTrue();
             assertThat(constraintExists(connection, "part_listings", "part_listings_storage_status_chk")).isTrue();
             assertThat(triggerExists(connection, "wallet_ledger_immutable_trigger")).isTrue();
+            assertThat(triggerExists(connection, "wallet_funding_immutable_trigger")).isTrue();
             assertThat(triggerExists(connection, "audit_records_immutable_trigger")).isTrue();
             assertThat(triggerExists(connection, "app_users_audit_trigger")).isTrue();
             assertThat(triggerExists(connection, "app_users_initial_audit_trigger")).isTrue();

@@ -1,6 +1,6 @@
 # AP-0050 Require Trusted Wallet Funding Authority
 
-- **Status:** Proposed
+- **Status:** In Progress
 - **Type:** Technical Enhancement
 - **Feature:** [F13 Marketplace Business Integrity](../features/F13-marketplace-business-integrity.md)
 - **Linked Tickets:** [AP-0011 Wallet Ledger](AP-0011-wallet-ledger.md), [AP-0052 Accepted-Offer Journey](AP-0052-accepted-offer-marketplace-journey.md)
@@ -39,3 +39,10 @@ Scope is this trust boundary and its business-event replay protection, not a rew
 ## Definition of Done
 
 The complete approved trust-boundary scope is implemented; every criterion and scenario is automated and passing; audit/recovery, API compatibility and relevant documentation are complete; no provider/checkout scope was silently added; and all applicable test/verification suites pass. No criterion or scenario may be deferred or weakened.
+
+
+## Approved Policy and Implementation Tracking
+
+Owner approved administrator-only manual confirmed funding on 2026-11-18. The new admin endpoint requires an existing canonical ADMIN, persisted ACTIVE ADMIN and ACTIVE SELLER beneficiary, explicit confirmation and a globally unique recorded reference. The authority is a trusted human attestation, not independently verified external settlement. Seller add aliases deny credits; strictly positive debit input and a service-level positive-mutation rejection prevent sign/alias bypass. References and immutable recorded results are permanent, distinct from request-key retention.
+
+Implementation adds V14 evidence/result storage, one shared transaction with the wallet ledger and actual-admin funding audit, DTO/API/service boundary, and tests for authorization, conflicts, global reference races, expiry/restart replay, rollback/retry, immutability and overflow. Focused verification passed: 44 tests including PostgreSQL funding/wallet concurrency, rollback, schema and runtime grants. All 44 documentation Mermaid diagrams parse. Full clean unit/final verification and independent exact-candidate approval remain pending; status stays In Progress until those gates pass. No live identity, credential, service, data or provider changes are performed.

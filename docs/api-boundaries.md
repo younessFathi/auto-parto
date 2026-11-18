@@ -47,7 +47,8 @@ settings cannot silently make the documentation stale.
 | `marketplace` | `PUT /api/v1/buyers/{id}/deactivate`; `POST /api/v1/sellers/create`; `GET /api/v1/sellers/{id}`; `POST /api/v1/sellers/{id}/deactivate` | Buyer alias `/customers/{id}/deactivate` and seller aliases `/seller/create`, `/seller/{id}`, `/seller/{id}/deactivate` sunset 2027-04-01. IDs are canonical user public UUIDs; self-deactivation requires role and ownership checks. |
 | `marketplace` | `GET /pieces/{customerId}`; `GET /pieces/{pieceId}/detail` | Deprecated read-only compatibility operations until 2027-04-01. No mutation is supported. IDs resolve as public UUIDs; do not copy obsolete example IDs into OpenAPI. |
 | `profiles` | `PUT /api/v1/profiles/buyer`; `PUT /api/v1/profiles/seller` | Aliases `PUT /customers/profile` and `PUT /seller/profile` sunset 2027-04-01. Requires the matching authenticated owner role. |
-| `wallets` | `POST /api/v1/sellers/{id}/wallet/add`; `POST /api/v1/sellers/{id}/wallet/deduct` | Aliases `/seller/{id}/wallet/add` and `/seller/{id}/wallet/deduct` sunset 2027-04-01. Seller role and owner checks apply. Preserve amount/currency and idempotency semantics. |
+| `wallets` | `POST /api/v1/sellers/{id}/wallet/deduct` | Alias `/seller/{id}/wallet/deduct` sunsets 2027-04-01. Seller owner only; strictly positive major-unit debit amount and Idempotency-Key required. Seller `/wallet/add` routes are retained only to deny self-credit with 403. |
+| `wallets` | `POST /api/v1/admin/wallet-funding` | Canonical ADMIN plus persisted ACTIVE ADMIN identity; manual confirmed reference and ACTIVE SELLER beneficiary. Positive minor-unit amount, supported currency and request key required. Permanent globally unique funding reference/replay contract: [wallet-ledger.md](wallet-ledger.md). |
 | `files` | `POST /api/v1/files/requests/{requestId}`; `POST /api/v1/files/listings/{listingId}` | Request upload requires buyer role; listing upload requires seller role; resource ownership applies to both. `/images/**` and folder browsing are retired and are not operations. |
 | `files` | `GET /api/v1/files/{fileId}` | Requires authentication and a UUID identifying an ACTIVE file. Current reads do not enforce caller ownership or a buyer/seller role; this inventory records existing runtime behavior without changing access policy. |
 | `notifications` | `GET, PUT /api/v1/notifications/preferences`; `GET /api/v1/notifications/preferences/channel/{channel}`; `GET /api/v1/notifications/preferences/type/{type}` | Requires authentication and uses the authenticated user's preferences. |
@@ -72,7 +73,7 @@ POST  /api/v1/files/requests/{requestPublicId}
 GET   /api/v1/files/{filePublicId}
 PUT   /api/v1/profiles/buyer
 PUT   /api/v1/profiles/seller
-POST  /api/v1/sellers/{sellerPublicId}/wallet/add
+POST  /api/v1/admin/wallet-funding
 GET   /api/v1/notifications/stream
 ```
 
