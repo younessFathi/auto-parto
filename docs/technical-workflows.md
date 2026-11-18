@@ -482,7 +482,13 @@ sequenceDiagram
         else Connected
             API->>Registry: Subscribe to live sink before replay
             API->>DB: Replay at most 100 rows after cursor if supplied
-            API-->>Client: Merge live events replay and heartbeat
+            Note over API: Hold live content during replay with bounded buffer
+            alt Replay succeeds
+                API-->>Client: Replay then release held live content
+            else Lookup storage error or buffer overflow
+                API-->>Client: Terminate stream without later content
+            end
+            Note over API,Client: Content-free heartbeats continue while replay waits
             Client->>Client: Deduplicate by persisted event UUID
             Client->>API: Disconnect or cancel
             API->>Registry: Remove only the expected connection
@@ -833,7 +839,7 @@ Both `/api/v1/offers/{offerId}/status` and `/offers/{offerId}/status` derive act
 
 Preference reads are bounded by five seconds. Each attempt uses one current preference snapshot; a concurrent update after that decision cannot recall an in-flight transport send. Durable SSE opt-outs atomically mark SUPPRESSED and record a suppression attempt under an unexpired owner lease, clear the lease, and remove Redis projection best effort. SUPPRESSED never means delivered or acknowledged and cannot be claimed/replayed; pending statistics exclude it. Historical malformed/unknown or recipient-mismatched payloads terminate safely as INVALID_NOTIFICATION.
 
-Lookup failures keep the durable intent PENDING with bounded retry, then EXHAUSTED after three failed attempts, using safe failure codes. They never suppress or acknowledge it. Replay reads only previously DISPATCHED events and applies current preferences; a failed replay lookup returns no content without rewriting prior delivery history. Legacy ephemeral broadcast checks each canonical subscriber independently; it has no durable queue, and failure emits no content. FCM retains its existing bounded provider/lookup retries and safe failed result; no new durable FCM queue is implied. No transport guarantees exactly-once delivery: stable IDs, bounded replay and client deduplication still apply.
+Lookup failures keep the durable intent PENDING with bounded retry, then EXHAUSTED after three failed attempts, using safe failure codes. They never suppress or acknowledge it. Replay reads only previously DISPATCHED events and applies current preferences; a failed replay lookup terminates the stream before later replay/live content can advance the cursor, without rewriting prior delivery history. Live content waits during the bounded replay page (100 queued events plus one held); overflow fails the stream. Cancellation/replacement discards held content and cancels replay. Genuine opt-outs may be skipped, and content-free heartbeats remain independent. Legacy ephemeral broadcast checks each canonical subscriber independently; it has no durable queue, and failure emits no content. FCM retains its existing bounded provider/lookup retries and safe failed result; no new durable FCM queue is implied. No transport guarantees exactly-once delivery: stable IDs, bounded replay and client deduplication still apply.
 
 | Input type or code | Preference category |
 | --- | --- |

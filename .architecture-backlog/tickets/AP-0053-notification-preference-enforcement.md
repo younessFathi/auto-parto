@@ -50,3 +50,25 @@ The owner explicitly approved the policy recorded in [F13](../features/F13-marke
 ## Implementation evidence
 
 Shared explicit type/channel mapping and defaults now gate direct/durable/retried SSE, replay, legacy per-subscriber broadcast and every FCM token attempt/retry. Current snapshot semantics permit completion of already in-flight sends; no admin bypass. V15 adds lease-guarded atomic SUPPRESSED outcome plus attempt, excluded from claims/stats/replay. Lookup failures remain durable pending with existing bounded exhaustion; direct FCM retains bounded retries/result reporting, without a new queue. Authentication OTP and content-free heartbeats remain independent. Focused verification passed 71 tests across preferences, SSE, replay, broadcast, FCM, PostgreSQL leases/suppression/outages and schema. All 44 Mermaid diagrams parse. Additional stored-policy matrix is included in final verification. Final full suite and independent review remain pending.
+
+
+### Replay review correction (2026-11-18)
+
+Independent review found that a failed preference lookup could skip an unresolved
+DISPATCHED event, emit a later replay/live event and advance the client's cursor.
+The correction propagates replay lookup/storage failures to terminate the whole
+stream; only explicit opt-outs intentionally skip rows. Live content is held
+until replay completes, bounded to 100 queued events plus one held event;
+overflow terminates the stream. Cancellation and replacement discard held content
+and cancel replay, while content-free heartbeats remain independent. Reconnect
+uses the last received cursor; stable IDs, bounded replay and client deduplication
+retain their existing at-least-once contract, without global ordering guarantees.
+
+Regression coverage includes failing A/allowed B, original-cursor recovery,
+intentional opt-out, delayed success/error, buffer overflow, cancellation,
+replacement and heartbeat lifecycle. The coordinator confirmed the new regression
+suite failed against the original implementation (13 tests, seven failures, no
+compilation errors). Corrected targeted verification passed 36 tests, including
+active replay cancellation on overflow and live-source failure, plus existing SSE
+compatibility checks. Full verification and renewed independent review are pending.
+The earlier full-suite evidence applies only to the prior candidate.

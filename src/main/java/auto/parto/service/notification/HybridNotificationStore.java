@@ -166,12 +166,9 @@ public class HybridNotificationStore {
         return parseUserId(userId)
                 .flatMapMany(owner -> postgresqlRepository.findForRecipientAfter(owner, afterEventId, limit)
                         .concatMap(record -> deserialize(record)
-                                .filterWhen(notification -> canDeliver(notification).onErrorReturn(false))
+                                .filterWhen(this::canDeliver)
                                 .map(notification -> new ClaimedNotification(record.publicId(), notification))))
-                .onErrorResume(error -> {
-                    log.warn("SSE notification replay is unavailable");
-                    return Flux.empty();
-                });
+                .doOnError(error -> log.warn("SSE notification replay is unavailable"));
     }
 
     public Mono<Boolean> validateReplayCursor(String userId, UUID cursor) {
