@@ -33,7 +33,7 @@ class PostgresqlSchemaIT {
                 .locations("classpath:db/migration")
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(15);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(16);
         assertThat(flyway.migrate().migrationsExecuted).isZero();
 
         try (Connection connection = POSTGRES.createConnection("")) {

@@ -10,7 +10,7 @@
 
 As a marketplace participant, I want explicitly defined decision rights for both offer origins so acceptance/rejection represents the intended party's business consent.
 
-The current API creates a seller offer for a buyer request and a buyer offer for a seller listing ([`OfferController.java:26–40`](../../src/main/java/auto/parto/api/OfferController.java)). [`PostgresqlOfferService.java:98–106`](../../src/main/java/auto/parto/service/PostgresqlOfferService.java) permits only the seller participant to accept/reject any pending offer, including an offer that seller created; either participant can cancel. Record this as observed behavior, not a claim that recipient-only or seller-only decisions are already approved.
+At the initial assessment, the API created a seller offer for a buyer request and a buyer offer for a seller listing ([`OfferController.java:26–40`](../../src/main/java/auto/parto/api/OfferController.java)). [`PostgresqlOfferService.java:98–106`](../../src/main/java/auto/parto/service/PostgresqlOfferService.java) permitted only the seller participant to accept/reject any pending offer, including an offer that seller created; either participant can cancel. Record this as observed behavior, not a claim that recipient-only or seller-only decisions are already approved.
 
 Scope is the policy matrix and enforcement of existing offer decisions. Counteroffers, negotiation history, checkout, payment and a new order aggregate are excluded.
 

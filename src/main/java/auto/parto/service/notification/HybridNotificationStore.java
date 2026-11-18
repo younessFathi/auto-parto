@@ -165,7 +165,7 @@ public class HybridNotificationStore {
         }
         return parseUserId(userId)
                 .flatMapMany(owner -> postgresqlRepository.findForRecipientAfter(owner, afterEventId, limit)
-                        .flatMap(record -> deserialize(record)
+                        .concatMap(record -> deserialize(record)
                                 .filterWhen(notification -> canDeliver(notification).onErrorReturn(false))
                                 .map(notification -> new ClaimedNotification(record.publicId(), notification))))
                 .onErrorResume(error -> {

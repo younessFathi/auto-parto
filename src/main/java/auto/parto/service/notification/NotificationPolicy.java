@@ -24,7 +24,7 @@ public final class NotificationPolicy {
             case "searchmatch", "new_search_match", "new_search_posted", "search.new",
                  "multiple_matches", "search.matches.multiple", "inventory_match", "inventory.match",
                  "urgent_search", "search.urgent" -> "searchmatch";
-            case "orderupdate", "search_expired", "search.expired", "search_fulfilled", "search.fulfilled" -> "orderupdate";
+            case "offer_accepted", "offer.accepted", "orderupdate", "search_expired", "search.expired", "search_fulfilled", "search.fulfilled" -> "orderupdate";
             case "marketing" -> "marketing";
             default -> throw new IllegalArgumentException("unsupported notification type");
         };

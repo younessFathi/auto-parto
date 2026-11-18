@@ -63,7 +63,7 @@ public class PostgresqlOfferService {
                         return Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN,
                                 "Only the offer recipient may accept or reject"));
                     }
-                    if (!allowed(existing.status(), target)) {
+                    if (!allowed(existing.status(), target) && !(target == OfferStatus.ACCEPTED && "ACCEPTED".equals(existing.status()))) {
                         return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT,
                                 "Offer cannot transition from " + existing.status() + " to " + target));
                     }
@@ -111,6 +111,6 @@ public class PostgresqlOfferService {
         return new OfferResponse(offer.publicId(), offer.partRequestPublicId(), offer.partListingPublicId(),
                 offer.buyerUserPublicId(), offer.sellerUserPublicId(), offer.amountMinor(), offer.currency(),
                 offer.status(), offer.negotiable(), offer.deliveryAmountMinor(), offer.deliveryMode(),
-                offer.createdAt(), offer.updatedAt(), offer.version());
+                offer.createdAt(), offer.updatedAt(), offer.version(), offer.acceptancePublicId());
     }
 }

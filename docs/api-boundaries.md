@@ -80,3 +80,5 @@ GET   /api/v1/notifications/stream
 All routes use the safe API error contract. Missing resources return 404, malformed UUIDs
 and invalid request values return 400, unauthenticated requests return 401, and ownership
 or role failures return 403.
+
+Offer responses expose `version` and nullable `acceptancePublicId`. Acceptance with a receipt completes the reservation/request disposition and two durable notification intents; it does not promise delivery or payment. See [offer contract](api-offers.md).

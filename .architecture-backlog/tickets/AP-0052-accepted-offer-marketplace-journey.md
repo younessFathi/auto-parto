@@ -1,6 +1,6 @@
 # AP-0052 Complete the Accepted-Offer Marketplace Journey
 
-- **Status:** Blocked
+- **Status:** In Progress
 - **Type:** User Story
 - **Feature:** [F13 Marketplace Business Integrity](../features/F13-marketplace-business-integrity.md)
 - **Linked Tickets:** [AP-0051 Offer Authority](AP-0051-offer-decision-authority.md), [AP-0050 Trusted Funding](AP-0050-trusted-wallet-funding.md), [AP-0053 Preference Enforcement](AP-0053-notification-preference-enforcement.md), [AP-0008 Part Listings](AP-0008-part-listings.md), [AP-0012 Notification Outbox](AP-0012-notification-outbox.md)
@@ -10,7 +10,7 @@
 
 As a buyer or seller, I want accepting an offer to produce the explicitly agreed marketplace outcome so reservation, account effects and participant updates cannot silently disagree with the accepted decision.
 
-[`PostgresqlOfferService.java:53–69`](../../src/main/java/auto/parto/service/PostgresqlOfferService.java) currently validates a decision and calls the offer repository to update status. That path does not orchestrate listing reservation, wallet movement or notification intent. Current acceptance is therefore an offer status decision, not proof of a completed purchase, reservation or payment. The uncovered work is to select and consistently implement required effects; this ticket does not presume they are all desired.
+[`PostgresqlOfferService.java:53–69`](../../src/main/java/auto/parto/service/PostgresqlOfferService.java) at the initial assessment validated a decision and calls the offer repository to update status. That original path did not orchestrate listing reservation, wallet movement or notification intent. Acceptance at that assessment was therefore an offer status decision, not proof of a completed purchase, reservation or payment. The uncovered work is to select and consistently implement required effects; this ticket does not presume they are all desired.
 
 Exclude checkout/provider selection, payouts/refunds, shipping execution and a new order aggregate. Reference existing boundaries without reopening their Done tickets or redesigning their underlying engines.
 
@@ -49,3 +49,7 @@ The owner-approved journey and its required/excluded effects are explicit and im
 ## Owner Policy Gate Resolved (2026-11-18)
 
 The owner explicitly approved the policy recorded in [F13](../features/F13-marketplace-business-integrity.md#approved-owner-policies-2026-11-18). This ticket's implementation has not started in the AP-0050 increment. AP-0051 authority and AP-0053 preference implementation are outstanding dependencies; wallet movement is explicitly excluded.
+
+## Implementation evidence
+
+Approved dependencies AP-0051/AP-0053 are implemented in preceding commits. AP-0052 now coordinates target→offer locks with creation, recipient/active identity/version/availability validation, reservation or request closure, competitor rejection, two OFFER_ACCEPTED notification/outbox intents and immutable public acceptance receipt in one transaction. No Redis/provider call occurs inside it; no money moves. Replays with original/resulting version reuse the persisted offer receipt; unsupported/legacy receipt-less acceptance conflicts. V16 adds receipt storage and unique accepted-per-target indexes; legacy conflicting data fails visibly. Focused verification passed 56 tests, including 18 acceptance integration cases with both origins, competing accepts, create/cancel/manual-target races, six injected rollback boundaries, replay/restart, immutable receipts, unchanged wallets, and postcommit Redis/transport recovery with orderUpdate opt-out. Additional asynchronous replay ordering regression is included for final verification. Final full suite and independent review remain pending.

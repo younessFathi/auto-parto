@@ -170,7 +170,7 @@ class R2dbcOfferRepositoryIT {
         OfferRecord offer = repository.createForRequest(seller, request, 9000, "MAD", false, 0, null).block();
         assertThat(offer.version()).isZero();
         StepVerifier.create(repository.updateStatus(offer.publicId(), seller, "ACCEPTED", 0, Instant.now()))
-                .verifyComplete();
+                .expectErrorMatches(e -> e.getMessage().contains("403")).verify();
         StepVerifier.create(repository.updateStatus(offer.publicId(), UUID.randomUUID(), "CANCELLED", 0, Instant.now()))
                 .verifyComplete();
         StepVerifier.create(repository.updateStatus(offer.publicId(), buyer, "REJECTED", 9, Instant.now()))
@@ -186,7 +186,7 @@ class R2dbcOfferRepositoryIT {
         var restarted = new R2dbcOfferRepository(DatabaseClient.create(cf),
                 TransactionalOperator.create(new R2dbcTransactionManager(cf)));
         StepVerifier.create(restarted.updateStatus(offer.publicId(), buyer, "ACCEPTED", 1, Instant.now()))
-                .verifyComplete();
+                .expectErrorMatches(e -> e.getMessage().contains("409")).verify();
         OfferRecord pending = repository.createForRequest(seller, request, 9000, "MAD", false, 0, null).block();
         databaseClient.sql("""
                 WITH audit AS (INSERT INTO audit_records (public_id, action, entity_type, entity_id)
@@ -197,7 +197,7 @@ class R2dbcOfferRepositoryIT {
                 """)
                 .bind("id", buyer).fetch().rowsUpdated().block();
         StepVerifier.create(repository.updateStatus(pending.publicId(), buyer, "ACCEPTED", 0, Instant.now()))
-                .verifyComplete();
+                .expectErrorMatches(e -> e.getMessage().contains("409")).verify();
     }
 
     private reactor.core.publisher.Mono<Void> insertPartiesAndRequest(UUID buyer, UUID seller, UUID request) {
@@ -216,8 +216,8 @@ class R2dbcOfferRepositoryIT {
                 .then(insertUser(seller, "SELLER"))
                 .then(databaseClient.sql("""
                         INSERT INTO part_listings (public_id, seller_user_id, name, condition, category,
-                                                   amount_minor, currency)
-                        SELECT :listing, id, 'Listing', 'NEW', 'CAR', 9000, 'MAD'
+                                                   amount_minor, currency, status, business_status)
+                        SELECT :listing, id, 'Listing', 'NEW', 'CAR', 9000, 'MAD', 'PUBLISHED', 'PUBLISHED'
                         FROM app_users WHERE public_id = :seller
                         """)
                         .bind("listing", listing).bind("seller", seller).fetch().rowsUpdated().then());

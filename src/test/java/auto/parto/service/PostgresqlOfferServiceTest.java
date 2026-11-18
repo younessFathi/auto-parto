@@ -23,7 +23,7 @@ class PostgresqlOfferServiceTest {
     private final UUID target = UUID.randomUUID();
     private final UUID offer = UUID.randomUUID();
     private final OfferRecord record = new OfferRecord(offer, target, null, buyer, seller,
-            1000, "MAD", "PENDING", true, 0, null, Instant.now(), Instant.now(), 0);
+            1000, "MAD", "PENDING", true, 0, null, Instant.now(), Instant.now(), 0, null);
 
     @Test
     void createsRequestOfferUsingAuthenticatedSeller() {
@@ -78,7 +78,7 @@ class PostgresqlOfferServiceTest {
     void authorityMatrix(boolean requestOrigin, boolean buyerActor, String targetStatus, boolean permitted) {
         OfferRecord persisted = new OfferRecord(offer, requestOrigin ? target : null,
                 requestOrigin ? null : target, buyer, seller, 1000, "MAD", "PENDING", true,
-                0, null, Instant.now(), Instant.now(), 7);
+                0, null, Instant.now(), Instant.now(), 7, null);
         UUID actor = buyerActor ? buyer : seller;
         when(repository.findByPublicId(offer)).thenReturn(Mono.just(persisted));
         if (permitted) {
@@ -101,11 +101,26 @@ class PostgresqlOfferServiceTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.updateStatus(offer, UUID.randomUUID(),
                 new UpdateOfferStatusRequest("ACCEPTED", 0L)).block()).hasMessageContaining("403");
         OfferRecord terminal = new OfferRecord(offer, target, null, buyer, seller, 1000, "MAD",
-                "REJECTED", true, 0, null, Instant.now(), Instant.now(), 1);
+                "REJECTED", true, 0, null, Instant.now(), Instant.now(), 1, null);
         when(repository.findByPublicId(offer)).thenReturn(Mono.just(terminal));
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.updateStatus(offer, buyer,
                 new UpdateOfferStatusRequest("REJECTED", 0L)).block()).hasMessageContaining("409");
         verify(repository, never()).updateStatus(any(), any(), any(), anyLong(), any());
+    }
+
+    @Test
+    void acceptedRetryDelegatesReceiptValidationWithoutAllowingCreatorReplay() {
+        UUID receipt = UUID.randomUUID();
+        OfferRecord accepted = new OfferRecord(offer, target, null, buyer, seller, 1000, "MAD",
+                "ACCEPTED", true, 0, null, Instant.now(), Instant.now(), 1, receipt);
+        when(repository.findByPublicId(offer)).thenReturn(Mono.just(accepted));
+        when(repository.updateStatus(eq(offer), eq(buyer), eq("ACCEPTED"), eq(0L), any()))
+                .thenReturn(Mono.just(accepted));
+        assertThat(service.updateStatus(offer, buyer, new UpdateOfferStatusRequest("ACCEPTED", 0L))
+                .block().acceptancePublicId()).isEqualTo(receipt);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.updateStatus(offer, seller,
+                new UpdateOfferStatusRequest("ACCEPTED", 0L)).block()).hasMessageContaining("403");
+        verify(repository, times(1)).updateStatus(any(), any(), any(), anyLong(), any());
     }
 
     private static ObjectProvider<OfferRepository> provider(OfferRepository repository) {

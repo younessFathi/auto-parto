@@ -17,5 +17,6 @@ public record OfferRecord(
         String deliveryMode,
         Instant createdAt,
         Instant updatedAt,
-        long version) {
+        long version,
+        UUID acceptancePublicId) {
 }

@@ -55,6 +55,23 @@ class HybridNotificationStoreTest {
                 .verifyComplete();
     }
 
+    @Test
+    void replayPreservesCursorOrderAcrossAsynchronousPreferenceReads() throws Exception {
+        HybridNotificationStore store = store();
+        NotificationRequest first = request();
+        NotificationRequest second = new NotificationRequest("request-2", first.userId(), first.type(), "safe", 2L);
+        UUID cursor = UUID.randomUUID(), firstId = UUID.randomUUID(), secondId = UUID.randomUUID();
+        var mapper = new ObjectMapper();
+        when(repository.findForRecipientAfter(UUID.fromString(first.userId()), cursor, 100))
+                .thenReturn(reactor.core.publisher.Flux.just(
+                        new NotificationRecord(firstId, UUID.fromString(first.userId()), first.type().name(), mapper.writeValueAsString(first), "DISPATCHED", Instant.now(), Instant.now()),
+                        new NotificationRecord(secondId, UUID.fromString(first.userId()), second.type().name(), mapper.writeValueAsString(second), "DISPATCHED", Instant.now(), Instant.now())));
+        when(preferences.canSend(first.userId(), "push", first.type().name()))
+                .thenReturn(Mono.delay(java.time.Duration.ofMillis(30)).map(ignored -> true), Mono.just(true));
+        StepVerifier.create(store.replayNotifications(first.userId(), cursor, 100).map(HybridNotificationStore.ClaimedNotification::publicId))
+                .expectNext(firstId, secondId).verifyComplete();
+    }
+
     private HybridNotificationStore store() {
         when(repositories.getIfAvailable()).thenReturn(repository);
         return new HybridNotificationStore(redisStore, repositories, new ObjectMapper(), preferences);

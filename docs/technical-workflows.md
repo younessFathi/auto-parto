@@ -276,7 +276,7 @@ Sources: [MarketplaceMatchingService.java](../src/main/java/auto/parto/service/M
 
 **Status:** Implemented.
 
-A seller can create an offer for a request; a buyer can create one for a listing. Reads/status updates require a participant. Only the recipient accepts/rejects: buyer for a request-origin offer, seller for a listing-origin offer. Either participant may cancel a pending offer. Expected-version checks reject races. Accepting an offer does not automatically transfer wallet funds or imply a listing transition.
+A seller can create an offer for a request; a buyer can create one for a listing. Reads/status updates require a participant. Only the recipient accepts/rejects: buyer for a request-origin offer, seller for a listing-origin offer. Either participant may cancel a pending offer. Expected-version checks reject races. Acceptance atomically reserves its PUBLISHED listing or closes its OPEN request, rejects pending competitors and records two participant notification intents plus an immutable receipt. It never transfers wallet funds.
 
 ```mermaid
 stateDiagram-v2
@@ -827,7 +827,7 @@ Sources: [agent-workflow.md](agent-workflow.md), [agent-handover-template.md](ag
 
 ## Offer decision authority (AP-0051)
 
-Both `/api/v1/offers/{offerId}/status` and `/offers/{offerId}/status` derive actors from authentication. Request-origin offers are decided by their buyer recipient; listing-origin offers by their seller recipient. Either participant can cancel PENDING offers. Nonparticipants and self-decisions receive 403; no admin override exists. Terminal/repeated/stale decisions receive 409 and require a fresh GET. Responses expose `version` for `expectedVersion`. PostgreSQL independently guards PENDING, version, active participants and the actor/origin matrix. Acceptance effects are introduced separately by AP-0052.
+Both `/api/v1/offers/{offerId}/status` and `/offers/{offerId}/status` derive actors from authentication. Request-origin offers are decided by their buyer recipient; listing-origin offers by their seller recipient. Either participant can cancel PENDING offers. Nonparticipants and self-decisions receive 403; no admin override exists. Terminal/repeated/stale decisions receive 409 and require a fresh GET, except receipt-backed acceptance replay described below. Responses expose `version` for `expectedVersion`. PostgreSQL independently guards PENDING, version, active participants and the actor/origin matrix. AP-0052 adds atomic acceptance effects and receipt-backed acceptance replay: the authorized recipient may retry with the original or resulting version. Other repeated/terminal/stale decisions remain 409.
 
 ## Notification delivery consent and recovery (AP-0053)
 
@@ -839,7 +839,7 @@ Lookup failures keep the durable intent PENDING with bounded retry, then EXHAUST
 | --- | --- |
 | SELLER_RESPONSE / seller.response / OFFER_CREATED | newOffer |
 | NEW_SEARCH_POSTED, NEW_SEARCH_MATCH, MULTIPLE_MATCHES, INVENTORY_MATCH, URGENT_SEARCH and corresponding enum codes | searchMatch |
-| SEARCH_EXPIRED, SEARCH_FULFILLED and corresponding enum codes | orderUpdate |
+| SEARCH_EXPIRED, SEARCH_FULFILLED, OFFER_ACCEPTED and corresponding enum codes | orderUpdate |
 | newOffer, priceAlert, searchMatch, orderUpdate, marketing | same named category |
 
 Only existing SSE/FCM delivery paths are active here. Email/SMS boolean queries share the policy; this change adds no optional email/SMS provider. OTP email stays outside optional notifications.

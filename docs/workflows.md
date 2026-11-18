@@ -102,7 +102,7 @@ stateDiagram-v2
     Closed --> [*]
 ```
 
-The seller manages their own listing. Reservation is a listing decision; accepting an offer does not automatically reserve it. Delivery progress is separate.
+The seller manages their own listing. The seller can reserve a listing manually, and accepting a listing offer reserves it automatically. Delivery progress remains separate.
 
 Business rules and implementation reference: [supporting documentation](api-part-listings.md).
 
@@ -136,12 +136,19 @@ flowchart TD
     B["Seller makes an offer for a request"] --> C
     C --> D{"Participant action?"}
     D -->|Recipient accepts| E["Offer accepted"]
+    E --> TARGET{"What was offered on?"}
+    TARGET -->|Seller listing| RESERVED["Listing reserved"]
+    TARGET -->|Buyer request| CLOSED["Request closed"]
+    RESERVED --> COMPETING["Competing pending offers rejected"]
+    CLOSED --> COMPETING
+    COMPETING --> UPDATES["Updates recorded for buyer and seller"]
+    UPDATES --> NEXT["Arrange payment and delivery separately"]
     D -->|Recipient rejects| F["Offer rejected"]
     D -->|Either participant cancels| G["Offer cancelled"]
     D -->|No action| C
 ```
 
-The recipient decides: the buyer for a seller-created request offer, and the seller for a buyer-created listing offer. Creators cannot accept/reject their own offer. Either participant may cancel a pending offer; administrators have no override. Acceptance records the decision; payment, reservation and delivery are separate.
+The recipient decides: the buyer for a seller-created request offer, and the seller for a buyer-created listing offer. Creators cannot accept/reject their own offer. Either participant may cancel a pending offer; administrators have no override. Acceptance reserves its listing or closes its request and rejects competing pending offers for that target. Both participants receive notification intents, delivered according to their preferences. Payment and delivery remain separate.
 
 Business rules and implementation reference: [supporting documentation](technical-workflows.md#offer-creation-and-decisions).
 
@@ -243,7 +250,7 @@ flowchart TD
     J["Member reconnects with a valid previous notification reference"] --> K["Return available recent updates after that reference"]
 ```
 
-A successful send does not prove the member read the message. Catch-up is limited; it is not an unlimited notification history. Marketplace matching and offer actions are not assumed to create notifications automatically.
+A successful send does not prove the member read the message. Catch-up is limited; it is not an unlimited notification history. Marketplace matching remains separate. Offer acceptance records an update for both participants; preferences or delivery outages may prevent immediate receipt.
 
 Business rules and implementation reference: [supporting documentation](notifications-outbox.md).
 
