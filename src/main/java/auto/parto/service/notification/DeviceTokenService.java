@@ -174,6 +174,11 @@ public class DeviceTokenService {
         return request;
     }
 
+    public Mono<String> activeOwner(String token) {
+        if (postgresqlRepository == null) return Mono.empty();
+        return postgresqlRepository.findActiveOwner(token).map(java.util.UUID::toString);
+    }
+
     public String maskToken(String token) {
         if (token == null || token.length() < 10) {
             return "***";

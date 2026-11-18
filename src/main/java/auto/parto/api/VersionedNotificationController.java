@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import reactor.core.Exceptions;
+import reactor.core.publisher.BufferOverflowStrategy;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
@@ -30,6 +32,7 @@ import java.util.UUID;
 public class VersionedNotificationController {
 
     private static final int REPLAY_LIMIT = 100;
+    private static final int LIVE_REPLAY_BUFFER_LIMIT = 100;
     private static final Duration HEARTBEAT_INTERVAL = Duration.ofSeconds(30);
 
     private final ResilientNotificationService connectionService;
@@ -72,17 +75,33 @@ public class VersionedNotificationController {
     private Flux<ServerSentEvent<NotificationRequest>> buildStream(String userId, UUID cursor,
                                                                      Sinks.Many<SseNotificationEvent> sink) {
         return Flux.defer(() -> sink.asFlux().publish(shared -> {
-                    Mono<Void> sinkClosed = shared.ignoreElements().then();
-                    Flux<ServerSentEvent<NotificationRequest>> live = shared.map(VersionedNotificationController::toSse);
-                    Flux<ServerSentEvent<NotificationRequest>> replay = cursor == null
-                            ? Flux.empty()
+                    Sinks.One<Void> replayFinished = Sinks.one();
+                    Sinks.One<Void> streamFailure = Sinks.one();
+                    Mono<Void> sinkClosed = shared.ignoreElements()
+                            .doOnError(streamFailure::tryEmitError)
+                            .onErrorResume(error -> Mono.never())
+                            .then();
+                    // Hold one item and at most 100 queued live events until replay succeeds.
+                    // Overflow fails the whole stream rather than advancing past unresolved replay.
+                    Flux<ServerSentEvent<NotificationRequest>> live = shared
+                            .onBackpressureBuffer(LIVE_REPLAY_BUFFER_LIMIT,
+                                    ignored -> streamFailure.tryEmitError(Exceptions.failWithOverflow(
+                                            "Live notification replay buffer exceeded")),
+                                    BufferOverflowStrategy.ERROR)
+                            .concatMap(event -> replayFinished.asMono().thenReturn(event), 0)
+                            .map(VersionedNotificationController::toSse);
+                    Flux<ServerSentEvent<NotificationRequest>> replay = (cursor == null
+                            ? Flux.<ServerSentEvent<NotificationRequest>>empty()
                             : notificationStore.replayNotifications(userId, cursor, REPLAY_LIMIT)
-                                .takeUntilOther(sinkClosed)
-                                .map(event -> toSse(new SseNotificationEvent(event.publicId(), event.notification())));
-                    Flux<ServerSentEvent<NotificationRequest>> heartbeat = heartbeat()
-                            .takeUntilOther(sinkClosed);
-                    // Subscribe to the live sink through the returned chain before replay starts.
-                    return Flux.merge(live, replay, heartbeat);
+                                .map(event -> toSse(new SseNotificationEvent(event.publicId(), event.notification()))))
+                            .doOnComplete(() -> replayFinished.tryEmitEmpty());
+                    // Register live before starting replay; replay errors cancel live and heartbeats.
+                    // Close/replacement cancels the entire chain without releasing held content.
+                    // Fail through a merge lane so all active sources are cancelled immediately;
+                    // a buffered error can otherwise wait behind the unresolved replay gate.
+                    Flux<ServerSentEvent<NotificationRequest>> failure = streamFailure.asMono()
+                            .thenMany(Flux.empty());
+                    return Flux.merge(live, replay, heartbeat(), failure).takeUntilOther(sinkClosed);
                 }))
                 .doFinally(signal -> connectionService.unregisterConnection(userId, sink));
     }

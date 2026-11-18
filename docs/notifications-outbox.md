@@ -28,6 +28,15 @@ recipient; malformed, missing, or foreign cursors return 400. Clients deduplicat
 because a live event and a replayed event may overlap. A full instance connection
 registry returns 429.
 
+Replay checks current push/type preferences in row order. An explicit opt-out skips
+that row; a preference/storage error terminates the stream instead of skipping
+unresolved content and advancing its cursor. During replay, live content waits in
+a bounded buffer (100 queued events plus one held event); overflow also terminates
+the stream. Clients reconnect with their last received event ID. Disconnect or
+connection replacement discards held content and cancels replay; content-free
+heartbeats continue while replay is pending. This protects the bounded replay
+phase, without promising global live/replay ordering or exactly-once delivery.
+
 The durable notification row and its SSE transport attempt remain separate. Writing to
 the socket records a bounded `WRITTEN` attempt but does not mean the client received or
 processed the event. The current connection registry is process-local, so deployments

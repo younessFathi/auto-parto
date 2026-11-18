@@ -87,6 +87,15 @@ public class R2dbcDeviceTokenRepository implements DeviceTokenRepository {
     }
 
     @Override
+    public Mono<UUID> findActiveOwner(String providerToken) {
+        requireText(providerToken, "providerToken");
+        return databaseClient.sql("""
+                SELECT owner.public_id FROM device_tokens token JOIN app_users owner ON owner.id = token.owner_user_id
+                WHERE token.provider_token = :token AND token.status = 'ACTIVE' AND owner.status = 'ACTIVE'
+                """).bind("token", providerToken).map((row, meta) -> row.get("public_id", UUID.class)).one();
+    }
+
+    @Override
     public Mono<Boolean> invalidate(String providerToken) {
         requireText(providerToken, "providerToken");
         return transactions.transactional(findByProviderToken(providerToken)

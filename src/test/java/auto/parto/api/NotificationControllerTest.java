@@ -44,9 +44,9 @@ class NotificationControllerTest {
 
 
     @Test
-    @WithMockUser
     void subscribe_returnsSseStream() {
-        webTestClient.get()
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.buyer("user-1")))
+                .mutate().responseTimeout(java.time.Duration.ofSeconds(35)).build().get()
                 .uri("/notifications/subscribe")
                 .exchange()
                 .expectStatus().isOk()
@@ -202,4 +202,36 @@ class NotificationControllerTest {
                 .exchange()
                 .expectStatus().isUnauthorized();
     }
+    @Test
+    @WithMockUser
+    void legacySubscribeRequiresCanonicalPrincipalForPreferenceEvaluation() {
+        webTestClient.get().uri("/notifications/subscribe").exchange().expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void onlineOptOutReportsSuppressedWithoutClaimingDeliveredOrQueuingAnotherIntent() {
+        NotificationRequest notification = new NotificationRequest("safe", "user-1",
+                auto.parto.enums.NotificationType.SELLER_RESPONSE, "safe", 1L);
+        when(resilientNotificationService.hasActiveConnection("user-1")).thenReturn(true);
+        when(resilientNotificationService.deliverDirect(any())).thenReturn(Mono.just(
+                new ResilientNotificationService.DirectDeliveryResult(java.util.UUID.randomUUID(), true, false, true)));
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.admin("admin-1")))
+                .post().uri("/api/v1/notifications/send").contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(notification).exchange().expectStatus().isOk()
+                .expectBody().jsonPath("$.status").isEqualTo("SUPPRESSED");
+        verify(pendingNotificationService, never()).addPendingNotification(any());
+    }
+
+    @Test
+    void missingTypeCannotEnterAdminSendOrBroadcast() {
+        NotificationRequest notification = new NotificationRequest("safe", "user-1", null, "safe", 1L);
+        for (String route : new String[]{"/api/v1/notifications/send", "/api/v1/notifications/broadcast"}) {
+            webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.admin("admin-1")))
+                    .post().uri(route).contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(notification).exchange().expectStatus().isBadRequest();
+        }
+        verify(resilientNotificationService, never()).deliverDirect(any());
+        verify(pendingNotificationService, never()).addPendingNotification(any());
+    }
+
 }

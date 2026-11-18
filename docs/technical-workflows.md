@@ -276,13 +276,13 @@ Sources: [MarketplaceMatchingService.java](../src/main/java/auto/parto/service/M
 
 **Status:** Implemented.
 
-A seller can create an offer for a request; a buyer can create one for a listing. Reads/status updates require a participant. Only a seller participant accepts/rejects; either participant may cancel a pending offer. Expected-version checks reject races. Accepting an offer does not automatically transfer wallet funds or imply a listing transition.
+A seller can create an offer for a request; a buyer can create one for a listing. Reads/status updates require a participant. Only the recipient accepts/rejects: buyer for a request-origin offer, seller for a listing-origin offer. Either participant may cancel a pending offer. Expected-version checks reject races. Acceptance atomically reserves its PUBLISHED listing or closes its OPEN request, rejects pending competitors and records two participant notification intents plus an immutable receipt. It never transfers wallet funds.
 
 ```mermaid
 stateDiagram-v2
     [*] --> PENDING: Create offer for available request or listing
-    PENDING --> ACCEPTED: Seller participant accepts
-    PENDING --> REJECTED: Seller participant rejects
+    PENDING --> ACCEPTED: Recipient accepts
+    PENDING --> REJECTED: Recipient rejects
     PENDING --> CANCELLED: Either participant cancels
     ACCEPTED --> [*]
     REJECTED --> [*]
@@ -295,22 +295,30 @@ Sources: [PostgresqlOfferService.java](../src/main/java/auto/parto/service/Postg
 
 **Status:** Implemented PostgreSQL transaction.
 
-Amounts use integer minor units plus currency. A live idempotency key is scoped to owner and operation and must match the request fingerprint. The ledger is immutable; replay does not append another entry. Retained keys expire after seven days under bounded cleanup.
+Amounts use integer minor units plus currency. Seller owners may debit but cannot self-credit, including through a negative debit amount. Confirmed manual credits require an active administrator and active seller beneficiary; a globally unique permanent funding reference binds details and the original audited result. Ordinary wallet request keys remain owner/operation scoped and expire after seven days; funding-reference replay survives their cleanup. Completed funding evidence and the ledger are immutable.
 
 ```mermaid
 flowchart TD
-    REQUEST["Authorized owner supplies amount, currency and Idempotency-Key"] --> VALIDATE["Validate request and derive fingerprint"]
-    VALIDATE --> TX["Begin PostgreSQL transaction"]
-    TX --> LOCK["Prepare wallet and lock owner-currency row"]
-    LOCK --> KEY{"Existing live idempotency record?"}
-    KEY -->|Same fingerprint| REPLAY["Return stored result; no second mutation"]
-    KEY -->|Different fingerprint| CONFLICT["409 conflict; rollback"]
-    KEY -->|No| RESERVE["Reserve key"]
+    REQUEST["Seller owner requests positive debit amount and key"] --> VALIDATE["Validate input, role and canonical identity"]
+    ADMIN["Administrator confirms manual funding"] --> VALIDATE
+    VALIDATE --> TX["Begin shared PostgreSQL transaction"]
+    TX --> KIND{"Confirmed funding?"}
+    KIND -->|Yes| IDENTITIES["Lock and verify active persisted ADMIN and seller"]
+    IDENTITIES --> REFERENCE{"Permanent funding reference?"}
+    REFERENCE -->|Same completed details| FUNDREPLAY["Return original funding snapshot"]
+    REFERENCE -->|Conflicting details| CONFLICT["409 conflict; rollback"]
+    REFERENCE -->|New| EVIDENCE["Reserve unique funding reference"]
+    EVIDENCE --> LOCK["Prepare wallet and lock only its balance row"]
+    KIND -->|No, debit| LOCK
+    LOCK --> KEY{"Existing live wallet request key?"}
+    KEY -->|Conflicting details| CONFLICT
+    KEY -->|Same details| REPLAY["Replay debit result; refuse reused key for new funding"]
+    KEY -->|No| RESERVE["Reserve wallet request key"]
     RESERVE --> FUNDS{"Arithmetic and balance checks pass?"}
-    FUNDS -->|No| FAIL["Safe insufficient-balance or validation error; rollback"]
-    FUNDS -->|Yes| APPLY["Append audit and ledger; update minor-unit balance"]
-    APPLY --> RESULT["Store idempotent result and commit"]
-    RESULT --> DTO["Return wallet result"]
+    FUNDS -->|No| FAIL["Safe error; rollback all writes"]
+    FUNDS -->|Yes| APPLY["Append ledger and audit; update balance and request result"]
+    APPLY --> RESULT["Complete new funding evidence and actual-admin audit if applicable"]
+    RESULT --> COMMIT["Commit all required writes together"]
 ```
 
 Sources: [R2dbcWalletRepository.java](../src/main/java/auto/parto/persistence/R2dbcWalletRepository.java), [wallet-ledger.md](wallet-ledger.md), [money.md](money.md).
@@ -407,7 +415,7 @@ Sources: [DeviceTokenService.java](../src/main/java/auto/parto/service/notificat
 
 **Status:** Implemented PostgreSQL preference APIs and query helpers.
 
-Current reads and updates use the canonical public UUID directly; the compatibility email argument is ignored, and the current repository does not perform email-key migration. A missing full preference record returns DTO defaults (SMS and marketing disabled); the channel/type query helpers separately return `true` when no record exists. The filter helper is available but is not automatically enforced by every direct FCM/SSE delivery path.
+Current reads and updates use the canonical public UUID directly; the compatibility email argument is ignored, and the current repository does not perform email-key migration. Full reads, boolean helpers and dispatch share DTO defaults: email/push and transactional categories on; SMS/marketing off. Every direct/durable SSE attempt, replay and direct FCM attempt evaluates current channel AND type. Push governs SSE and FCM. Unknown identifiers reject; lookup errors never grant consent. Authentication OTP bypasses optional preferences through its existing protected producer only; heartbeats carry no notification content.
 
 ```mermaid
 flowchart TD
@@ -420,7 +428,7 @@ flowchart TD
     OP -->|Update| SAVE["Save owner-scoped preferences in PostgreSQL"]
     SAVE --> DTO
     OP -->|Channel or type query| FLAG["Read stored field if present"]
-    FLAG --> VALUE["Return stored flag or true when record is absent"]
+    FLAG --> VALUE["Use same defaults; reject unknown identifiers"]
 ```
 
 Sources: [NotificationPreferencesService.java](../src/main/java/auto/parto/service/NotificationPreferencesService.java), [R2dbcNotificationPreferencesRepository.java](../src/main/java/auto/parto/persistence/R2dbcNotificationPreferencesRepository.java), [NotificationPreferencesController.java](../src/main/java/auto/parto/api/NotificationPreferencesController.java), [NotificationPreferenceFilter.java](../src/main/java/auto/parto/service/notification/NotificationPreferenceFilter.java).
@@ -474,7 +482,13 @@ sequenceDiagram
         else Connected
             API->>Registry: Subscribe to live sink before replay
             API->>DB: Replay at most 100 rows after cursor if supplied
-            API-->>Client: Merge live events replay and heartbeat
+            Note over API: Hold live content during replay with bounded buffer
+            alt Replay succeeds
+                API-->>Client: Replay then release held live content
+            else Lookup storage error or buffer overflow
+                API-->>Client: Terminate stream without later content
+            end
+            Note over API,Client: Content-free heartbeats continue while replay waits
             Client->>Client: Deduplicate by persisted event UUID
             Client->>API: Disconnect or cancel
             API->>Registry: Remove only the expected connection
@@ -488,14 +502,16 @@ Sources: [VersionedNotificationController.java](../src/main/java/auto/parto/api/
 
 **Status:** Implemented only when Firebase components are enabled.
 
-Endpoint roles are checked by callers. Current direct FCM controller/service paths do not demonstrate universal preference enforcement; the preference API/filter is a separate workflow. Sends use bounded in-flight requests, batch concurrency, timeouts, retry filtering and a circuit breaker. Provider success is not device receipt; terminal failure is returned to the caller and does not by itself prove a durable FCM queue exists.
+Endpoint roles are checked by callers. Each token send and provider retry resolves its active PostgreSQL owner and checks current push AND type preferences. Unknown types reject; owner/lookup failures never send. Sends use bounded in-flight requests, batch concurrency, timeouts, retry filtering and a circuit breaker. Provider success is not device receipt; terminal failure is returned to the caller and does not by itself prove a durable FCM queue exists.
 
 ```mermaid
 flowchart TD
     CALL["Authorized direct FCM caller"] --> TOKENS["Resolve active owner tokens"]
     TOKENS --> ANY{"Active tokens?"}
     ANY -->|No| NONE["Return no-active-token result"]
-    ANY -->|Yes| LIMIT["Bound batch concurrency and in-flight sends"]
+    ANY -->|Yes| PREFS{"Current owner and push plus type allow?"}
+    PREFS -->|No| SUPPRESS["Return suppressed result without provider send"]
+    PREFS -->|Yes| LIMIT["Bound batch concurrency and in-flight sends"]
     LIMIT --> BREAKER{"Circuit permits call?"}
     BREAKER -->|No| FAILED["Return safe provider failure result"]
     BREAKER -->|Yes| SEND["Firebase async send with timeout and cancellation"]
@@ -506,7 +522,7 @@ flowchart TD
     MARK --> FAILED
     INVALID -->|No| RETRY{"Retryable and retries remain?"}
     RETRY -->|Yes| BACKOFF["Bounded retry backoff"]
-    BACKOFF --> SEND
+    BACKOFF --> PREFS
     RETRY -->|No| FAILED
 ```
 
@@ -814,3 +830,22 @@ flowchart TD
 ```
 
 Sources: [agent-workflow.md](agent-workflow.md), [agent-handover-template.md](agent-handover-template.md).
+
+## Offer decision authority (AP-0051)
+
+Both `/api/v1/offers/{offerId}/status` and `/offers/{offerId}/status` derive actors from authentication. Request-origin offers are decided by their buyer recipient; listing-origin offers by their seller recipient. Either participant can cancel PENDING offers. Nonparticipants and self-decisions receive 403; no admin override exists. Terminal/repeated/stale decisions receive 409 and require a fresh GET, except receipt-backed acceptance replay described below. Responses expose `version` for `expectedVersion`. PostgreSQL independently guards PENDING, version, active participants and the actor/origin matrix. AP-0052 adds atomic acceptance effects and receipt-backed acceptance replay: the authorized recipient may retry with the original or resulting version. Other repeated/terminal/stale decisions remain 409.
+
+## Notification delivery consent and recovery (AP-0053)
+
+Preference reads are bounded by five seconds. Each attempt uses one current preference snapshot; a concurrent update after that decision cannot recall an in-flight transport send. Durable SSE opt-outs atomically mark SUPPRESSED and record a suppression attempt under an unexpired owner lease, clear the lease, and remove Redis projection best effort. SUPPRESSED never means delivered or acknowledged and cannot be claimed/replayed; pending statistics exclude it. Historical malformed/unknown or recipient-mismatched payloads terminate safely as INVALID_NOTIFICATION.
+
+Lookup failures keep the durable intent PENDING with bounded retry, then EXHAUSTED after three failed attempts, using safe failure codes. They never suppress or acknowledge it. Replay reads only previously DISPATCHED events and applies current preferences; a failed replay lookup terminates the stream before later replay/live content can advance the cursor, without rewriting prior delivery history. Live content waits during the bounded replay page (100 queued events plus one held); overflow fails the stream. Cancellation/replacement discards held content and cancels replay. Genuine opt-outs may be skipped, and content-free heartbeats remain independent. Legacy ephemeral broadcast checks each canonical subscriber independently; it has no durable queue, and failure emits no content. FCM retains its existing bounded provider/lookup retries and safe failed result; no new durable FCM queue is implied. No transport guarantees exactly-once delivery: stable IDs, bounded replay and client deduplication still apply.
+
+| Input type or code | Preference category |
+| --- | --- |
+| SELLER_RESPONSE / seller.response / OFFER_CREATED | newOffer |
+| NEW_SEARCH_POSTED, NEW_SEARCH_MATCH, MULTIPLE_MATCHES, INVENTORY_MATCH, URGENT_SEARCH and corresponding enum codes | searchMatch |
+| SEARCH_EXPIRED, SEARCH_FULFILLED, OFFER_ACCEPTED and corresponding enum codes | orderUpdate |
+| newOffer, priceAlert, searchMatch, orderUpdate, marketing | same named category |
+
+Only existing SSE/FCM delivery paths are active here. Email/SMS boolean queries share the policy; this change adds no optional email/SMS provider. OTP email stays outside optional notifications.

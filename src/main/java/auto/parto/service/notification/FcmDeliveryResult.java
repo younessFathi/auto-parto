@@ -57,6 +57,11 @@ public class FcmDeliveryResult {
                 .build();
     }
 
+    public static FcmDeliveryResult suppressed(String userId) {
+        return FcmDeliveryResult.builder().userId(userId).success(false).status("SUPPRESSED")
+                .error("PREFERENCE_DISABLED").totalTokens(0).successfulTokens(0).build();
+    }
+
     public static FcmDeliveryResult pending(String userId) {
         return FcmDeliveryResult.builder()
                 .userId(userId)

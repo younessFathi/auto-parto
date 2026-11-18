@@ -121,7 +121,10 @@ public class ResilientPendingNotificationService {
         NotificationRequest notification = claimed.notification();
         String userId = notification.userId();
         return ObservationSupport.observe(observationRegistry, "notification.delivery",
-                java.util.Map.of("channel", "sse"), Mono.defer(() -> {
+                java.util.Map.of("channel", "sse"), notificationStore.canDeliver(notification).flatMap(allowed -> {
+            if (!allowed) return notificationStore.suppressDelivery(claimed.publicId(), workerId, notification)
+                    .thenReturn(false);
+            return Mono.defer(() -> {
             boolean delivered = sseService.sendViaSSE(userId, claimed.publicId(), notification);
             if (delivered) {
                 circuitBreaker.recordSuccess(userId);
@@ -133,14 +136,15 @@ public class ResilientPendingNotificationService {
             return notificationStore.recordAttempt(claimed.publicId(), "SSE", "FAILED", null,
                             "DELIVERY_UNAVAILABLE")
                     .then(notificationStore.scheduleRetry(claimed.publicId(), workerId,
-                            Instant.now().plus(RETRY_DELAY), "DELIVERY_UNAVAILABLE", MAX_ATTEMPTS))
+                            Instant.now().plus(RETRY_DELAY), "DELIVERY_UNAVAILABLE", MAX_ATTEMPTS)).thenReturn(false)
                     .doOnSuccess(ignored -> DomainMetrics.notificationDelivery("sse", "retry_scheduled"));
+        });
         }).onErrorResume(error -> {
             DomainMetrics.notificationDelivery("sse", "failure");
             return notificationStore.recordAttempt(claimed.publicId(), "SSE", "FAILED", null,
                         "DELIVERY_ERROR")
                 .then(notificationStore.scheduleRetry(claimed.publicId(), workerId,
-                        Instant.now().plus(RETRY_DELAY), "DELIVERY_ERROR", MAX_ATTEMPTS));
+                        Instant.now().plus(RETRY_DELAY), "DELIVERY_ERROR", MAX_ATTEMPTS)).thenReturn(false);
         }));
     }
 }

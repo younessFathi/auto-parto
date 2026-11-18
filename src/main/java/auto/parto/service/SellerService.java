@@ -61,7 +61,9 @@ public class SellerService implements ISellerService {
         if (currency == null) return Mono.error(new IllegalArgumentException("currency is required"));
         if (idempotencyKey == null || idempotencyKey.isBlank()) return Mono.error(new IllegalArgumentException("Idempotency-Key is required for PostgreSQL wallet mutations"));
         long amountMinor = Money.fromMajor(amount, currency).minorUnits();
-        String operation = amountMinor >= 0 ? "CREDIT" : "DEBIT";
+        if (amountMinor >= 0) return Mono.error(new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.FORBIDDEN, "Wallet credits require confirmed administrator funding"));
+        String operation = "DEBIT";
         Mono<SellerDto> mutation = walletRepository.mutate(publicId, currency.name(), amountMinor, operation,
                         idempotencyKey, "seller-wallet-api")
                 .flatMap(walletMutation -> userRepository.findByPublicId(publicId).zipWhen(user -> profileRepository.findByUserPublicId(publicId))

@@ -28,6 +28,8 @@ public enum NotificationType {
     SEARCH_EXPIRED("search.expired", "Search has expired", Priority.LOW,
             "⏰ Your search for {partName} has expired"),
 
+    OFFER_ACCEPTED("offer.accepted", "Offer accepted", Priority.MEDIUM, "Offer accepted"),
+
     // Search fulfilled
     SEARCH_FULFILLED("search.fulfilled", "Search was fulfilled", Priority.LOW,
             "✅ Your search for {partName} was fulfilled by {sellerName}");
@@ -47,13 +49,13 @@ public enum NotificationType {
     // Constructor and getters
 
     public boolean isForSellers() {
-        return this == NEW_SEARCH_POSTED ||
+        return this == OFFER_ACCEPTED || this == NEW_SEARCH_POSTED ||
                 this == INVENTORY_MATCH ||
                 this == URGENT_SEARCH;
     }
 
     public boolean isForBuyers() {
-        return this == SELLER_RESPONSE ||
+        return this == OFFER_ACCEPTED || this == SELLER_RESPONSE ||
                 this == MULTIPLE_MATCHES ||
                 this == SEARCH_EXPIRED ||
                 this == SEARCH_FULFILLED;

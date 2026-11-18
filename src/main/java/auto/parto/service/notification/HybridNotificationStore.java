@@ -28,20 +28,23 @@ public class HybridNotificationStore {
     private final RedisNotificationStore redisStore;
     private final NotificationRepository postgresqlRepository;
     private final ObjectMapper objectMapper;
+    private final NotificationPreferenceFilter preferences;
 
     public HybridNotificationStore(RedisNotificationStore redisStore) {
         this.redisStore = redisStore;
         this.postgresqlRepository = null;
         this.objectMapper = null;
+        this.preferences = null;
     }
 
     @Autowired
     public HybridNotificationStore(RedisNotificationStore redisStore,
                                    ObjectProvider<NotificationRepository> postgresqlRepositories,
-                                   ObjectMapper objectMapper) {
+                                   ObjectMapper objectMapper, NotificationPreferenceFilter preferences) {
         this.redisStore = redisStore;
         this.postgresqlRepository = postgresqlRepositories.getIfAvailable();
         this.objectMapper = objectMapper;
+        this.preferences = preferences;
     }
 
     public Mono<Boolean> storePending(NotificationRequest notification) {
@@ -50,6 +53,7 @@ public class HybridNotificationStore {
 
     /** Persists first and returns the authoritative public ID used by live delivery. */
     public Mono<NotificationRecord> storePendingRecord(NotificationRequest notification) {
+        NotificationPolicy.category(notification.type() == null ? null : notification.type().name());
         String userId = notification.userId();
         if (postgresqlRepository == null) {
             return Mono.empty();
@@ -107,8 +111,12 @@ public class HybridNotificationStore {
     private Mono<NotificationRequest> deserialize(auto.parto.persistence.NotificationRecord record) {
         if (objectMapper == null) return Mono.empty();
         try {
-            return Mono.just(objectMapper.readValue(record.payloadJson(), NotificationRequest.class));
-        } catch (JsonProcessingException exception) {
+            NotificationRequest request = objectMapper.readValue(record.payloadJson(), NotificationRequest.class);
+            NotificationPolicy.category(request.type() == null ? null : request.type().name());
+            if (!record.recipientUserPublicId().toString().equals(request.userId())
+                    || !record.eventType().equals(request.type().name())) return Mono.empty();
+            return Mono.just(request);
+        } catch (JsonProcessingException | IllegalArgumentException exception) {
             log.warn("Skipping malformed PostgreSQL notification {}", record.publicId());
             return Mono.empty();
         }
@@ -146,7 +154,9 @@ public class HybridNotificationStore {
                 .flatMapMany(owner -> postgresqlRepository
                         .claimPendingForRecipient(owner, claimOwner, now, leaseDuration, limit)
                         .flatMap(record -> deserialize(record)
-                                .map(notification -> new ClaimedNotification(record.publicId(), notification))));
+                                .map(notification -> new ClaimedNotification(record.publicId(), notification))
+                                .switchIfEmpty(postgresqlRepository.suppressDelivery(record.publicId(), claimOwner,
+                                        "INVALID_NOTIFICATION").then(Mono.empty()))));
     }
 
     public Flux<ClaimedNotification> replayNotifications(String userId, UUID afterEventId, int limit) {
@@ -155,12 +165,10 @@ public class HybridNotificationStore {
         }
         return parseUserId(userId)
                 .flatMapMany(owner -> postgresqlRepository.findForRecipientAfter(owner, afterEventId, limit)
-                        .flatMap(record -> deserialize(record)
+                        .concatMap(record -> deserialize(record)
+                                .filterWhen(this::canDeliver)
                                 .map(notification -> new ClaimedNotification(record.publicId(), notification))))
-                .onErrorResume(error -> {
-                    log.warn("SSE notification replay is unavailable");
-                    return Flux.empty();
-                });
+                .doOnError(error -> log.warn("SSE notification replay is unavailable"));
     }
 
     public Mono<Boolean> validateReplayCursor(String userId, UUID cursor) {
@@ -183,6 +191,24 @@ public class HybridNotificationStore {
                         postgresqlRepository.findPendingForRecipient(owner, 100)
                                 .flatMap(this::deserialize)))
                 .then();
+    }
+
+    public Mono<Boolean> canDeliver(NotificationRequest notification) {
+        return canDeliver(notification.userId(), notification);
+    }
+
+    public Mono<Boolean> canDeliver(String recipientId, NotificationRequest notification) {
+        if (preferences == null) return Mono.error(new IllegalStateException("preferences unavailable"));
+        return preferences.canSend(recipientId, "push", notification.type() == null ? null : notification.type().name());
+    }
+
+    public Mono<Boolean> suppressDelivery(UUID id, String claimOwner, NotificationRequest notification) {
+        if (postgresqlRepository == null) return Mono.just(false);
+        return postgresqlRepository.suppressDelivery(id, claimOwner, "PREFERENCE_DISABLED")
+                .flatMap(suppressed -> suppressed
+                        ? redisStore.removeNotification(notification.userId(), notification.id())
+                            .onErrorReturn(0L).thenReturn(true)
+                        : Mono.just(false));
     }
 
     public Mono<Boolean> acknowledgeDelivery(UUID notificationPublicId, String claimOwner) {

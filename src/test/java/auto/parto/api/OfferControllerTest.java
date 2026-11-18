@@ -22,7 +22,7 @@ class OfferControllerTest {
     private final UUID target = UUID.randomUUID();
     private final CreateOfferRequest create = new CreateOfferRequest(1000L, "MAD", true, 0L, null);
     private final OfferResponse response = new OfferResponse(UUID.randomUUID(), target, null, actor,
-            UUID.randomUUID(), 1000, "MAD", "PENDING", true, 0, null, null, null);
+            UUID.randomUUID(), 1000, "MAD", "PENDING", true, 0, null, null, null, 0, null);
 
     @Test
     void requestOfferRequiresSellerAndUsesPrincipal() {

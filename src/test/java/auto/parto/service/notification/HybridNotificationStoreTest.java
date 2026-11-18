@@ -28,6 +28,7 @@ class HybridNotificationStoreTest {
     private NotificationRepository repository;
     @Mock
     private ObjectProvider<NotificationRepository> repositories;
+    @Mock private NotificationPreferenceFilter preferences;
 
     @Test
     void reportsFalseWhenPostgresqlPersistenceFails() {
@@ -54,9 +55,76 @@ class HybridNotificationStoreTest {
                 .verifyComplete();
     }
 
+    @Test
+    void replayPreservesCursorOrderAcrossAsynchronousPreferenceReads() throws Exception {
+        HybridNotificationStore store = store();
+        NotificationRequest first = request();
+        NotificationRequest second = new NotificationRequest("request-2", first.userId(), first.type(), "safe", 2L);
+        UUID cursor = UUID.randomUUID(), firstId = UUID.randomUUID(), secondId = UUID.randomUUID();
+        var mapper = new ObjectMapper();
+        when(repository.findForRecipientAfter(UUID.fromString(first.userId()), cursor, 100))
+                .thenReturn(reactor.core.publisher.Flux.just(
+                        new NotificationRecord(firstId, UUID.fromString(first.userId()), first.type().name(), mapper.writeValueAsString(first), "DISPATCHED", Instant.now(), Instant.now()),
+                        new NotificationRecord(secondId, UUID.fromString(first.userId()), second.type().name(), mapper.writeValueAsString(second), "DISPATCHED", Instant.now(), Instant.now())));
+        when(preferences.canSend(first.userId(), "push", first.type().name()))
+                .thenReturn(Mono.delay(java.time.Duration.ofMillis(30)).map(ignored -> true), Mono.just(true));
+        StepVerifier.create(store.replayNotifications(first.userId(), cursor, 100).map(HybridNotificationStore.ClaimedNotification::publicId))
+                .expectNext(firstId, secondId).verifyComplete();
+    }
+
+    @Test
+    void replayLookupFailureStopsBeforeLaterAllowedEvent() throws Exception {
+        HybridNotificationStore store = store();
+        NotificationRequest first = request();
+        NotificationRequest second = new NotificationRequest("request-2", first.userId(), first.type(), "safe", 2L);
+        UUID cursor = UUID.randomUUID(), firstId = UUID.randomUUID(), secondId = UUID.randomUUID();
+        when(repository.findForRecipientAfter(UUID.fromString(first.userId()), cursor, 100))
+                .thenReturn(reactor.core.publisher.Flux.just(dispatched(firstId, first), dispatched(secondId, second)));
+        when(preferences.canSend(first.userId(), "push", first.type().name()))
+                .thenReturn(Mono.error(new IllegalStateException("preferences unavailable")), Mono.just(true));
+
+        StepVerifier.create(store.replayNotifications(first.userId(), cursor, 100))
+                .expectError().verify(java.time.Duration.ofSeconds(1));
+        org.mockito.Mockito.verify(preferences, org.mockito.Mockito.times(1))
+                .canSend(first.userId(), "push", first.type().name());
+    }
+
+    @Test
+    void genuineReplayOptOutSkipsIntentionallyAndAllowsLaterEvent() throws Exception {
+        HybridNotificationStore store = store();
+        NotificationRequest first = request();
+        NotificationRequest second = new NotificationRequest("request-2", first.userId(), first.type(), "safe", 2L);
+        UUID cursor = UUID.randomUUID(), firstId = UUID.randomUUID(), secondId = UUID.randomUUID();
+        when(repository.findForRecipientAfter(UUID.fromString(first.userId()), cursor, 100))
+                .thenReturn(reactor.core.publisher.Flux.just(dispatched(firstId, first), dispatched(secondId, second)));
+        when(preferences.canSend(first.userId(), "push", first.type().name()))
+                .thenReturn(Mono.just(false), Mono.just(true));
+
+        StepVerifier.create(store.replayNotifications(first.userId(), cursor, 100)
+                        .map(HybridNotificationStore.ClaimedNotification::publicId))
+                .expectNext(secondId).verifyComplete();
+    }
+
+    @Test
+    void replayStorageFailureIsNotAnEmptySuccessfulReplay() {
+        HybridNotificationStore store = store();
+        NotificationRequest request = request();
+        UUID cursor = UUID.randomUUID();
+        when(repository.findForRecipientAfter(UUID.fromString(request.userId()), cursor, 100))
+                .thenReturn(reactor.core.publisher.Flux.error(new IllegalStateException("storage unavailable")));
+
+        StepVerifier.create(store.replayNotifications(request.userId(), cursor, 100))
+                .expectError().verify(java.time.Duration.ofSeconds(1));
+    }
+
+    private NotificationRecord dispatched(UUID id, NotificationRequest request) throws Exception {
+        return new NotificationRecord(id, UUID.fromString(request.userId()), request.type().name(),
+                new ObjectMapper().writeValueAsString(request), "DISPATCHED", Instant.now(), Instant.now());
+    }
+
     private HybridNotificationStore store() {
         when(repositories.getIfAvailable()).thenReturn(repository);
-        return new HybridNotificationStore(redisStore, repositories, new ObjectMapper());
+        return new HybridNotificationStore(redisStore, repositories, new ObjectMapper(), preferences);
     }
 
     private static NotificationRequest request() {

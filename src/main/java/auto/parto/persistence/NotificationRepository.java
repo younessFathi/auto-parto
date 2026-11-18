@@ -41,6 +41,8 @@ public interface NotificationRepository {
     Flux<NotificationRecord> claimPendingForRecipient(UUID recipientUserPublicId, String claimOwner,
                                                        Instant now, Duration leaseDuration, int limit);
 
+    Mono<Boolean> suppressDelivery(UUID notificationPublicId, String claimOwner, String reason);
+
     Mono<Boolean> acknowledgeDelivery(UUID notificationPublicId, String claimOwner);
 
     Mono<Boolean> scheduleRetry(UUID notificationPublicId, String claimOwner, Instant nextAttemptAt,

@@ -27,7 +27,8 @@ class ControllerAuthorizationConventionTest {
             auto.parto.api.PartRequestController.class,
             auto.parto.api.PieceController.class,
             auto.parto.api.SellerController.class,
-            auto.parto.api.SellerProfileController.class
+            auto.parto.api.SellerProfileController.class,
+            auto.parto.api.WalletFundingController.class
     );
 
     @Test
