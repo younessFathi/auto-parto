@@ -23,7 +23,7 @@ public class R2dbcOfferRepository implements OfferRepository {
                    seller.public_id AS seller_public_id,
                    offer.amount_minor, offer.currency, offer.status, offer.negotiable,
                    offer.delivery_amount_minor, offer.delivery_mode,
-                   offer.created_at, offer.updated_at
+                   offer.created_at, offer.updated_at, offer.version
             FROM offers offer
             JOIN app_users buyer ON buyer.id = offer.buyer_user_id
             JOIN app_users seller ON seller.id = offer.seller_user_id
@@ -175,7 +175,12 @@ public class R2dbcOfferRepository implements OfferRepository {
                           AND buyer.id = offer.buyer_user_id
                           AND seller.id = offer.seller_user_id
                           AND :actorUserPublicId IN (buyer.public_id, seller.public_id)
-                          AND offer.version = :expectedVersion
+                          AND offer.version = :expectedVersion AND offer.status = 'PENDING'
+                          AND buyer.status = 'ACTIVE' AND seller.status = 'ACTIVE'
+                          AND (:status = 'CANCELLED' OR
+                               (:status IN ('ACCEPTED', 'REJECTED') AND
+                                :actorUserPublicId = CASE WHEN offer.part_request_id IS NOT NULL
+                                    THEN buyer.public_id ELSE seller.public_id END))
                         RETURNING offer.public_id
                         """)
                 .bind("status", status)
@@ -202,7 +207,7 @@ public class R2dbcOfferRepository implements OfferRepository {
                 row.get("delivery_amount_minor", Long.class),
                 row.get("delivery_mode", String.class),
                 row.get("created_at", Instant.class),
-                row.get("updated_at", Instant.class));
+                row.get("updated_at", Instant.class), row.get("version", Long.class));
     }
 
     private static <T> DatabaseClient.GenericExecuteSpec bindNullable(

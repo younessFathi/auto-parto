@@ -276,13 +276,13 @@ Sources: [MarketplaceMatchingService.java](../src/main/java/auto/parto/service/M
 
 **Status:** Implemented.
 
-A seller can create an offer for a request; a buyer can create one for a listing. Reads/status updates require a participant. Only a seller participant accepts/rejects; either participant may cancel a pending offer. Expected-version checks reject races. Accepting an offer does not automatically transfer wallet funds or imply a listing transition.
+A seller can create an offer for a request; a buyer can create one for a listing. Reads/status updates require a participant. Only the recipient accepts/rejects: buyer for a request-origin offer, seller for a listing-origin offer. Either participant may cancel a pending offer. Expected-version checks reject races. Accepting an offer does not automatically transfer wallet funds or imply a listing transition.
 
 ```mermaid
 stateDiagram-v2
     [*] --> PENDING: Create offer for available request or listing
-    PENDING --> ACCEPTED: Seller participant accepts
-    PENDING --> REJECTED: Seller participant rejects
+    PENDING --> ACCEPTED: Recipient accepts
+    PENDING --> REJECTED: Recipient rejects
     PENDING --> CANCELLED: Either participant cancels
     ACCEPTED --> [*]
     REJECTED --> [*]
@@ -822,3 +822,7 @@ flowchart TD
 ```
 
 Sources: [agent-workflow.md](agent-workflow.md), [agent-handover-template.md](agent-handover-template.md).
+
+## Offer decision authority (AP-0051)
+
+Both `/api/v1/offers/{offerId}/status` and `/offers/{offerId}/status` derive actors from authentication. Request-origin offers are decided by their buyer recipient; listing-origin offers by their seller recipient. Either participant can cancel PENDING offers. Nonparticipants and self-decisions receive 403; no admin override exists. Terminal/repeated/stale decisions receive 409 and require a fresh GET. Responses expose `version` for `expectedVersion`. PostgreSQL independently guards PENDING, version, active participants and the actor/origin matrix. Acceptance effects are introduced separately by AP-0052.

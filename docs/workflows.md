@@ -135,13 +135,13 @@ flowchart TD
     A["Buyer makes an offer for a listing"] --> C["Offer awaits a decision"]
     B["Seller makes an offer for a request"] --> C
     C --> D{"Participant action?"}
-    D -->|Seller accepts| E["Offer accepted"]
-    D -->|Seller rejects| F["Offer rejected"]
+    D -->|Recipient accepts| E["Offer accepted"]
+    D -->|Recipient rejects| F["Offer rejected"]
     D -->|Either participant cancels| G["Offer cancelled"]
     D -->|No action| C
 ```
 
-Current rules give acceptance and rejection to the seller participant, including when the seller created the offer. Either participant may cancel a pending offer. Acceptance records the decision; payment, reservation and delivery are separate.
+The recipient decides: the buyer for a seller-created request offer, and the seller for a buyer-created listing offer. Creators cannot accept/reject their own offer. Either participant may cancel a pending offer; administrators have no override. Acceptance records the decision; payment, reservation and delivery are separate.
 
 Business rules and implementation reference: [supporting documentation](technical-workflows.md#offer-creation-and-decisions).
 

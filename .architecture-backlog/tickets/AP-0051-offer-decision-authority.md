@@ -1,6 +1,6 @@
 # AP-0051 Define and Enforce Offer Decision Authority
 
-- **Status:** Ready
+- **Status:** In Progress
 - **Type:** User Story
 - **Feature:** [F13 Marketplace Business Integrity](../features/F13-marketplace-business-integrity.md)
 - **Linked Tickets:** [AP-0009 Offers and Matching](AP-0009-offers-and-matching.md), [AP-0052 Accepted-Offer Journey](AP-0052-accepted-offer-marketplace-journey.md)
@@ -44,3 +44,7 @@ The approved policy matrix is implemented for both origins; every criterion/scen
 ## Owner Policy Gate Resolved (2026-11-18)
 
 The owner explicitly approved the policy recorded in [F13](../features/F13-marketplace-business-integrity.md#approved-owner-policies-2026-11-18). This ticket's implementation has not started in the AP-0050 increment. It remains a separate reviewed implementation increment; policy approval alone is not completion.
+
+## Implementation evidence
+
+Implemented origin-specific recipient decisions and either-participant cancellation in service and PostgreSQL predicates, with active-identity, PENDING and optimistic-version guards. Both aliases share the same controller/service. Responses now expose version. Forbidden ownership/self-decisions are 403; terminal/repeated/stale decisions are 409 with a fresh GET required. No admin override. Authority matrix, direct database bypass/staleness/terminal/restart and concurrent opposite decisions are covered. Focused verification passed: 27 tests including both-origin authority matrix, controller identity binding, PostgreSQL direct-call guards, stale/terminal/restart checks and concurrent transitions. All 44 Mermaid diagrams parse. Final full verification and independent approval remain pending.

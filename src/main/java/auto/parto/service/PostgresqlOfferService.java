@@ -57,7 +57,13 @@ public class PostgresqlOfferService {
                 .flatMap(existing -> {
                     requireActor(existing, actorPublicId);
                     OfferStatus target = parseStatus(request.status());
-                    if (!allowed(existing.status(), target, actorPublicId, existing)) {
+                    if (target != OfferStatus.CANCELLED &&
+                            !actorPublicId.equals(existing.partRequestPublicId() != null
+                                    ? existing.buyerUserPublicId() : existing.sellerUserPublicId())) {
+                        return Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN,
+                                "Only the offer recipient may accept or reject"));
+                    }
+                    if (!allowed(existing.status(), target)) {
                         return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT,
                                 "Offer cannot transition from " + existing.status() + " to " + target));
                     }
@@ -95,21 +101,16 @@ public class PostgresqlOfferService {
         }
     }
 
-    private static boolean allowed(String current, OfferStatus target, UUID actorPublicId, OfferRecord offer) {
-        if (!OfferStatus.PENDING.name().equals(current)) {
-            return false;
-        }
-        if (OfferStatus.CANCELLED == target) {
-            return true;
-        }
-        return actorPublicId.equals(offer.sellerUserPublicId())
-                && (OfferStatus.ACCEPTED == target || OfferStatus.REJECTED == target);
+    private static boolean allowed(String current, OfferStatus target) {
+        return OfferStatus.PENDING.name().equals(current)
+                && (target == OfferStatus.CANCELLED || target == OfferStatus.ACCEPTED
+                    || target == OfferStatus.REJECTED);
     }
 
     private static OfferResponse toResponse(OfferRecord offer) {
         return new OfferResponse(offer.publicId(), offer.partRequestPublicId(), offer.partListingPublicId(),
                 offer.buyerUserPublicId(), offer.sellerUserPublicId(), offer.amountMinor(), offer.currency(),
                 offer.status(), offer.negotiable(), offer.deliveryAmountMinor(), offer.deliveryMode(),
-                offer.createdAt(), offer.updatedAt());
+                offer.createdAt(), offer.updatedAt(), offer.version());
     }
 }

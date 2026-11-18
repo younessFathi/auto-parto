@@ -147,3 +147,5 @@ Codex feature delivery uses Coder, Reviewer and DevOps with independent commit a
 Coder can also suggest evidence-based product, technical and workflow improvements through [feature proposals](docs/feature-proposals/README.md). Reviewer and DevOps assess each proposal; implementation requires your explicit approval.
 
 Wallet credits require [confirmed administrator funding](docs/wallet-ledger.md#confirmed-manual-funding-authority-ap-0050); sellers can debit their own wallets but cannot self-credit.
+
+Offer decisions follow recipient consent: buyers decide seller-created request offers; sellers decide buyer-created listing offers. Either participant can cancel a pending offer. Use the response `version` as `expectedVersion`; terminal/stale decisions conflict, and admins cannot bypass participation.
