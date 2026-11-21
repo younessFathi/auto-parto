@@ -156,6 +156,18 @@ class HybridNotificationStoreTest {
         org.mockito.Mockito.verifyNoInteractions(preferences);
     }
 
+    @Test
+    void abbreviatedHistoricalRecipientCannotMatchCanonicalOwnerDuringReplay() throws Exception {
+        HybridNotificationStore store = store();
+        UUID owner = UUID.fromString("12345678-1234-4abc-8def-000000000001"), cursor = UUID.randomUUID();
+        NotificationRequest payload = new NotificationRequest("short", "12345678-1234-4abc-8def-1", NotificationType.NEW_SEARCH_POSTED, "safe", 1L);
+        when(repository.findForRecipientAfter(owner, cursor, 100)).thenReturn(reactor.core.publisher.Flux.just(
+                new NotificationRecord(UUID.randomUUID(), owner, payload.type().name(), new ObjectMapper().writeValueAsString(payload),
+                        "DISPATCHED", Instant.now(), Instant.now())));
+        StepVerifier.create(store.replayNotifications(owner.toString(), cursor, 100)).verifyComplete();
+        org.mockito.Mockito.verifyNoInteractions(preferences);
+    }
+
     private NotificationRecord dispatched(UUID id, NotificationRequest request) throws Exception {
         return new NotificationRecord(id, UUID.fromString(request.userId()), request.type().name(),
                 new ObjectMapper().writeValueAsString(request), "DISPATCHED", Instant.now(), Instant.now());

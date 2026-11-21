@@ -93,3 +93,21 @@ overlapping work on the same instance. Corrected focused verification passed:
 23 PostgreSQL tests. All 45 Mermaid diagrams parsed successfully. Full clean
 verification and fresh independent exact-candidate approvals remain pending.
 Prior approvals are withdrawn; no completion or publication is claimed here.
+
+
+### Recipient spelling correction (2026-11-21)
+
+Follow-up review confirmed that Java UUID parsing accepts abbreviated groups.
+The shared recipient helper now requires the original text to equal the parsed
+canonical spelling ignoring hex case. Full-width lowercase/uppercase/mixed-case
+UUIDs remain valid; no trimming, padding or new UUID version/variant restriction
+is introduced. HTTP recipient validation rejects abbreviated forms before any
+recipient work, and historical abbreviated owners follow INVALID_NOTIFICATION
+suppression while the next valid intent still processes.
+
+Coordinator baseline RED ran 77 focused tests with 11 expected assertion failures
+and zero errors/skips before this production correction. Coverage includes the
+helper matrix, SSE/single-FCM/mixed-batch HTTP boundaries, replay rejection and
+PostgreSQL suppression/continuation with uppercase delivery control. Corrected
+focused/full verification and fresh independent approvals are pending; prior
+candidate approvals do not apply to this change.

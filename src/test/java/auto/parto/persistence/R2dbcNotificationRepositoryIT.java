@@ -524,15 +524,18 @@ class R2dbcNotificationRepositoryIT {
         assertThat(repository.renewClaim(row.publicId(), "claim-b", Duration.ofSeconds(30)).block()).isFalse();
     }
 
-    @Test
-    void malformedFirstClaimDoesNotHideFollowingValidNotificationInSamePass() throws Exception {
-        UUID owner = UUID.randomUUID();
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"null", "abbreviated"})
+    void malformedFirstClaimDoesNotHideFollowingValidNotificationInSamePass(String invalidForm) throws Exception {
+        UUID owner = UUID.fromString(UUID.randomUUID().toString().substring(0, 24) + "000000000001");
         insertUser(owner).block();
         var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-        var invalid = new auto.parto.dto.NotificationRequest("invalid", null, auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "safe", 1L);
+        String invalidOwner = invalidForm.equals("null") ? null : owner.toString().substring(0, 24) + "1";
+        var invalid = new auto.parto.dto.NotificationRequest("invalid", invalidOwner, auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "safe", 1L);
         var valid = new auto.parto.dto.NotificationRequest("valid", owner.toString(), invalid.type(), "safe", 2L);
         var invalidRow = repository.enqueue(owner, invalid.type().name(), mapper.writeValueAsString(invalid)).block();
-        var validRow = repository.enqueue(owner, valid.type().name(), mapper.writeValueAsString(valid)).block();
+        var uppercaseValid = new auto.parto.dto.NotificationRequest(valid.id(), owner.toString().toUpperCase(java.util.Locale.ROOT), valid.type(), valid.message(), valid.sysTime());
+        var validRow = repository.enqueue(owner, valid.type().name(), mapper.writeValueAsString(uppercaseValid)).block();
         var redis = org.mockito.Mockito.mock(auto.parto.service.notification.RedisNotificationStore.class);
         org.mockito.Mockito.when(redis.replacePendingNotifications(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any())).thenReturn(Mono.empty());
         org.mockito.Mockito.when(redis.removeNotification(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString())).thenReturn(Mono.just(1L));
@@ -548,7 +551,11 @@ class R2dbcNotificationRepositoryIT {
         StepVerifier.create(worker.deliverPendingOnConnect(owner.toString())).expectNext(1).expectComplete().verify(Duration.ofSeconds(5));
         assertThat(databaseClient.sql("SELECT status FROM notifications WHERE public_id = :id").bind("id", invalidRow.publicId())
                 .map((row, metadata) -> row.get("status", String.class)).one().block()).isEqualTo("SUPPRESSED");
+        assertThat(databaseClient.sql("SELECT last_failure_code FROM notifications WHERE public_id = :id").bind("id", invalidRow.publicId())
+                .map((row, metadata) -> row.get("last_failure_code", String.class)).one().block()).isEqualTo("INVALID_NOTIFICATION");
+        assertThat(repository.claimNotification(invalidRow.publicId(), "another-worker", Instant.now(), Duration.ofSeconds(30)).block()).isNull();
         org.mockito.Mockito.verify(sse).sendViaSSE(owner.toString(), validRow.publicId(), valid);
+        org.mockito.Mockito.verify(sse, org.mockito.Mockito.never()).sendViaSSE(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(invalidRow.publicId()), org.mockito.ArgumentMatchers.any());
         org.mockito.Mockito.verify(preferences, org.mockito.Mockito.times(1)).canSend(owner.toString(), "push", valid.type().name());
     }
 

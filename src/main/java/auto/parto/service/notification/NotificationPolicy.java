@@ -8,7 +8,11 @@ public final class NotificationPolicy {
 
     public static String recipientId(String value) {
         if (value == null) throw new IllegalArgumentException("notification recipient is required");
-        return java.util.UUID.fromString(value).toString();
+        String canonical = java.util.UUID.fromString(value).toString();
+        if (!value.equalsIgnoreCase(canonical)) {
+            throw new IllegalArgumentException("notification recipient must use full UUID spelling");
+        }
+        return canonical;
     }
 
     public static auto.parto.dto.NotificationRequest canonicalRecipient(auto.parto.dto.NotificationRequest value) {

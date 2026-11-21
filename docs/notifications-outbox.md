@@ -53,5 +53,9 @@ work on the same instance. After the preference read, a server-time guarded rene
 requires the current unexpired PENDING claim before any SSE write or suppression.
 A lost claim skips stale delivery/finalization; recovery can reclaim expired work.
 This does not make the socket write and database acknowledgement exactly-once.
-Recipient UUIDs are compared by value and routed in canonical form, including valid
-uppercase historical payloads; different or malformed owners remain invalid.
+Recipient UUIDs must use the full 8-4-4-4-12 spelling; full-width uppercase and
+mixed-case hex are accepted and routed in canonical form. Abbreviated groups,
+whitespace and other malformed spellings are rejected rather than padded or
+trimmed. Historical payloads must also match their persisted owner: abbreviated,
+different or malformed owners become INVALID_NOTIFICATION, while later valid work
+continues in the same bounded recovery pass.

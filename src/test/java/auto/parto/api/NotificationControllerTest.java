@@ -248,4 +248,14 @@ class NotificationControllerTest {
         org.mockito.Mockito.verify(resilientNotificationService).deliverDirect(new NotificationRequest("upper", canonical, request.type(), "safe", 1L));
     }
 
+    @Test
+    void abbreviatedRecipientIsBadRequestBeforeSseDeliveryOrPersistence() {
+        NotificationRequest request = new NotificationRequest("short", "12345678-1234-4abc-8def-1",
+                auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "safe", 1L);
+        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.admin("admin"))).post()
+                .uri("/api/v1/notifications/send").contentType(MediaType.APPLICATION_JSON).bodyValue(request)
+                .exchange().expectStatus().isBadRequest();
+        org.mockito.Mockito.verifyNoInteractions(resilientNotificationService, pendingNotificationService);
+    }
+
 }

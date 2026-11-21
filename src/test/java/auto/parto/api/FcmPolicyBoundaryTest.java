@@ -123,6 +123,21 @@ class FcmPolicyBoundaryTest {
         verifyNoInteractions(tokens, preferences, firebase);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"/send", "/urgent"})
+    void abbreviatedRecipientIsBadRequestBeforeAnyRecipientWork(String route) {
+        lenient().when(security.validateAdmin(any())).thenReturn(Mono.just(true));
+        lenient().when(security.validateAuthentication(any())).thenReturn(Mono.just(true));
+        String abbreviated = "12345678-1234-4abc-8def-1";
+        Object request = route.equals("/send")
+                ? Map.of("userId", abbreviated, "title", "safe", "body", "safe", "data", Map.of("type", "SELLER_RESPONSE"))
+                : Map.of("userIds", List.of(USER, abbreviated), "title", "safe", "message", "safe", "metadata", Map.of("type", "SELLER_RESPONSE"));
+        client.mutateWith(mockAuthentication(CanonicalTestAuthentication.admin("admin"))).post()
+                .uri("/api/v1/notifications/fcm" + route).contentType(MediaType.APPLICATION_JSON).bodyValue(request)
+                .exchange().expectStatus().isBadRequest();
+        verifyNoInteractions(tokens, preferences, firebase);
+    }
+
     private void suppressedRecipient() {
         when(tokens.getActiveTokens(USER)).thenReturn(Mono.just(List.of("opaque-test-token")));
         when(tokens.activeOwner("opaque-test-token")).thenReturn(Mono.just(USER));
