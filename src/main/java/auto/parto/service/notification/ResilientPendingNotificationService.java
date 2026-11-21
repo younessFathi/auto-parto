@@ -105,46 +105,63 @@ public class ResilientPendingNotificationService {
     }
 
     private Mono<Integer> claimAndDeliver(String userId, boolean requireActiveConnection) {
-        if (requireActiveConnection && !sseService.hasActiveConnection(userId)) {
+        String canonicalUserId = NotificationPolicy.recipientId(userId);
+        if (requireActiveConnection && !sseService.hasActiveConnection(canonicalUserId)) {
             return Mono.just(0);
         }
-        return notificationStore.rebuildProjection(userId)
-                .thenMany(notificationStore.claimPendingNotifications(userId, workerId, Instant.now(), CLAIM_LEASE,
-                        RECOVERY_BATCH_SIZE))
-                .flatMapSequential(this::deliverClaimed, 1, 1)
-                .filter(Boolean::booleanValue)
-                .count()
-                .map(Long::intValue);
+        return notificationStore.rebuildProjection(canonicalUserId)
+                .then(deliverNext(canonicalUserId, RECOVERY_BATCH_SIZE));
     }
 
-    private Mono<Boolean> deliverClaimed(HybridNotificationStore.ClaimedNotification claimed) {
+    private Mono<Integer> deliverNext(String userId, int remaining) {
+        if (remaining == 0) return Mono.just(0);
+        return Mono.defer(() -> {
+            // Fence every claim, including overlapping connect/scheduled work on this instance.
+            String claimOwner = workerId + "-" + UUID.randomUUID();
+            return notificationStore.claimPendingNotifications(userId, claimOwner, Instant.now(), CLAIM_LEASE, 1)
+                    .singleOrEmpty()
+                    .flatMap(claimed -> deliverClaimed(claimed, claimOwner)
+                            .flatMap(delivered -> deliverNext(userId, remaining - 1)
+                                    .map(rest -> rest + (delivered ? 1 : 0))))
+                    .defaultIfEmpty(0);
+        });
+    }
+
+    private Mono<Boolean> deliverClaimed(HybridNotificationStore.ClaimedNotification claimed, String claimOwner) {
+        // A claimed malformed row has already been safely suppressed; it still consumes
+        // one bounded work slot, and must not hide valid rows behind it in the same pass.
+        if (claimed.invalidPayload()) return Mono.just(false);
         NotificationRequest notification = claimed.notification();
         String userId = notification.userId();
         return ObservationSupport.observe(observationRegistry, "notification.delivery",
-                java.util.Map.of("channel", "sse"), notificationStore.canDeliver(notification).flatMap(allowed -> {
-            if (!allowed) return notificationStore.suppressDelivery(claimed.publicId(), workerId, notification)
+                java.util.Map.of("channel", "sse"), notificationStore.canDeliver(notification).flatMap(allowed ->
+                        notificationStore.renewClaim(claimed.publicId(), claimOwner, CLAIM_LEASE).flatMap(current -> {
+            if (!current) return Mono.just(false);
+            if (!allowed) return notificationStore.suppressDelivery(claimed.publicId(), claimOwner, notification)
                     .thenReturn(false);
             return Mono.defer(() -> {
             boolean delivered = sseService.sendViaSSE(userId, claimed.publicId(), notification);
             if (delivered) {
                 circuitBreaker.recordSuccess(userId);
                 return notificationStore.recordAttempt(claimed.publicId(), "SSE", "WRITTEN", null, null)
-                        .then(notificationStore.acknowledgeDelivery(claimed.publicId(), workerId))
+                        .then(notificationStore.acknowledgeDelivery(claimed.publicId(), claimOwner))
                         .doOnSuccess(ignored -> DomainMetrics.notificationDelivery("sse", "acknowledged"));
             }
             circuitBreaker.recordFailure(userId);
             return notificationStore.recordAttempt(claimed.publicId(), "SSE", "FAILED", null,
                             "DELIVERY_UNAVAILABLE")
-                    .then(notificationStore.scheduleRetry(claimed.publicId(), workerId,
+                    .then(notificationStore.scheduleRetry(claimed.publicId(), claimOwner,
                             Instant.now().plus(RETRY_DELAY), "DELIVERY_UNAVAILABLE", MAX_ATTEMPTS)).thenReturn(false)
                     .doOnSuccess(ignored -> DomainMetrics.notificationDelivery("sse", "retry_scheduled"));
         });
-        }).onErrorResume(error -> {
+        })).onErrorResume(error -> {
             DomainMetrics.notificationDelivery("sse", "failure");
-            return notificationStore.recordAttempt(claimed.publicId(), "SSE", "FAILED", null,
+            return notificationStore.renewClaim(claimed.publicId(), claimOwner, CLAIM_LEASE)
+                    .flatMap(current -> !current ? Mono.just(false)
+                            : notificationStore.recordAttempt(claimed.publicId(), "SSE", "FAILED", null,
                         "DELIVERY_ERROR")
-                .then(notificationStore.scheduleRetry(claimed.publicId(), workerId,
-                        Instant.now().plus(RETRY_DELAY), "DELIVERY_ERROR", MAX_ATTEMPTS)).thenReturn(false);
+                .then(notificationStore.scheduleRetry(claimed.publicId(), claimOwner,
+                        Instant.now().plus(RETRY_DELAY), "DELIVERY_ERROR", MAX_ATTEMPTS)).thenReturn(false)).onErrorReturn(false);
         }));
     }
 }

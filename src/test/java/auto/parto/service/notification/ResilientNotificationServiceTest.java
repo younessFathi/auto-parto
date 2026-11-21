@@ -30,6 +30,8 @@ class ResilientNotificationServiceTest {
 
     @org.junit.jupiter.api.BeforeEach
     void allowPreferences() {
+        org.mockito.Mockito.lenient().when(notificationStore.renewClaim(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any())).thenReturn(Mono.just(true));
         org.mockito.Mockito.lenient().when(notificationStore.canDeliver(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Mono.just(true));
     }
@@ -176,6 +178,21 @@ class ResilientNotificationServiceTest {
 
         verify(notificationStore).scheduleRetry(eq(persistedId), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.any(), eq("DELIVERY_ERROR"), eq(3));
+    }
+
+    @Test
+    void lostLeaseAfterPolicyReadCannotWriteSocketOrFinalize() {
+        UUID owner = UUID.randomUUID(), event = UUID.randomUUID();
+        NotificationRequest request = new NotificationRequest("lost", owner.toString(), NotificationType.NEW_SEARCH_POSTED, "safe", 1L);
+        stubClaim(request, pendingRecord(event, owner));
+        when(notificationStore.renewClaim(eq(event), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Mono.just(false));
+        StepVerifier.create(new ResilientNotificationService(circuitBreaker, sseNotificationService, notificationStore).deliverDirect(request))
+                .expectNextMatches(result -> result.persisted() && !result.delivered()).verifyComplete();
+        org.mockito.Mockito.verifyNoInteractions(sseNotificationService);
+        verify(notificationStore, org.mockito.Mockito.never()).acknowledgeDelivery(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString());
+        verify(notificationStore, org.mockito.Mockito.never()).recordAttempt(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
     private NotificationRecord pendingRecord(UUID publicId, UUID userId) {

@@ -341,6 +341,24 @@ public class R2dbcNotificationRepository implements NotificationRepository {
     }
 
     @Override
+    public Mono<Boolean> renewClaim(UUID notificationPublicId, String claimOwner, Duration leaseDuration) {
+        requirePublicId(notificationPublicId);
+        requireText(claimOwner, "claimOwner");
+        if (leaseDuration == null || leaseDuration.isNegative() || leaseDuration.isZero()) {
+            throw new IllegalArgumentException("leaseDuration must be positive");
+        }
+        return databaseClient.sql("""
+                        UPDATE notifications
+                        SET lease_expires_at = CURRENT_TIMESTAMP + (:leaseMillis * INTERVAL '1 millisecond'),
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE public_id = :id AND status = 'PENDING' AND lease_owner = :owner
+                          AND lease_expires_at > CURRENT_TIMESTAMP
+                        """)
+                .bind("id", notificationPublicId).bind("owner", claimOwner)
+                .bind("leaseMillis", leaseDuration.toMillis()).fetch().rowsUpdated().map(count -> count == 1);
+    }
+
+    @Override
     public Mono<Boolean> suppressDelivery(UUID notificationPublicId, String claimOwner, String reason) {
         requirePublicId(notificationPublicId);
         requireText(claimOwner, "claimOwner");

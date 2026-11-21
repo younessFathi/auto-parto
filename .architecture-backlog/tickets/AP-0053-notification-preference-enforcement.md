@@ -72,3 +72,24 @@ compilation errors). Corrected targeted verification passed 36 tests, including
 active replay cancellation on overflow and live-source failure, plus existing SSE
 compatibility checks. Full verification and renewed independent review are pending.
 The earlier full-suite evidence applies only to the prior candidate.
+
+
+### External review corrections (2026-11-21)
+
+The six confirmed findings are addressed by downstream replay-before-live
+serialization under limited demand; just-in-time single-row claims with unique
+fencing and guarded post-policy renewal; UUID-value ownership checks and canonical
+routing; provider-only Firebase circuit breaking with terminal ineligibility and
+retry eligibility checks; shared category validation with HTTP 400; and explicit
+suppression totals/terminal responses. Existing bounded buffers, cancellation,
+replacement, heartbeats and at-least-once semantics remain required.
+
+Coordinator RED evidence: the initial focused unit/HTTP set compiled and ran 35
+tests with 15 expected failures and zero errors before production changes. The
+lease PostgreSQL baseline RED was not run because Docker was unavailable at that
+point; its controlled two-recovery regression covers both separate services and
+overlapping work on the same instance. Corrected focused verification passed:
+116 tests, zero failures/errors/skips across 12 affected test classes, including
+23 PostgreSQL tests. All 45 Mermaid diagrams parsed successfully. Full clean
+verification and fresh independent exact-candidate approvals remain pending.
+Prior approvals are withdrawn; no completion or publication is claimed here.

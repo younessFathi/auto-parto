@@ -35,11 +35,13 @@ public class ResilientNotificationService {
 
     public Mono<DirectDeliveryResult> deliverDirect(NotificationRequest notification) {
         NotificationPolicy.category(notification.type() == null ? null : notification.type().name());
-        String userId = notification.userId();
-        return notificationStore.storePendingRecord(notification)
-                .flatMap(record -> notificationStore.claimNotification(record.publicId(), directWorkerId,
+        NotificationRequest canonical = NotificationPolicy.canonicalRecipient(notification);
+        String userId = canonical.userId();
+        String claimOwner = directWorkerId + "-" + UUID.randomUUID();
+        return notificationStore.storePendingRecord(canonical)
+                .flatMap(record -> notificationStore.claimNotification(record.publicId(), claimOwner,
                                 Instant.now(), Duration.ofSeconds(30))
-                        .flatMap(claimed -> deliverClaimed(userId, notification, claimed))
+                        .flatMap(claimed -> deliverClaimed(userId, canonical, claimed, claimOwner))
                         .defaultIfEmpty(new DirectDeliveryResult(record.publicId(), true, false))
                         .onErrorResume(error -> Mono.just(new DirectDeliveryResult(record.publicId(), true, false))))
                 .defaultIfEmpty(new DirectDeliveryResult(null, false, false))
@@ -54,31 +56,36 @@ public class ResilientNotificationService {
     }
 
     private Mono<DirectDeliveryResult> deliverClaimed(String userId, NotificationRequest notification,
-                                                       NotificationRecord claimed) {
-        return notificationStore.canDeliver(notification).flatMap(allowed -> {
-            if (!allowed) return notificationStore.suppressDelivery(claimed.publicId(), directWorkerId, notification)
+                                                       NotificationRecord claimed, String claimOwner) {
+        return notificationStore.canDeliver(notification).flatMap(allowed ->
+                notificationStore.renewClaim(claimed.publicId(), claimOwner, Duration.ofSeconds(30)).flatMap(current -> {
+            if (!current) return Mono.just(new DirectDeliveryResult(claimed.publicId(), true, false));
+            if (!allowed) return notificationStore.suppressDelivery(claimed.publicId(), claimOwner, notification)
                     .map(suppressed -> new DirectDeliveryResult(claimed.publicId(), true, false, suppressed));
             return Mono.defer(() -> {
             boolean delivered = sseNotificationService.sendViaSSE(userId, claimed.publicId(), notification);
             if (delivered) {
                 return notificationStore.recordAttempt(claimed.publicId(), "SSE", "WRITTEN", null, null)
-                        .then(notificationStore.acknowledgeDelivery(claimed.publicId(), directWorkerId))
+                        .then(notificationStore.acknowledgeDelivery(claimed.publicId(), claimOwner))
                         .flatMap(acknowledged -> acknowledged
                                 ? Mono.just(new DirectDeliveryResult(claimed.publicId(), true, true))
-                                : scheduleDirectRetry(claimed, "ACKNOWLEDGEMENT_FAILED"));
+                                : scheduleDirectRetry(claimed, claimOwner, "ACKNOWLEDGEMENT_FAILED"));
             }
-            return scheduleDirectRetry(claimed, "DELIVERY_UNAVAILABLE");
+            return scheduleDirectRetry(claimed, claimOwner, "DELIVERY_UNAVAILABLE");
         });
-        }).onErrorResume(error -> scheduleDirectRetry(claimed, "DELIVERY_ERROR"));
+        })).onErrorResume(error -> scheduleDirectRetry(claimed, claimOwner, "DELIVERY_ERROR"));
     }
 
-    private Mono<DirectDeliveryResult> scheduleDirectRetry(NotificationRecord claimed, String failureCode) {
-        return notificationStore.recordAttempt(claimed.publicId(), "SSE", "FAILED", null, failureCode)
+    private Mono<DirectDeliveryResult> scheduleDirectRetry(NotificationRecord claimed, String claimOwner, String failureCode) {
+        return notificationStore.renewClaim(claimed.publicId(), claimOwner, Duration.ofSeconds(30))
+                .flatMap(current -> !current ? Mono.just(new DirectDeliveryResult(claimed.publicId(), true, false))
+                        : notificationStore.recordAttempt(claimed.publicId(), "SSE", "FAILED", null, failureCode)
                 .onErrorResume(error -> Mono.empty())
-                .then(notificationStore.scheduleRetry(claimed.publicId(), directWorkerId,
+                .then(notificationStore.scheduleRetry(claimed.publicId(), claimOwner,
                         Instant.now().plusSeconds(30), failureCode, 3)
                         .onErrorResume(error -> Mono.just(false)))
-                .thenReturn(new DirectDeliveryResult(claimed.publicId(), true, false));
+                .thenReturn(new DirectDeliveryResult(claimed.publicId(), true, false)))
+                .onErrorReturn(new DirectDeliveryResult(claimed.publicId(), true, false));
     }
 
     public Mono<Boolean> canDeliver(String recipientId, NotificationRequest notification) {

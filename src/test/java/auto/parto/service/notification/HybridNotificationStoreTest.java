@@ -117,6 +117,45 @@ class HybridNotificationStoreTest {
                 .expectError().verify(java.time.Duration.ofSeconds(1));
     }
 
+    @Test
+    void uppercaseHistoricalRecipientIsComparedAsUuidAndReturnedCanonically() throws Exception {
+        HybridNotificationStore store = store();
+        UUID owner = UUID.fromString("abcdefab-abcd-abcd-abcd-abcdefabcdef");
+        NotificationRequest uppercase = new NotificationRequest("historical", owner.toString().toUpperCase(java.util.Locale.ROOT),
+                NotificationType.NEW_SEARCH_POSTED, "safe", 1L);
+        UUID event = UUID.randomUUID(), cursor = UUID.randomUUID();
+        when(repository.findForRecipientAfter(owner, cursor, 100))
+                .thenReturn(reactor.core.publisher.Flux.just(dispatched(event, uppercase)));
+        org.mockito.Mockito.lenient().when(preferences.canSend(owner.toString(), "push", uppercase.type().name())).thenReturn(Mono.just(true));
+        StepVerifier.create(store.replayNotifications(owner.toString(), cursor, 100))
+                .assertNext(row -> org.assertj.core.api.Assertions.assertThat(row.notification().userId()).isEqualTo(owner.toString()))
+                .verifyComplete();
+    }
+
+    @Test
+    void differentHistoricalRecipientStillCannotBeReplayed() throws Exception {
+        HybridNotificationStore store = store();
+        NotificationRequest payload = request();
+        UUID other = UUID.randomUUID(), cursor = UUID.randomUUID();
+        NotificationRecord row = new NotificationRecord(UUID.randomUUID(), other, payload.type().name(),
+                new ObjectMapper().writeValueAsString(payload), "DISPATCHED", Instant.now(), Instant.now());
+        when(repository.findForRecipientAfter(other, cursor, 100)).thenReturn(reactor.core.publisher.Flux.just(row));
+        StepVerifier.create(store.replayNotifications(other.toString(), cursor, 100)).verifyComplete();
+        org.mockito.Mockito.verifyNoInteractions(preferences);
+    }
+
+    @Test
+    void nullHistoricalRecipientIsInvalidRatherThanBreakingRecovery() throws Exception {
+        HybridNotificationStore store = store();
+        UUID owner = UUID.randomUUID(), cursor = UUID.randomUUID();
+        NotificationRequest payload = new NotificationRequest("missing-owner", null, NotificationType.NEW_SEARCH_POSTED, "safe", 1L);
+        when(repository.findForRecipientAfter(owner, cursor, 100)).thenReturn(reactor.core.publisher.Flux.just(
+                new NotificationRecord(UUID.randomUUID(), owner, payload.type().name(), new ObjectMapper().writeValueAsString(payload),
+                        "DISPATCHED", Instant.now(), Instant.now())));
+        StepVerifier.create(store.replayNotifications(owner.toString(), cursor, 100)).verifyComplete();
+        org.mockito.Mockito.verifyNoInteractions(preferences);
+    }
+
     private NotificationRecord dispatched(UUID id, NotificationRequest request) throws Exception {
         return new NotificationRecord(id, UUID.fromString(request.userId()), request.type().name(),
                 new ObjectMapper().writeValueAsString(request), "DISPATCHED", Instant.now(), Instant.now());

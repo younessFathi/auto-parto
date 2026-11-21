@@ -436,6 +436,122 @@ class R2dbcNotificationRepositoryIT {
         org.mockito.Mockito.verify(sse, org.mockito.Mockito.times(2)).sendViaSSE(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void delayedLookupCannotSendAfterAnotherRecoveryReclaimsItsLease(boolean sameServiceInstance) throws Exception {
+        UUID owner = UUID.randomUUID();
+        insertUser(owner).block();
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var firstRequest = new auto.parto.dto.NotificationRequest("lease-first", owner.toString().toUpperCase(java.util.Locale.ROOT),
+                auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "safe", 1L);
+        var secondRequest = new auto.parto.dto.NotificationRequest("lease-second", owner.toString(), firstRequest.type(), "safe", 2L);
+        var firstRow = repository.enqueue(owner, firstRequest.type().name(), mapper.writeValueAsString(firstRequest)).block();
+        var secondRow = repository.enqueue(owner, secondRequest.type().name(), mapper.writeValueAsString(secondRequest)).block();
+        var redis = org.mockito.Mockito.mock(auto.parto.service.notification.RedisNotificationStore.class);
+        org.mockito.Mockito.when(redis.replacePendingNotifications(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Mono.empty());
+        org.mockito.Mockito.when(redis.removeNotification(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Mono.just(1L));
+        var provider = org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+        org.mockito.Mockito.when(provider.getIfAvailable()).thenReturn(repository);
+        var policy = org.mockito.Mockito.mock(auto.parto.service.notification.NotificationPreferenceFilter.class);
+        var lookupStarted = reactor.core.publisher.Sinks.<Void>one();
+        var delayedLookup = reactor.core.publisher.Sinks.<Boolean>one();
+        var replacementLookup = reactor.core.publisher.Sinks.<Boolean>one();
+        var replacementStarted = reactor.core.publisher.Sinks.<Void>one();
+        var firstFinished = reactor.core.publisher.Sinks.<Integer>one();
+        var lookups = new java.util.concurrent.atomic.AtomicInteger();
+        org.mockito.Mockito.when(policy.canSend(owner.toString(), "push", firstRequest.type().name()))
+                .thenAnswer(ignored -> {
+                    int attempt = lookups.getAndIncrement();
+                    if (attempt == 0) {
+                        lookupStarted.tryEmitEmpty();
+                        return delayedLookup.asMono();
+                    }
+                    if (attempt == 1) {
+                        replacementStarted.tryEmitEmpty();
+                        return replacementLookup.asMono();
+                    }
+                    return Mono.just(true);
+                });
+        var store = new auto.parto.service.notification.HybridNotificationStore(redis, provider, mapper, policy);
+        var sse = org.mockito.Mockito.mock(auto.parto.service.notification.SSENotificationService.class);
+        var written = new java.util.concurrent.ConcurrentLinkedQueue<UUID>();
+        org.mockito.Mockito.when(sse.sendViaSSE(org.mockito.ArgumentMatchers.eq(owner.toString()),
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(call -> { written.add(call.getArgument(1)); return true; });
+        var breaker = org.mockito.Mockito.mock(auto.parto.service.BasicCircuitBreaker.class);
+        var workerA = new auto.parto.service.notification.ResilientPendingNotificationService(store, sse, breaker);
+        var workerB = sameServiceInstance ? workerA
+                : new auto.parto.service.notification.ResilientPendingNotificationService(store, sse, breaker);
+        Mono<Integer> reclaim = lookupStarted.asMono()
+                // Deterministically cross the lease boundary while A's lookup is unresolved.
+                .then(databaseClient.sql("UPDATE notifications SET lease_expires_at = CURRENT_TIMESTAMP - INTERVAL '1 second' WHERE recipient_user_id = (SELECT id FROM app_users WHERE public_id = :owner) AND lease_owner IS NOT NULL")
+                        .bind("owner", owner).fetch().rowsUpdated())
+                .then(Mono.zip(Mono.defer(() -> workerB.deliverPendingOnConnect(owner.toString())),
+                        replacementStarted.asMono().doOnSuccess(ignored -> delayedLookup.tryEmitValue(true))
+                                .then(firstFinished.asMono())
+                                .flatMap(ignored -> databaseClient.sql("SELECT status FROM notifications WHERE public_id = :id")
+                                        .bind("id", firstRow.publicId()).map((row, metadata) -> row.get("status", String.class)).one())
+                                .doOnNext(status -> {
+                                    assertThat(status).isEqualTo("PENDING");
+                                    assertThat(written).doesNotContain(firstRow.publicId());
+                                    replacementLookup.tryEmitValue(true);
+                                })))
+                .map(tuple -> tuple.getT1());
+        StepVerifier.create(Mono.zip(workerA.deliverPendingOnConnect(owner.toString())
+                .doOnSuccess(firstFinished::tryEmitValue), reclaim))
+                .assertNext(counts -> assertThat(counts.getT1() + counts.getT2()).isEqualTo(2))
+                .expectComplete().verify(Duration.ofSeconds(10));
+        assertThat(written).containsExactlyInAnyOrder(firstRow.publicId(), secondRow.publicId());
+        assertThat(repository.findPendingForRecipient(owner, 100).collectList().block()).isEmpty();
+    }
+
+    @Test
+    void renewalCannotReviveExpiredOrReplacedClaimAndRequiresPendingStatus() {
+        UUID owner = UUID.randomUUID();
+        insertUser(owner).block();
+        var row = repository.enqueue(owner, "NEW_SEARCH_POSTED", "{}").block();
+        repository.claimNotification(row.publicId(), "claim-a", Instant.now(), Duration.ofSeconds(30)).block();
+        assertThat(repository.renewClaim(row.publicId(), "other", Duration.ofSeconds(30)).block()).isFalse();
+        assertThat(repository.renewClaim(row.publicId(), "claim-a", Duration.ofSeconds(30)).block()).isTrue();
+        databaseClient.sql("UPDATE notifications SET lease_expires_at = CURRENT_TIMESTAMP - INTERVAL '1 second' WHERE public_id = :id")
+                .bind("id", row.publicId()).fetch().rowsUpdated().block();
+        assertThat(repository.renewClaim(row.publicId(), "claim-a", Duration.ofSeconds(30)).block()).isFalse();
+        repository.claimNotification(row.publicId(), "claim-b", Instant.now(), Duration.ofSeconds(30)).block();
+        assertThat(repository.renewClaim(row.publicId(), "claim-a", Duration.ofSeconds(30)).block()).isFalse();
+        assertThat(repository.acknowledgeDelivery(row.publicId(), "claim-b").block()).isTrue();
+        assertThat(repository.renewClaim(row.publicId(), "claim-b", Duration.ofSeconds(30)).block()).isFalse();
+    }
+
+    @Test
+    void malformedFirstClaimDoesNotHideFollowingValidNotificationInSamePass() throws Exception {
+        UUID owner = UUID.randomUUID();
+        insertUser(owner).block();
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var invalid = new auto.parto.dto.NotificationRequest("invalid", null, auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "safe", 1L);
+        var valid = new auto.parto.dto.NotificationRequest("valid", owner.toString(), invalid.type(), "safe", 2L);
+        var invalidRow = repository.enqueue(owner, invalid.type().name(), mapper.writeValueAsString(invalid)).block();
+        var validRow = repository.enqueue(owner, valid.type().name(), mapper.writeValueAsString(valid)).block();
+        var redis = org.mockito.Mockito.mock(auto.parto.service.notification.RedisNotificationStore.class);
+        org.mockito.Mockito.when(redis.replacePendingNotifications(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any())).thenReturn(Mono.empty());
+        org.mockito.Mockito.when(redis.removeNotification(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString())).thenReturn(Mono.just(1L));
+        var provider = org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+        org.mockito.Mockito.when(provider.getIfAvailable()).thenReturn(repository);
+        var preferences = org.mockito.Mockito.mock(auto.parto.service.notification.NotificationPreferenceFilter.class);
+        org.mockito.Mockito.when(preferences.canSend(owner.toString(), "push", valid.type().name())).thenReturn(Mono.just(true));
+        var store = new auto.parto.service.notification.HybridNotificationStore(redis, provider, mapper, preferences);
+        var sse = org.mockito.Mockito.mock(auto.parto.service.notification.SSENotificationService.class);
+        org.mockito.Mockito.when(sse.sendViaSSE(owner.toString(), validRow.publicId(), valid)).thenReturn(true);
+        var worker = new auto.parto.service.notification.ResilientPendingNotificationService(store, sse,
+                org.mockito.Mockito.mock(auto.parto.service.BasicCircuitBreaker.class));
+        StepVerifier.create(worker.deliverPendingOnConnect(owner.toString())).expectNext(1).expectComplete().verify(Duration.ofSeconds(5));
+        assertThat(databaseClient.sql("SELECT status FROM notifications WHERE public_id = :id").bind("id", invalidRow.publicId())
+                .map((row, metadata) -> row.get("status", String.class)).one().block()).isEqualTo("SUPPRESSED");
+        org.mockito.Mockito.verify(sse).sendViaSSE(owner.toString(), validRow.publicId(), valid);
+        org.mockito.Mockito.verify(preferences, org.mockito.Mockito.times(1)).canSend(owner.toString(), "push", valid.type().name());
+    }
+
     private reactor.core.publisher.Mono<Void> insertUser(UUID publicId) {
         return databaseClient.sql("""
                         INSERT INTO app_users (public_id, email, role, status)

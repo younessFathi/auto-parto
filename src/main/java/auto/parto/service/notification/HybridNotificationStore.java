@@ -22,7 +22,10 @@ import java.time.Instant;
 @Slf4j
 public class HybridNotificationStore {
 
-    public record ClaimedNotification(UUID publicId, NotificationRequest notification) {
+    public record ClaimedNotification(UUID publicId, NotificationRequest notification, boolean invalidPayload) {
+        public ClaimedNotification(UUID publicId, NotificationRequest notification) {
+            this(publicId, notification, false);
+        }
     }
 
     private final RedisNotificationStore redisStore;
@@ -54,16 +57,17 @@ public class HybridNotificationStore {
     /** Persists first and returns the authoritative public ID used by live delivery. */
     public Mono<NotificationRecord> storePendingRecord(NotificationRequest notification) {
         NotificationPolicy.category(notification.type() == null ? null : notification.type().name());
-        String userId = notification.userId();
+        NotificationRequest canonical = NotificationPolicy.canonicalRecipient(notification);
+        String userId = canonical.userId();
         if (postgresqlRepository == null) {
             return Mono.empty();
         }
         return parseUserId(userId)
-                .flatMap(owner -> serialize(notification)
+                .flatMap(owner -> serialize(canonical)
                         .flatMap(payload -> postgresqlRepository.enqueue(owner,
                                 notification.type().name(), payload))
                         // PostgreSQL is authoritative; Redis is only a best-effort projection.
-                        .flatMap(record -> redisStore.storePending(userId, notification)
+                        .flatMap(record -> redisStore.storePending(userId, canonical)
                                 .onErrorReturn(false)
                                 .thenReturn(record)));
     }
@@ -113,9 +117,9 @@ public class HybridNotificationStore {
         try {
             NotificationRequest request = objectMapper.readValue(record.payloadJson(), NotificationRequest.class);
             NotificationPolicy.category(request.type() == null ? null : request.type().name());
-            if (!record.recipientUserPublicId().toString().equals(request.userId())
+            if (!record.recipientUserPublicId().toString().equals(NotificationPolicy.recipientId(request.userId()))
                     || !record.eventType().equals(request.type().name())) return Mono.empty();
-            return Mono.just(request);
+            return Mono.just(NotificationPolicy.canonicalRecipient(request));
         } catch (JsonProcessingException | IllegalArgumentException exception) {
             log.warn("Skipping malformed PostgreSQL notification {}", record.publicId());
             return Mono.empty();
@@ -156,7 +160,9 @@ public class HybridNotificationStore {
                         .flatMap(record -> deserialize(record)
                                 .map(notification -> new ClaimedNotification(record.publicId(), notification))
                                 .switchIfEmpty(postgresqlRepository.suppressDelivery(record.publicId(), claimOwner,
-                                        "INVALID_NOTIFICATION").then(Mono.empty()))));
+                                        "INVALID_NOTIFICATION")
+                                        .thenReturn(new ClaimedNotification(record.publicId(), null, true)))));
+
     }
 
     public Flux<ClaimedNotification> replayNotifications(String userId, UUID afterEventId, int limit) {
@@ -169,6 +175,10 @@ public class HybridNotificationStore {
                                 .filterWhen(this::canDeliver)
                                 .map(notification -> new ClaimedNotification(record.publicId(), notification))))
                 .doOnError(error -> log.warn("SSE notification replay is unavailable"));
+    }
+
+    public Mono<Boolean> renewClaim(UUID publicId, String claimOwner, Duration lease) {
+        return postgresqlRepository == null ? Mono.just(false) : postgresqlRepository.renewClaim(publicId, claimOwner, lease);
     }
 
     public Mono<Boolean> validateReplayCursor(String userId, UUID cursor) {

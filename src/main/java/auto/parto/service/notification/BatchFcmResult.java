@@ -12,6 +12,7 @@ public class BatchFcmResult {
     private int totalUsers;
     private int successfulUsers;
     private int failedUsers;
+    private int suppressedUsers;
     private List<UserDeliveryResult> results;
 
     @Data

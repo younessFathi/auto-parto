@@ -148,7 +148,8 @@ public class NotificationController {
         CanonicalSecurity.requireRole(authentication, "ROLE_ADMIN");
         auto.parto.service.notification.NotificationPolicy.category(
                 notificationRequest.type() == null ? null : notificationRequest.type().name());
-        String userId = notificationRequest.userId();
+        NotificationRequest canonical = auto.parto.service.notification.NotificationPolicy.canonicalRecipient(notificationRequest);
+        String userId = canonical.userId();
         log.info(SENDING_NOTIFICATION_TO_USER_TYPE, userId, notificationRequest.type());
         return Mono.defer(() -> {
                     // Check if user has active connection
@@ -156,7 +157,7 @@ public class NotificationController {
                         log.debug(USER_HAS_ACTIVE_CONNECTION_ATTEMPTING_DIRECT_DELIVERY, userId);
 
                         // User is online - try direct delivery
-                        return resilientNotificationService.deliverDirect(notificationRequest)
+                        return resilientNotificationService.deliverDirect(canonical)
                                 .flatMap(result -> {
                                     if (result.delivered()) {
                                         log.info(NOTIFICATION_SUCCESSFULLY_DELIVERED_TO_VIA_SSE, userId);
@@ -179,7 +180,7 @@ public class NotificationController {
                     }
 
                     // Store for later delivery
-                    return pendingNotificationService.addPendingNotification(notificationRequest)
+                    return pendingNotificationService.addPendingNotification(canonical)
                             .map(isStored -> {
                                 if (isStored) {
                                     log.info(NOTIFICATION_STORED_FOR_USER, userId);

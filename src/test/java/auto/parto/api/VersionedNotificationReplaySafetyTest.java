@@ -212,6 +212,42 @@ class VersionedNotificationReplaySafetyTest {
         verify(connections).unregisterConnection(user.toString(), sink);
     }
 
+    @Test
+    void downstreamDemandCannotReleaseLiveAheadOfQueuedReplay() throws Exception {
+        for (long initialDemand : new long[]{0, 1, 3}) {
+            VersionedNotificationController controller = controller();
+            Sinks.Many<SseNotificationEvent> sink = liveSink();
+            when(connections.registerConnection(user.toString())).thenReturn(sink);
+            UUID thirdId = UUID.randomUUID();
+            ObjectMapper mapper = new ObjectMapper();
+            when(repository.findForRecipientAfter(user, cursor, 100)).thenReturn(Flux.just(
+                    new NotificationRecord(firstId, user, "NEW_SEARCH_POSTED", mapper.writeValueAsString(notification("first")), "DISPATCHED", Instant.EPOCH, Instant.EPOCH),
+                    new NotificationRecord(secondId, user, "NEW_SEARCH_POSTED", mapper.writeValueAsString(notification("second")), "DISPATCHED", Instant.EPOCH, Instant.EPOCH),
+                    new NotificationRecord(thirdId, user, "NEW_SEARCH_POSTED", mapper.writeValueAsString(notification("third")), "DISPATCHED", Instant.EPOCH, Instant.EPOCH)));
+            Sinks.One<Boolean> lookup = Sinks.one();
+            when(preferences.canSend(user.toString(), "push", "NEW_SEARCH_POSTED"))
+                    .thenReturn(lookup.asMono(), Mono.just(true));
+            java.util.List<String> received = new java.util.ArrayList<>();
+            reactor.core.publisher.BaseSubscriber<ServerSentEvent<NotificationRequest>> subscriber =
+                    new reactor.core.publisher.BaseSubscriber<>() {
+                        @Override protected void hookOnSubscribe(org.reactivestreams.Subscription subscription) {
+                            if (initialDemand > 0) request(initialDemand);
+                        }
+                        @Override protected void hookOnNext(ServerSentEvent<NotificationRequest> event) {
+                            received.add(event.id());
+                            if (liveId.toString().equals(event.id())) cancel();
+                        }
+                    };
+            stream(controller).subscribe(subscriber);
+            // Drive demand only after subscribe and all synchronous prefetch work return.
+            assertThat(sink.tryEmitNext(liveEvent())).isEqualTo(Sinks.EmitResult.OK);
+            lookup.tryEmitValue(true);
+            for (int i = 0; i < 4; i++) subscriber.request(1);
+            subscriber.cancel();
+            assertThat(received).containsExactly(firstId.toString(), secondId.toString(), thirdId.toString(), liveId.toString());
+        }
+    }
+
     private VersionedNotificationController controller() {
         when(repositories.getIfAvailable()).thenReturn(repository);
         when(repository.cursorBelongsToRecipient(user, cursor)).thenReturn(Mono.just(true));

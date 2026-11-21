@@ -6,6 +6,15 @@ import java.util.Locale;
 public final class NotificationPolicy {
     private NotificationPolicy() { }
 
+    public static String recipientId(String value) {
+        if (value == null) throw new IllegalArgumentException("notification recipient is required");
+        return java.util.UUID.fromString(value).toString();
+    }
+
+    public static auto.parto.dto.NotificationRequest canonicalRecipient(auto.parto.dto.NotificationRequest value) {
+        return new auto.parto.dto.NotificationRequest(value.id(), recipientId(value.userId()), value.type(), value.message(), value.sysTime());
+    }
+
     public static String channel(String value) {
         if (value == null) throw new IllegalArgumentException("notification channel is required");
         return switch (value.toLowerCase(Locale.ROOT)) {

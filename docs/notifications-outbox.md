@@ -31,7 +31,9 @@ registry returns 429.
 Replay checks current push/type preferences in row order. An explicit opt-out skips
 that row; a preference/storage error terminates the stream instead of skipping
 unresolved content and advancing its cursor. During replay, live content waits in
-a bounded buffer (100 queued events plus one held event); overflow also terminates
+a bounded capture queue. The single downstream content lane drains replay before
+releasing any live event, including under limited client demand. At most 100 live
+events are queued plus one prefetched downstream; overflow also terminates
 the stream. Clients reconnect with their last received event ID. Disconnect or
 connection replacement discards held content and cancels replay; content-free
 heartbeats continue while replay is pending. This protects the bounded replay
@@ -44,3 +46,12 @@ must use load-balancer instance affinity for an SSE connection and reconnect. A 
 shared connection coordinator is required before claiming global multi-instance live
 delivery. The legacy `/notifications/subscribe` and `/notifications/subscribe/{userId}`
 routes are deprecated during migration.
+
+Recovery processes at most 100 intents per recipient pass, claiming one only when
+ready to process it. Each claim has a unique fencing identity, including overlapping
+work on the same instance. After the preference read, a server-time guarded renewal
+requires the current unexpired PENDING claim before any SSE write or suppression.
+A lost claim skips stale delivery/finalization; recovery can reclaim expired work.
+This does not make the socket write and database acknowledgement exactly-once.
+Recipient UUIDs are compared by value and routed in canonical form, including valid
+uppercase historical payloads; different or malformed owners remain invalid.
