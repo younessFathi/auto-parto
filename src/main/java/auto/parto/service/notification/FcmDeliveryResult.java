@@ -29,6 +29,8 @@ public class FcmDeliveryResult {
 
     private int totalTokens;
     private int successfulTokens;
+    private int suppressedTokens;
+    private int failedTokenCount;
     private String token;
 
     @Builder.Default
@@ -55,6 +57,16 @@ public class FcmDeliveryResult {
                 .totalTokens(0)
                 .successfulTokens(0)
                 .build();
+    }
+
+    public static FcmDeliveryResult ineligible(String userId) {
+        return FcmDeliveryResult.builder().userId(userId).success(false).status("INELIGIBLE")
+                .error("NO_ACTIVE_OWNER").totalTokens(0).successfulTokens(0).build();
+    }
+
+    public static FcmDeliveryResult suppressed(String userId) {
+        return FcmDeliveryResult.builder().userId(userId).success(false).status("SUPPRESSED")
+                .error("PREFERENCE_DISABLED").totalTokens(0).successfulTokens(0).build();
     }
 
     public static FcmDeliveryResult pending(String userId) {

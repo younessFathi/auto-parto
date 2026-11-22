@@ -13,6 +13,11 @@ public class NotificationPreferenceFilter {
 
     private final NotificationPreferencesService preferencesService;
 
+    public Mono<Boolean> canSend(String userId, String channel, String type) {
+        return Mono.defer(() -> preferencesService.canDeliver(userId, channel, type))
+                .timeout(java.time.Duration.ofSeconds(5));
+    }
+
     public Mono<Boolean> canSendPushNotification(String userId) {
         return preferencesService.isChannelEnabled(userId, "push");
     }

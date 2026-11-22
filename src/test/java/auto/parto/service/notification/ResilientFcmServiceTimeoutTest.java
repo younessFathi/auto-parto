@@ -27,15 +27,21 @@ class ResilientFcmServiceTimeoutTest {
     private FirebaseMessaging firebaseMessaging;
     @Mock
     private DeviceTokenService deviceTokenService;
+    @Mock private NotificationPreferenceFilter preferences;
     private ResilientFcmService service;
     private CircuitBreaker circuitBreaker;
     private SimpleMeterRegistry registry;
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(deviceTokenService.activeOwner(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Mono.just("user-1"));
+        org.mockito.Mockito.lenient().when(preferences.canSend(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("push"), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Mono.just(true));
         circuitBreaker = CircuitBreaker.ofDefaults("fcm-test");
         registry = new SimpleMeterRegistry();
-        service = new ResilientFcmService(firebaseMessaging, deviceTokenService, circuitBreaker,
+        service = new ResilientFcmService(firebaseMessaging, deviceTokenService, preferences, circuitBreaker,
                 new ProviderCallTelemetry(registry), Duration.ofMillis(50), Duration.ofMillis(1), 0, 1, 1);
     }
 
@@ -44,7 +50,7 @@ class ResilientFcmServiceTimeoutTest {
         SettableApiFuture<String> pending = SettableApiFuture.create();
         when(firebaseMessaging.sendAsync(any())).thenReturn(pending);
 
-        StepVerifier.create(service.sendToToken("token-1", new FcmNotification()))
+        StepVerifier.create(service.sendToToken("token-1", FcmNotification.sellerResponse("seller", "part", "response")))
                 .assertNext(result -> org.assertj.core.api.Assertions.assertThat(result.isSuccess()).isFalse())
                 .verifyComplete();
 
@@ -63,10 +69,10 @@ class ResilientFcmServiceTimeoutTest {
             return pending;
         });
 
-        reactor.core.Disposable first = service.sendToToken("token-1", new FcmNotification()).subscribe();
+        reactor.core.Disposable first = service.sendToToken("token-1", FcmNotification.sellerResponse("seller", "part", "response")).subscribe();
         org.assertj.core.api.Assertions.assertThat(started.await(1, TimeUnit.SECONDS)).isTrue();
 
-        StepVerifier.create(service.sendToToken("token-2", new FcmNotification()))
+        StepVerifier.create(service.sendToToken("token-2", FcmNotification.sellerResponse("seller", "part", "response")))
                 .assertNext(result -> org.assertj.core.api.Assertions.assertThat(result.isSuccess()).isFalse())
                 .verifyComplete();
 

@@ -145,3 +145,11 @@ The canonical versioned HTTP API and legacy-route migration policy are documente
 Codex feature delivery uses Coder, Reviewer and DevOps with independent commit approvals and a GitHub PR handoff for human review. Read [the agent workflow](docs/agent-workflow.md). Open Codex in this repository to load `.codex/config.toml` and `.codex/agents/`; model settings inherit from the current chat. Local progress is recorded in ignored `handover.md` using [the versioned template](docs/agent-handover-template.md).
 
 Coder can also suggest evidence-based product, technical and workflow improvements through [feature proposals](docs/feature-proposals/README.md). Reviewer and DevOps assess each proposal; implementation requires your explicit approval.
+
+Wallet credits require [confirmed administrator funding](docs/wallet-ledger.md#confirmed-manual-funding-authority-ap-0050); sellers can debit their own wallets but cannot self-credit.
+
+Offer decisions follow recipient consent: buyers decide seller-created request offers; sellers decide buyer-created listing offers. Either participant can cancel a pending offer. Use the response `version` as `expectedVersion`; terminal/stale decisions conflict except receipt-backed acceptance replay, and admins cannot bypass participation.
+
+Notification delivery checks current channel **and** category preferences, including queued SSE, replay and every FCM retry. Push controls both SSE and device notifications; SMS/marketing default off. Opt-outs are SUPPRESSED, lookup failures retry boundedly, and authentication OTP is independent. See [delivery consent and recovery](docs/technical-workflows.md#notification-delivery-consent-and-recovery-ap-0053).
+
+Accepted offers atomically reserve the listing or close the request, reject competing pending offers, and record updates for both participants. `acceptancePublicId` identifies the completed database journey; delivery follows current preferences and may remain pending. No wallet funds move. See [offer decisions and recovery](docs/api-offers.md).

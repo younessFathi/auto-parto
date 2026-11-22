@@ -83,6 +83,14 @@ public class FcmNotificationController {
                             FcmNotification notification = buildFcmNotification(request);
                             return fcmService.sendToUser(request.getUserId(), notification)
                                     .map(result -> {
+                                        if ("SUPPRESSED".equals(result.getStatus())) {
+                                            log.info("Notification suppressed by recipient preferences");
+                                            return ResponseEntity.ok(result);
+                                        }
+                                        if ("INELIGIBLE".equals(result.getStatus())) {
+                                            log.info("Notification recipient is no longer eligible");
+                                            return ResponseEntity.ok(result);
+                                        }
                                         if (result.isSuccess()) {
                                             log.info("Notification sent successfully");
                                             return ResponseEntity.ok(result);
@@ -91,7 +99,7 @@ public class FcmNotificationController {
                                             return ResponseEntity.status(HttpStatus.ACCEPTED).body(result);
                                         }
                                     })
-                                    .onErrorResume(error -> {
+                                    .onErrorResume(error -> !(error instanceof IllegalArgumentException), error -> {
                                         log.error("Error sending notification: PROVIDER_UNAVAILABLE");
                                         return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                                                 .body(FcmDeliveryResult.failed(request.getUserId(), "PROVIDER_UNAVAILABLE")));
@@ -142,7 +150,7 @@ public class FcmNotificationController {
                                                         result.getSuccessfulUsers(), result.getTotalUsers());
                                                 return ResponseEntity.ok(result);
                                             })
-                                            .onErrorResume(error -> {
+                                            .onErrorResume(error -> !(error instanceof IllegalArgumentException), error -> {
                                                 log.error("Failed to notify sellers: PROVIDER_UNAVAILABLE");
                                                 return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                                                         .body(BatchFcmResult.builder()
@@ -212,6 +220,14 @@ public class FcmNotificationController {
 
                             return fcmService.sendToUser(request.getBuyerId(), notification)
                                     .map(result -> {
+                                        if ("SUPPRESSED".equals(result.getStatus())) {
+                                            log.info("Notification suppressed by recipient preferences");
+                                            return ResponseEntity.ok(result);
+                                        }
+                                        if ("INELIGIBLE".equals(result.getStatus())) {
+                                            log.info("Notification recipient is no longer eligible");
+                                            return ResponseEntity.ok(result);
+                                        }
                                         if (result.isSuccess()) {
                                             log.info("Buyer notified about seller response");
                                             return ResponseEntity.ok(result);
@@ -252,7 +268,7 @@ public class FcmNotificationController {
                                             log.info("Urgent notification sent to {}/{} users",
                                                     result.getSuccessfulUsers(), result.getTotalUsers()))
                                     .map(ResponseEntity::ok)
-                                    .onErrorResume(error -> {
+                                    .onErrorResume(error -> !(error instanceof IllegalArgumentException), error -> {
                                         log.error("Failed to send urgent notification: PROVIDER_UNAVAILABLE");
                                         return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                                                 .body(BatchFcmResult.builder()

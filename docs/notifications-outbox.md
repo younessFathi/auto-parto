@@ -28,6 +28,17 @@ recipient; malformed, missing, or foreign cursors return 400. Clients deduplicat
 because a live event and a replayed event may overlap. A full instance connection
 registry returns 429.
 
+Replay checks current push/type preferences in row order. An explicit opt-out skips
+that row; a preference/storage error terminates the stream instead of skipping
+unresolved content and advancing its cursor. During replay, live content waits in
+a bounded capture queue. The single downstream content lane drains replay before
+releasing any live event, including under limited client demand. At most 100 live
+events are queued plus one prefetched downstream; overflow also terminates
+the stream. Clients reconnect with their last received event ID. Disconnect or
+connection replacement discards held content and cancels replay; content-free
+heartbeats continue while replay is pending. This protects the bounded replay
+phase, without promising global live/replay ordering or exactly-once delivery.
+
 The durable notification row and its SSE transport attempt remain separate. Writing to
 the socket records a bounded `WRITTEN` attempt but does not mean the client received or
 processed the event. The current connection registry is process-local, so deployments
@@ -35,3 +46,16 @@ must use load-balancer instance affinity for an SSE connection and reconnect. A 
 shared connection coordinator is required before claiming global multi-instance live
 delivery. The legacy `/notifications/subscribe` and `/notifications/subscribe/{userId}`
 routes are deprecated during migration.
+
+Recovery processes at most 100 intents per recipient pass, claiming one only when
+ready to process it. Each claim has a unique fencing identity, including overlapping
+work on the same instance. After the preference read, a server-time guarded renewal
+requires the current unexpired PENDING claim before any SSE write or suppression.
+A lost claim skips stale delivery/finalization; recovery can reclaim expired work.
+This does not make the socket write and database acknowledgement exactly-once.
+Recipient UUIDs must use the full 8-4-4-4-12 spelling; full-width uppercase and
+mixed-case hex are accepted and routed in canonical form. Abbreviated groups,
+whitespace and other malformed spellings are rejected rather than padded or
+trimmed. Historical payloads must also match their persisted owner: abbreviated,
+different or malformed owners become INVALID_NOTIFICATION, while later valid work
+continues in the same bounded recovery pass.

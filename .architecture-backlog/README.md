@@ -40,3 +40,4 @@ This ignored local backlog converts `docs/architecture.md` and `docs/deployment-
 - [F08 Observability and Recovery](features/F08-observability-and-recovery.md)
 - [F09 Go-Live Readiness](features/F09-go-live-readiness.md)
 - [F12 Runtime Cleanup](features/F12-runtime-cleanup.md)
+- [F13 Marketplace Business Integrity](features/F13-marketplace-business-integrity.md)

@@ -77,6 +77,19 @@ class PostgresqlMigrationRolesIT {
                 assertThat(resultSet.getBoolean("rolcreaterole")).isFalse();
             }
 
+            try (Statement statement = connection.createStatement();
+                 ResultSet privileges = statement.executeQuery("""
+                         SELECT has_table_privilege(current_user, 'offer_acceptances', 'SELECT')
+                            AND has_table_privilege(current_user, 'offer_acceptances', 'INSERT')
+                            AND has_table_privilege(current_user, 'wallet_funding_events', 'SELECT')
+                            AND has_table_privilege(current_user, 'wallet_funding_events', 'INSERT')
+                            AND has_table_privilege(current_user, 'wallet_funding_events', 'UPDATE')
+                            AND has_sequence_privilege(current_user, 'wallet_funding_events_id_seq', 'USAGE') AS allowed
+                         """)) {
+                assertThat(privileges.next()).isTrue();
+                assertThat(privileges.getBoolean("allowed")).isTrue();
+            }
+
             assertThatThrownBy(() -> {
                 try (Statement statement = connection.createStatement()) {
                     statement.execute("CREATE TABLE runtime_must_not_create (id BIGINT)");

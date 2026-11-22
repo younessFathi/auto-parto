@@ -157,4 +157,20 @@ class NotificationControllerLifecycleTest {
         verify(resilientNotificationService, org.mockito.Mockito.never())
                 .unregisterConnection(userId, replacementSink);
     }
+    @Test
+    void legacyBroadcastUsesCanonicalSubscriberPreferencesAndLeavesHeartbeatsAvailable() {
+        String recipient = java.util.UUID.randomUUID().toString();
+        var notification = new auto.parto.dto.NotificationRequest("safe", "payload-owner",
+                auto.parto.enums.NotificationType.NEW_SEARCH_POSTED, "safe", 1L);
+        when(resilientNotificationService.canDeliver(recipient, notification)).thenReturn(Mono.just(false));
+        var controller = new NotificationController(resilientNotificationService,
+                pendingNotificationService, resilientPendingNotificationService);
+        StepVerifier.withVirtualTime(() -> controller.subscribe(CanonicalTestAuthentication.buyer(recipient)))
+                .then(() -> controller.broadcast(notification, CanonicalTestAuthentication.admin("admin")).block())
+                .thenAwait(Duration.ofSeconds(30))
+                .assertNext(event -> assertThat(event.comment()).isNotNull())
+                .thenCancel().verify();
+        verify(resilientNotificationService).canDeliver(recipient, notification);
+    }
+
 }

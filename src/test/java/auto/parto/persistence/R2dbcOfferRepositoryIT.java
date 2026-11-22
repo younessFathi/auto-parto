@@ -163,6 +163,43 @@ class R2dbcOfferRepositoryIT {
                 .verify();
     }
 
+    @Test
+    void databaseEnforcesRecipientPendingVersionAndActiveParticipantsAcrossRestart() {
+        UUID buyer = UUID.randomUUID(), seller = UUID.randomUUID(), request = UUID.randomUUID();
+        insertPartiesAndRequest(buyer, seller, request).block();
+        OfferRecord offer = repository.createForRequest(seller, request, 9000, "MAD", false, 0, null).block();
+        assertThat(offer.version()).isZero();
+        StepVerifier.create(repository.updateStatus(offer.publicId(), seller, "ACCEPTED", 0, Instant.now()))
+                .expectErrorMatches(e -> e.getMessage().contains("403")).verify();
+        StepVerifier.create(repository.updateStatus(offer.publicId(), UUID.randomUUID(), "CANCELLED", 0, Instant.now()))
+                .verifyComplete();
+        StepVerifier.create(repository.updateStatus(offer.publicId(), buyer, "REJECTED", 9, Instant.now()))
+                .verifyComplete();
+        OfferRecord result = repository.updateStatus(offer.publicId(), buyer, "REJECTED", 0, Instant.now()).block();
+        assertThat(result.status()).isEqualTo("REJECTED");
+        assertThat(result.version()).isEqualTo(1);
+        // A fresh adapter has no in-memory replay state and still cannot reopen a terminal offer.
+        var cf = io.r2dbc.spi.ConnectionFactories.get(ConnectionFactoryOptions.builder()
+                .option(DRIVER, "postgresql").option(HOST, POSTGRES.getHost())
+                .option(PORT, POSTGRES.getFirstMappedPort()).option(USER, POSTGRES.getUsername())
+                .option(PASSWORD, POSTGRES.getPassword()).option(DATABASE, POSTGRES.getDatabaseName()).build());
+        var restarted = new R2dbcOfferRepository(DatabaseClient.create(cf),
+                TransactionalOperator.create(new R2dbcTransactionManager(cf)));
+        StepVerifier.create(restarted.updateStatus(offer.publicId(), buyer, "ACCEPTED", 1, Instant.now()))
+                .expectErrorMatches(e -> e.getMessage().contains("409")).verify();
+        OfferRecord pending = repository.createForRequest(seller, request, 9000, "MAD", false, 0, null).block();
+        databaseClient.sql("""
+                WITH audit AS (INSERT INTO audit_records (public_id, action, entity_type, entity_id)
+                    SELECT gen_random_uuid(), 'TEST_DEACTIVATE', 'app_users', id FROM app_users WHERE public_id = :id
+                    RETURNING id)
+                UPDATE app_users SET status = 'INACTIVE', last_audit_record_id = audit.id
+                FROM audit WHERE public_id = :id
+                """)
+                .bind("id", buyer).fetch().rowsUpdated().block();
+        StepVerifier.create(repository.updateStatus(pending.publicId(), buyer, "ACCEPTED", 0, Instant.now()))
+                .expectErrorMatches(e -> e.getMessage().contains("409")).verify();
+    }
+
     private reactor.core.publisher.Mono<Void> insertPartiesAndRequest(UUID buyer, UUID seller, UUID request) {
         return insertUser(buyer, "BUYER")
                 .then(insertUser(seller, "SELLER"))
@@ -179,8 +216,8 @@ class R2dbcOfferRepositoryIT {
                 .then(insertUser(seller, "SELLER"))
                 .then(databaseClient.sql("""
                         INSERT INTO part_listings (public_id, seller_user_id, name, condition, category,
-                                                   amount_minor, currency)
-                        SELECT :listing, id, 'Listing', 'NEW', 'CAR', 9000, 'MAD'
+                                                   amount_minor, currency, status, business_status)
+                        SELECT :listing, id, 'Listing', 'NEW', 'CAR', 9000, 'MAD', 'PUBLISHED', 'PUBLISHED'
                         FROM app_users WHERE public_id = :seller
                         """)
                         .bind("listing", listing).bind("seller", seller).fetch().rowsUpdated().then());

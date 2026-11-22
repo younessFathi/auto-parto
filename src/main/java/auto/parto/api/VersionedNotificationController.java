@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import reactor.core.Exceptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
@@ -30,6 +31,7 @@ import java.util.UUID;
 public class VersionedNotificationController {
 
     private static final int REPLAY_LIMIT = 100;
+    private static final int LIVE_REPLAY_BUFFER_LIMIT = 100;
     private static final Duration HEARTBEAT_INTERVAL = Duration.ofSeconds(30);
 
     private final ResilientNotificationService connectionService;
@@ -72,17 +74,30 @@ public class VersionedNotificationController {
     private Flux<ServerSentEvent<NotificationRequest>> buildStream(String userId, UUID cursor,
                                                                      Sinks.Many<SseNotificationEvent> sink) {
         return Flux.defer(() -> sink.asFlux().publish(shared -> {
-                    Mono<Void> sinkClosed = shared.ignoreElements().then();
-                    Flux<ServerSentEvent<NotificationRequest>> live = shared.map(VersionedNotificationController::toSse);
+                    Sinks.One<Void> streamFailure = Sinks.one();
+                    // Capture live content before replay starts, even without downstream demand.
+                    Sinks.Many<SseNotificationEvent> capturedLive = Sinks.many().unicast()
+                            .onBackpressureBuffer(new java.util.concurrent.ArrayBlockingQueue<>(LIVE_REPLAY_BUFFER_LIMIT));
+                    Mono<Void> sinkClosed = shared.doOnNext(event -> {
+                                Sinks.EmitResult emitted = capturedLive.tryEmitNext(event);
+                                // Reactor reports a full bounded unicast queue before its first
+                                // subscriber as FAIL_ZERO_SUBSCRIBER rather than FAIL_OVERFLOW.
+                                if (emitted == Sinks.EmitResult.FAIL_OVERFLOW || emitted == Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER) {
+                                    streamFailure.tryEmitError(Exceptions.failWithOverflow("Live notification replay buffer exceeded"));
+                                }
+                            }).ignoreElements()
+                            .doOnError(streamFailure::tryEmitError)
+                            .onErrorResume(error -> Mono.never()).then();
                     Flux<ServerSentEvent<NotificationRequest>> replay = cursor == null
                             ? Flux.empty()
                             : notificationStore.replayNotifications(userId, cursor, REPLAY_LIMIT)
-                                .takeUntilOther(sinkClosed)
                                 .map(event -> toSse(new SseNotificationEvent(event.publicId(), event.notification())));
-                    Flux<ServerSentEvent<NotificationRequest>> heartbeat = heartbeat()
-                            .takeUntilOther(sinkClosed);
-                    // Subscribe to the live sink through the returned chain before replay starts.
-                    return Flux.merge(live, replay, heartbeat);
+                    // A single content lane drains replay downstream before any captured live ID.
+                    // Upstream completion alone cannot open a gate through merge's prefetch queue.
+                    Flux<ServerSentEvent<NotificationRequest>> content = Flux.concat(replay,
+                            capturedLive.asFlux().map(VersionedNotificationController::toSse));
+                    Flux<ServerSentEvent<NotificationRequest>> failure = streamFailure.asMono().thenMany(Flux.empty());
+                    return Flux.merge(1, content, heartbeat(), failure).takeUntilOther(sinkClosed);
                 }))
                 .doFinally(signal -> connectionService.unregisterConnection(userId, sink));
     }

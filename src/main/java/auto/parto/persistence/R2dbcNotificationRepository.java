@@ -20,7 +20,7 @@ public class R2dbcNotificationRepository implements NotificationRepository {
 
     private static final String NOTIFICATION_REQUESTED_EVENT = "notification.requested";
     private static final int NOTIFICATION_EVENT_SCHEMA_VERSION = 1;
-    private static final Set<String> STATUSES = Set.of("PENDING", "DISPATCHED", "EXHAUSTED");
+    private static final Set<String> STATUSES = Set.of("PENDING", "DISPATCHED", "EXHAUSTED", "SUPPRESSED");
     private static final Set<String> CHANNELS = Set.of("SSE", "FCM", "EMAIL");
     private static final String SELECT = """
             SELECT notification.public_id, owner.public_id AS recipient_public_id,
@@ -150,6 +150,8 @@ public class R2dbcNotificationRepository implements NotificationRepository {
                         JOIN notifications cursor_notification
                           ON cursor_notification.public_id = :afterNotificationPublicId
                         WHERE owner.public_id = :recipientPublicId
+                          AND cursor_notification.recipient_user_id = notification.recipient_user_id
+                          AND notification.status = 'DISPATCHED'
                           AND (notification.created_at, notification.public_id)
                               > (cursor_notification.created_at, cursor_notification.public_id)
                         ORDER BY notification.created_at, notification.public_id
@@ -336,6 +338,47 @@ public class R2dbcNotificationRepository implements NotificationRepository {
                 .all()
                 .flatMap(this::findByPublicId)
                 .as(transactions::transactional);
+    }
+
+    @Override
+    public Mono<Boolean> renewClaim(UUID notificationPublicId, String claimOwner, Duration leaseDuration) {
+        requirePublicId(notificationPublicId);
+        requireText(claimOwner, "claimOwner");
+        if (leaseDuration == null || leaseDuration.isNegative() || leaseDuration.isZero()) {
+            throw new IllegalArgumentException("leaseDuration must be positive");
+        }
+        return databaseClient.sql("""
+                        UPDATE notifications
+                        SET lease_expires_at = CURRENT_TIMESTAMP + (:leaseMillis * INTERVAL '1 millisecond'),
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE public_id = :id AND status = 'PENDING' AND lease_owner = :owner
+                          AND lease_expires_at > CURRENT_TIMESTAMP
+                        """)
+                .bind("id", notificationPublicId).bind("owner", claimOwner)
+                .bind("leaseMillis", leaseDuration.toMillis()).fetch().rowsUpdated().map(count -> count == 1);
+    }
+
+    @Override
+    public Mono<Boolean> suppressDelivery(UUID notificationPublicId, String claimOwner, String reason) {
+        requirePublicId(notificationPublicId);
+        requireText(claimOwner, "claimOwner");
+        if (!Set.of("PREFERENCE_DISABLED", "INVALID_NOTIFICATION").contains(reason)) {
+            throw new IllegalArgumentException("unsupported suppression reason");
+        }
+        return databaseClient.sql("""
+                WITH suppressed AS (
+                    UPDATE notifications SET status = 'SUPPRESSED', lease_owner = NULL,
+                        lease_expires_at = NULL, last_failure_code = :reason, updated_at = CURRENT_TIMESTAMP
+                    WHERE public_id = :id AND status = 'PENDING' AND lease_owner = :owner
+                        AND lease_expires_at > CURRENT_TIMESTAMP
+                    RETURNING id
+                )
+                INSERT INTO notification_attempts (public_id, notification_id, channel, status,
+                    failure_reason, completed_at)
+                SELECT gen_random_uuid(), id, 'SSE', 'SUPPRESSED', :reason, CURRENT_TIMESTAMP FROM suppressed
+                """)
+                .bind("id", notificationPublicId).bind("owner", claimOwner).bind("reason", reason)
+                .fetch().rowsUpdated().map(rows -> rows == 1).as(transactions::transactional);
     }
 
     @Override

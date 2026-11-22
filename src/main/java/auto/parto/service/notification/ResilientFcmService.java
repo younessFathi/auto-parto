@@ -30,6 +30,7 @@ public class ResilientFcmService {
 
     private final FirebaseMessaging firebaseMessaging;
     private final DeviceTokenService deviceTokenService;
+    private final NotificationPreferenceFilter preferences;
     private final CircuitBreaker circuitBreaker;
     private final ProviderCallTelemetry telemetry;
     private final Duration fcmTimeout;
@@ -40,6 +41,7 @@ public class ResilientFcmService {
 
     public ResilientFcmService(FirebaseMessaging firebaseMessaging,
                                DeviceTokenService deviceTokenService,
+                               NotificationPreferenceFilter preferences,
                                CircuitBreaker circuitBreaker,
                                ProviderCallTelemetry telemetry,
                                @Value("${auto.parto.providers.firebase.timeout:${firebase.messaging.timeout:10s}}") Duration fcmTimeout,
@@ -60,6 +62,7 @@ public class ResilientFcmService {
         }
         this.firebaseMessaging = firebaseMessaging;
         this.deviceTokenService = deviceTokenService;
+        this.preferences = preferences;
         this.circuitBreaker = circuitBreaker;
         this.telemetry = telemetry;
         this.fcmTimeout = fcmTimeout;
@@ -73,6 +76,20 @@ public class ResilientFcmService {
      * Send notification to a single user
      */
     public Mono<FcmDeliveryResult> sendToUser(String userId, FcmNotification notification) {
+        return Mono.defer(() -> {
+            validateNotification(notification);
+            return sendValidatedToUser(NotificationPolicy.recipientId(userId), notification);
+        });
+    }
+
+    private static void validateNotification(FcmNotification notification) {
+        if (notification == null || notification.getData() == null) {
+            throw new IllegalArgumentException("notification type is required");
+        }
+        NotificationPolicy.category(notification.getData().get("type"));
+    }
+
+    private Mono<FcmDeliveryResult> sendValidatedToUser(String userId, FcmNotification notification) {
         return deviceTokenService.getActiveTokens(userId)
                 // 1. Filter ensures that if the list is empty, the Mono becomes empty
                 .filter(tokens -> !tokens.isEmpty())
@@ -94,7 +111,7 @@ public class ResilientFcmService {
                             .error("No active tokens found")
                             .build());
                 })
-                // 5. Handle unexpected errors (Queue for retry)
+                // Direct failures are returned to the caller; no durable FCM queue is implied.
                 .onErrorResume(e -> {
                     log.error("FCM delivery failed; notification retry policy will handle the result");
                     return Mono.just(FcmDeliveryResult.failed(userId, "PROVIDER_UNAVAILABLE"));
@@ -106,7 +123,7 @@ public class ResilientFcmService {
      */
     private Mono<FcmDeliveryResult> sendToAllTokens(String userId, List<String> tokens, FcmNotification notification) {
         return Flux.fromIterable(tokens)
-                .flatMap(token -> sendToToken(token, notification), batchConcurrency)
+                .flatMap(token -> sendToToken(token, userId, notification), batchConcurrency)
                 .collectList()
                 .map(results -> buildDeliveryResult(userId, tokens.size(), results));
     }
@@ -117,14 +134,30 @@ public class ResilientFcmService {
     private FcmDeliveryResult buildDeliveryResult(String userId, int totalTokens, List<FcmDeliveryResult> results) {
         boolean anySuccess = results.stream().anyMatch(FcmDeliveryResult::isSuccess);
 
-        long failedCount = results.stream().filter(result -> !result.isSuccess()).count();
+        long successfulCount = results.stream().filter(FcmDeliveryResult::isSuccess).count();
+        int suppressedCount = (int) results.stream().filter(result -> "SUPPRESSED".equals(result.getStatus())).count();
+        if (suppressedCount == totalTokens) {
+            FcmDeliveryResult suppressed = FcmDeliveryResult.suppressed(userId);
+            suppressed.setTotalTokens(totalTokens);
+            suppressed.setSuppressedTokens(suppressedCount);
+            return suppressed;
+        }
+        if (results.stream().allMatch(result -> "INELIGIBLE".equals(result.getStatus()))) {
+            FcmDeliveryResult ineligible = FcmDeliveryResult.ineligible(userId);
+            ineligible.setTotalTokens(totalTokens);
+            ineligible.setFailedTokenCount(totalTokens);
+            return ineligible;
+        }
 
         return FcmDeliveryResult.builder()
                 .userId(userId)
                 .success(anySuccess)
+                .status(anySuccess ? (successfulCount == totalTokens ? "DELIVERED" : "PARTIAL") : "FAILED")
                 .failedTokens(List.of())
                 .totalTokens(totalTokens)
-                .successfulTokens(totalTokens - Math.toIntExact(failedCount))
+                .successfulTokens(Math.toIntExact(successfulCount))
+                .suppressedTokens(suppressedCount)
+                .failedTokenCount(totalTokens - Math.toIntExact(successfulCount) - suppressedCount)
                 .build();
     }
 
@@ -132,34 +165,37 @@ public class ResilientFcmService {
      * Send notification to multiple users (e.g., multiple sellers)
      */
     public Mono<BatchFcmResult> sendToUsers(List<String> userIds, FcmNotification notification) {
-        return Flux.fromIterable(userIds)
-                .flatMap(userId -> sendToUser(userId, notification)
-                        .map(result -> new BatchFcmResult.UserDeliveryResult(userId, result, null))
-                        .onErrorResume(e -> Mono.just(
-                                new BatchFcmResult.UserDeliveryResult(userId, FcmDeliveryResult.failed(userId, "PROVIDER_UNAVAILABLE"), null)
-                        ))
-                , batchConcurrency)
-                .collectList()
-                .map(results -> {
-                    int successCount = (int) results.stream()
-                            .filter(r -> r.getFcmDeliveryResult().isSuccess())
-                            .count();
-
-                    return BatchFcmResult.builder()
-                            .totalUsers(userIds.size())
-                            .successfulUsers(successCount)
-                            .failedUsers(userIds.size() - successCount)
-                            .results(results)
-                            .build();
-                });
+        return Mono.defer(() -> {
+            validateNotification(notification);
+            if (userIds == null) throw new IllegalArgumentException("notification recipients are required");
+            List<String> canonicalUsers = userIds.stream().map(NotificationPolicy::recipientId).toList();
+            return Flux.fromIterable(canonicalUsers)
+                    .flatMap(userId -> sendValidatedToUser(userId, notification)
+                            .map(result -> new BatchFcmResult.UserDeliveryResult(userId, result, null))
+                            .onErrorResume(error -> Mono.just(new BatchFcmResult.UserDeliveryResult(userId,
+                                    FcmDeliveryResult.failed(userId, "PROVIDER_UNAVAILABLE"), null))), batchConcurrency)
+                    .collectList()
+                    .map(results -> {
+                        int delivered = (int) results.stream().filter(r -> r.getFcmDeliveryResult().isSuccess()).count();
+                        int suppressed = (int) results.stream().filter(r -> "SUPPRESSED".equals(r.getFcmDeliveryResult().getStatus())).count();
+                        return BatchFcmResult.builder().totalUsers(canonicalUsers.size())
+                                .successfulUsers(delivered).suppressedUsers(suppressed)
+                                .failedUsers(canonicalUsers.size() - delivered - suppressed).results(results).build();
+                    });
+        });
     }
-
 
     /**
      * Send to single token with circuit breaker and retry
      */
     Mono<FcmDeliveryResult> sendToToken(String token, FcmNotification notification) {
-        Mono<FcmDeliveryResult> sendTask = telemetry.observe("firebase", "send_message", Mono.defer(() -> {
+        return sendToToken(token, null, notification);
+    }
+
+    private Mono<FcmDeliveryResult> sendToToken(String token, String expectedOwner, FcmNotification notification) {
+        String type = notification.getData().get("type");
+        NotificationPolicy.category(type);
+        Mono<FcmDeliveryResult> providerTask = Mono.defer(() -> {
                     Message message = Message.builder()
                             .setToken(token)
                             .setNotification(com.google.firebase.messaging.Notification.builder()
@@ -171,18 +207,31 @@ public class ResilientFcmService {
                             .setApnsConfig(getApnsConfig(notification))
                             .build();
                     if (!inFlight.tryAcquire()) {
-                        return Mono.error(new RejectedExecutionException("Firebase in-flight limit reached"));
+                        return telemetry.observe("firebase", "send_message",
+                                Mono.error(new RejectedExecutionException("Firebase in-flight limit reached")), fcmTimeout);
                     }
-                    return sendAsync(message)
-                            .map(messageId -> FcmDeliveryResult.success(token, messageId))
+                    return telemetry.observe("firebase", "send_message", sendAsync(message)
+                                    .map(messageId -> FcmDeliveryResult.success(token, messageId)), fcmTimeout)
+                            .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
                             .doFinally(ignored -> inFlight.release());
-                }), fcmTimeout)
+                });
+        Mono<FcmDeliveryResult> sendTask = Mono.defer(() -> deviceTokenService.activeOwner(token)
+                .onErrorMap(error -> new PreferenceLookupException())
+                .flatMap(owner -> {
+                    if (expectedOwner != null && !NotificationPolicy.recipientId(expectedOwner).equals(NotificationPolicy.recipientId(owner))) {
+                        return Mono.just(FcmDeliveryResult.ineligible(expectedOwner));
+                    }
+                    return preferences.canSend(owner, "push", type)
+                            .onErrorMap(error -> new PreferenceLookupException())
+                            .flatMap(allowed -> allowed ? providerTask
+                                    : Mono.just(FcmDeliveryResult.suppressed(expectedOwner)));
+                })
+                .switchIfEmpty(Mono.just(FcmDeliveryResult.ineligible(expectedOwner))))
                 .retryWhen(Retry.backoff(maxRetries, retryBackoff)
                         .filter(this::isRetryableError)
                         .doBeforeRetry(retry -> log.warn("Retrying FCM provider request attempt={}", retry.totalRetries() + 1)));
 
         return sendTask
-                .transformDeferred(CircuitBreakerOperator.of(circuitBreaker))
                 .onErrorResume(throwable -> {
                     log.error("FCM provider request failed; result will be handled by notification retry policy");
                     if (isInvalidTokenError(throwable)) {
@@ -221,9 +270,11 @@ public class ResilientFcmService {
     }
 
 
+    private static class PreferenceLookupException extends RuntimeException { }
+
     private boolean isRetryableError(Throwable throwable) {
         // Retry on network errors, timeouts, server errors
-        if (throwable instanceof TimeoutException) {
+        if (throwable instanceof TimeoutException || throwable instanceof PreferenceLookupException) {
             return true;
         }
         return throwable instanceof FirebaseMessagingException &&

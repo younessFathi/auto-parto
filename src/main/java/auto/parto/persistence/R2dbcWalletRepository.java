@@ -118,9 +118,10 @@ public class R2dbcWalletRepository implements WalletRepository {
                 .fetch().rowsUpdated().then();
     }
 
+    // Funding callers hold shared identity locks; lock only the balance row, not the joined owner.
     private Mono<WalletRecord> lockWallet(UUID ownerUserPublicId, String currency) {
         return databaseClient.sql(selectWalletSql()
-                        + " WHERE owner.public_id = :ownerPublicId AND wallet.currency = :currency FOR UPDATE")
+                        + " WHERE owner.public_id = :ownerPublicId AND wallet.currency = :currency FOR UPDATE OF wallet")
                 .bind("ownerPublicId", ownerUserPublicId)
                 .bind("currency", currency)
                 .map((row, metadata) -> mapWallet(row))

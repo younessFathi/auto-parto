@@ -80,11 +80,8 @@ public class SellerController {
                                     @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
                                     Authentication authentication) {
         CanonicalSecurity.requireOwner(authentication, id, "ROLE_SELLER");
-        Mono<SellerDto> mutation = idempotencyKey == null
-                ? sellerService.addFunds(id, amount)
-                : sellerService.addFunds(id, amount, currency, idempotencyKey);
-        return mutation
-                        .switchIfEmpty(Mono.error(new EntityNotFoundException("Seller not found")));
+        return Mono.error(new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.FORBIDDEN, "Wallet credits require confirmed administrator funding"));
     }
 
     @Operation(summary = "Deduct funds from seller's wallet")
@@ -107,6 +104,9 @@ public class SellerController {
                                        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
                                        Authentication authentication) {
         CanonicalSecurity.requireOwner(authentication, id, "ROLE_SELLER");
+        if (amount == null || amount.signum() <= 0) {
+            return Mono.error(new IllegalArgumentException("Debit amount must be positive"));
+        }
         Mono<SellerDto> mutation = idempotencyKey == null
                 ? sellerService.addFunds(id, amount.negate())
                 : sellerService.addFunds(id, amount.negate(), currency, idempotencyKey);

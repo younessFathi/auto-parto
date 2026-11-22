@@ -33,6 +33,12 @@ class ResilientPendingNotificationServiceTest {
     @InjectMocks
     private ResilientPendingNotificationService service;
 
+    @org.junit.jupiter.api.BeforeEach
+    void allowCurrentClaims() {
+        org.mockito.Mockito.lenient().when(notificationStore.renewClaim(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any())).thenReturn(Mono.just(true));
+    }
+
     @Test
     void recoverOnStartupSubscribesAndProcessesPendingNotifications() {
         String userId = "00000000-0000-0000-0000-000000000001";
@@ -44,7 +50,7 @@ class ResilientPendingNotificationServiceTest {
         when(notificationStore.getPendingRecipientIds(null, 100)).thenReturn(Flux.just(userId));
         when(notificationStore.rebuildProjection(userId)).thenReturn(Mono.empty());
         when(sseService.hasActiveConnection(userId)).thenReturn(true);
-        when(notificationStore.claimPendingNotifications(org.mockito.ArgumentMatchers.eq(userId), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(100))).thenReturn(Flux.empty());
+        when(notificationStore.claimPendingNotifications(org.mockito.ArgumentMatchers.eq(userId), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(1))).thenReturn(Flux.empty());
         when(notificationStore.getPendingRecipientIds(UUID.fromString(userId), 100)).thenReturn(Flux.empty());
 
         service.recoverOnStartup();
@@ -52,7 +58,7 @@ class ResilientPendingNotificationServiceTest {
         verify(notificationStore, org.mockito.Mockito.timeout(1_000)).getPendingStats();
         verify(notificationStore, org.mockito.Mockito.timeout(1_000)).claimPendingNotifications(
                 org.mockito.ArgumentMatchers.eq(userId), org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(100));
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(1));
     }
 
     @Test
@@ -67,7 +73,7 @@ class ResilientPendingNotificationServiceTest {
                 .thenReturn(Flux.fromIterable(recipients.subList(0, 100)));
         when(notificationStore.rebuildProjection(org.mockito.ArgumentMatchers.anyString())).thenReturn(Mono.empty());
         when(sseService.hasActiveConnection(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
-        when(notificationStore.claimPendingNotifications(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(100))).thenReturn(Flux.empty());
+        when(notificationStore.claimPendingNotifications(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(1))).thenReturn(Flux.empty());
         when(notificationStore.getPendingRecipientIds(UUID.fromString(recipients.get(99)), 100))
                 .thenReturn(Flux.just(recipients.get(100)));
         when(notificationStore.getPendingRecipientIds(UUID.fromString(recipients.get(100)), 100))
@@ -77,7 +83,7 @@ class ResilientPendingNotificationServiceTest {
 
         verify(notificationStore, org.mockito.Mockito.timeout(1_000)).claimPendingNotifications(
                 org.mockito.ArgumentMatchers.eq(recipients.get(100)), org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(100));
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(1));
     }
 
     @Test
@@ -120,8 +126,9 @@ class ResilientPendingNotificationServiceTest {
                 "PENDING", Instant.now(), Instant.now());
         when(notificationStore.rebuildProjection(userId)).thenReturn(Mono.empty());
         when(notificationStore.claimPendingNotifications(org.mockito.ArgumentMatchers.eq(userId), org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(100)))
-                .thenReturn(Flux.just(new HybridNotificationStore.ClaimedNotification(record.publicId(), notification)));
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(1)))
+                .thenReturn(Flux.just(new HybridNotificationStore.ClaimedNotification(record.publicId(), notification)), Flux.empty());
+        when(notificationStore.canDeliver(notification)).thenReturn(Mono.just(true));
         when(sseService.sendViaSSE(userId, record.publicId(), notification)).thenReturn(true);
         when(notificationStore.recordAttempt(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("SSE"),
                 org.mockito.ArgumentMatchers.eq("WRITTEN"), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull()))

@@ -83,15 +83,26 @@ class SellerControllerTest {
     }
 
     @Test
-    void addFunds_returns200() {
-        SellerDto dto = SellerDto.builder().id("seller-1").build();
-        when(sellerService.addFunds("seller-1", new BigDecimal("100.00"))).thenReturn(Mono.just(dto));
+    void sellerSelfCreditIsForbiddenOnBothAliases() {
+        for (String base : java.util.List.of("/seller", "/api/v1/sellers")) {
+            webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.seller("seller-1")))
+                    .post().uri(base + "/seller-1/wallet/add?amount=100.00")
+                    .header("Idempotency-Key", "self-credit")
+                    .exchange().expectStatus().isForbidden();
+        }
+        org.mockito.Mockito.verify(sellerService, org.mockito.Mockito.never())
+                .addFunds(anyString(), any(BigDecimal.class), any(), anyString());
+    }
 
-        webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.seller("seller-1")))
-                .post()
-                .uri("/seller/seller-1/wallet/add?amount=100.00")
-                .exchange()
-                .expectStatus().isOk();
+    @Test
+    void negativeDebitCannotBecomeCreditOnEitherAlias() {
+        for (String base : java.util.List.of("/seller", "/api/v1/sellers")) {
+            webTestClient.mutateWith(mockAuthentication(CanonicalTestAuthentication.seller("seller-1")))
+                    .post().uri(base + "/seller-1/wallet/deduct?amount=-50.00")
+                    .header("Idempotency-Key", "negative-debit")
+                    .exchange().expectStatus().isBadRequest();
+        }
+        org.mockito.Mockito.verifyNoInteractions(sellerService);
     }
 
     @Test

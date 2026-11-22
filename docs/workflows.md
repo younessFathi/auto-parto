@@ -102,7 +102,7 @@ stateDiagram-v2
     Closed --> [*]
 ```
 
-The seller manages their own listing. Reservation is a listing decision; accepting an offer does not automatically reserve it. Delivery progress is separate.
+The seller manages their own listing. The seller can reserve a listing manually, and accepting a listing offer reserves it automatically. Delivery progress remains separate.
 
 Business rules and implementation reference: [supporting documentation](api-part-listings.md).
 
@@ -135,37 +135,46 @@ flowchart TD
     A["Buyer makes an offer for a listing"] --> C["Offer awaits a decision"]
     B["Seller makes an offer for a request"] --> C
     C --> D{"Participant action?"}
-    D -->|Seller accepts| E["Offer accepted"]
-    D -->|Seller rejects| F["Offer rejected"]
+    D -->|Recipient accepts| E["Offer accepted"]
+    E --> TARGET{"What was offered on?"}
+    TARGET -->|Seller listing| RESERVED["Listing reserved"]
+    TARGET -->|Buyer request| CLOSED["Request closed"]
+    RESERVED --> COMPETING["Competing pending offers rejected"]
+    CLOSED --> COMPETING
+    COMPETING --> UPDATES["Updates recorded for buyer and seller"]
+    UPDATES --> NEXT["Arrange payment and delivery separately"]
+    D -->|Recipient rejects| F["Offer rejected"]
     D -->|Either participant cancels| G["Offer cancelled"]
     D -->|No action| C
 ```
 
-Current rules give acceptance and rejection to the seller participant, including when the seller created the offer. Either participant may cancel a pending offer. Acceptance records the decision; payment, reservation and delivery are separate.
+The recipient decides: the buyer for a seller-created request offer, and the seller for a buyer-created listing offer. Creators cannot accept/reject their own offer. Either participant may cancel a pending offer; administrators have no override. Acceptance reserves its listing or closes its request and rejects competing pending offers for that target. Both participants receive notification intents, delivered according to their preferences. Payment and delivery remain separate.
 
 Business rules and implementation reference: [supporting documentation](technical-workflows.md#offer-creation-and-decisions).
 
 ## Credit or debit a seller wallet
 
-A seller requests a credit or debit to their own wallet and receives the resulting balance.
+A seller can request a debit from their own wallet. Credits require an active administrator to record confirmed manual funding for an active seller.
 
 ```mermaid
 flowchart TD
-    A["Seller requests a wallet credit or debit"] --> B{"Signed in as the wallet's seller owner?"}
-    B -->|No| C["Deny the request"]
-    B -->|Yes| D["Provide amount, currency and request reference"]
-    D --> E{"Request reference already used for this operation?"}
-    E -->|Same request retained| F["Return the original result without applying it again"]
-    E -->|Different request retained| G["Report a conflicting request reference"]
-    E -->|New request| H{"Valid amount and sufficient funds for a debit?"}
-    H -->|No| I["Decline the change and keep the balance"]
-    H -->|Yes| J["Update the balance and record the transaction internally"]
-    J --> K["Return the mutation's resulting balance and currency"]
+    A["Seller requests a debit"] --> B{"Authenticated seller owns the wallet?"}
+    B -->|No| DENY["Deny the request"]
+    B -->|Yes| D["Provide positive debit amount, currency and request key"]
+    D --> CHECK{"Valid debit and sufficient funds?"}
+    CHECK -->|No| FAIL["Decline; keep balance unchanged"]
+    CHECK -->|Yes| DEBIT["Apply debit once while its request key is retained"]
+    ADMIN["Active administrator confirms recorded manual funding"] --> REF["Provide unique funding reference, beneficiary, minor-unit amount and currency"]
+    REF --> TRUST{"Authority, active seller and evidence details valid?"}
+    TRUST -->|No| FAIL
+    TRUST -->|Yes| CREDIT["Credit once for this permanent funding reference"]
+    DEBIT --> RESULT["Return recorded balance result"]
+    CREDIT --> RESULT
 ```
 
-The request reference (`Idempotency-Key`) is required and scoped to the authenticated seller and operation. Replaying the same retained request returns its original result, which may differ from the wallet's current balance after later changes. Repeat protection applies while the reference is retained. The ledger is internal; there is no separate wallet balance or transaction-history browsing API.
+Seller self-credit routes return 403; a negative debit cannot become a credit. Debit request keys use the existing retention policy. Funding references are globally unique and permanent: identical reference/details returns the original result across request-key expiry or restart, while changed details conflict. Replays can return a historical balance. The ledger remains internal; no separate wallet balance/history browsing API is implied.
 
-Credits and debits are account operations. A credit is not proof of an external payment, and offer acceptance does not automatically move money.
+Manual funding records an authorized administrator's confirmation; it is not a new payment provider or proof of external settlement. Offer acceptance does not automatically move money.
 
 Business rules and implementation reference: [supporting documentation](wallet-ledger.md).
 
@@ -218,7 +227,7 @@ flowchart TD
     D --> E["View updated preferences"]
 ```
 
-Saving preferences is supported. Preference enforcement is incomplete across delivery paths, so these choices are not currently a universal guarantee that messages will be suppressed.
+Messages require both the current channel and message-category choices. Push controls SSE and device push. Disabled choices suppress future delivery attempts, including queued messages; a send already in progress may finish. SMS and marketing default off. Authentication OTP remains available independently.
 
 Business rules and implementation reference: [supporting documentation](technical-workflows.md#notification-preferences).
 
@@ -241,7 +250,7 @@ flowchart TD
     J["Member reconnects with a valid previous notification reference"] --> K["Return available recent updates after that reference"]
 ```
 
-A successful send does not prove the member read the message. Catch-up is limited; it is not an unlimited notification history. Marketplace matching and offer actions are not assumed to create notifications automatically.
+A successful send does not prove the member read the message. Catch-up is limited; it is not an unlimited notification history. Marketplace matching remains separate. Offer acceptance records an update for both participants; preferences or delivery outages may prevent immediate receipt.
 
 Business rules and implementation reference: [supporting documentation](notifications-outbox.md).
 

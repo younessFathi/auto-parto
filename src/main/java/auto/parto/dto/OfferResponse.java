@@ -16,5 +16,7 @@ public record OfferResponse(
         long deliveryAmountMinor,
         String deliveryMode,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        long version,
+        UUID acceptancePublicId) {
 }
